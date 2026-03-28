@@ -1,0 +1,390 @@
+**SHAAVIR HRMS**
+
+Multi-Tenant Security Architecture
+
+Option B: Shared Database with Row-Level Security
+
+**CONFIDENTIAL**
+
+Version 1.0 | 2026-03-22
+
+# **1. Executive Summary**
+
+This document defines the complete security architecture for running Shaavir HRMS as a multi-tenant SaaS platform using a shared PostgreSQL database with Row-Level Security (RLS). It covers seven security domains: tenant data isolation, authentication hardening, attendance anti-fraud, API security, encryption, audit/compliance, and subscription enforcement.
+
+The architecture ensures that no tenant can access, modify, or even detect the existence of another tenant's data, even in the event of application-level bugs, SQL injection, or compromised admin accounts.
+
+# **2. Tenant Data Isolation with PostgreSQL RLS**
+
+## **2.1 Architecture Overview**
+
+Every tenant shares one PostgreSQL database. Every data table has a tenant_id column. PostgreSQL Row-Level Security policies enforce that queries can only see rows belonging to the current tenant. The application sets the tenant context on every request via a session variable. Even if application code has a bug and omits a WHERE clause, the database engine itself blocks cross-tenant access.
+
+## **2.2 Implementation**
+
+### **2.2.1 Tenant ID Column**
+
+Added to every data table (not system tables like _migrations):
+
+ALTER TABLE members ADD COLUMN **tenant_id TEXT NOT NULL DEFAULT ****'****default****'**;
+
+ALTER TABLE clock_events ADD COLUMN **tenant_id TEXT NOT NULL DEFAULT ****'****default****'**;
+
+Repeat for all 60+ tables. One migration handles all of them.
+
+### **2.2.2 Row-Level Security Policies**
+
+For every table, create an RLS policy that filters by tenant_id using a session variable:
+
+**ALTER TABLE members ENABLE ROW LEVEL SECURITY;**
+
+**ALTER TABLE members FORCE ROW LEVEL SECURITY;**
+
+CREATE POLICY tenant_isolation ON members USING (tenant_id = current_setting('app.tenant_id'));
+
+CREATE POLICY tenant_insert ON members FOR INSERT WITH CHECK (tenant_id = current_setting('app.tenant_id'));
+
+The FORCE keyword is critical: it ensures RLS applies even to table owners and superusers. Without FORCE, a database superuser bypasses RLS.
+
+### **2.2.3 Tenant Context Middleware**
+
+Every HTTP request sets the tenant context before any query executes:
+
+1. Extract tenant from hostname: acme.shaavir.com -> tenant_id = "acme"
+
+2. Verify tenant exists and is active in the tenant registry
+
+3. Execute SET app.tenant_id = 'acme' on the database connection
+
+4. All subsequent queries in this request are automatically scoped
+
+5. Connection is released back to pool (session variable is reset)
+
+### **2.2.4 Why RLS Cannot Be Bypassed**
+
+| **Attack Vector** | **RLS Defense** |
+| --- | --- |
+| Application bug omits WHERE tenant_id=? | RLS adds the filter at database engine level. Query returns only current tenant rows regardless. |
+| SQL injection via user input | Injected SQL still runs under the RLS policy. SELECT * FROM members returns only current tenant. |
+| Compromised admin account | Admin account belongs to one tenant. RLS prevents seeing other tenants even with admin privileges. |
+| Direct database connection (psql) | FORCE ROW LEVEL SECURITY applies to ALL roles including superuser. Must explicitly SET app.tenant_id. |
+| ORM/query builder bypasses | RLS operates below the application layer. No ORM, raw SQL, or driver trick can bypass it. |
+| Timing/enumeration attacks | Queries return zero rows for other tenants, same as if those rows did not exist. No timing difference. |
+
+## **2.3 Tenant Registry**
+
+A separate schema (public.tenants) not subject to RLS, accessible only by the platform service account:
+
+| **Column** | **Type** | **Example** | **Purpose** |
+| --- | --- | --- | --- |
+| tenant_id | TEXT PK | acme | Unique tenant identifier, used in subdomain |
+| company_name | TEXT | Acme Corp | Display name |
+| status | TEXT | active | active │ trial │ suspended │ deleted |
+| plan | TEXT | business | free │ starter │ business │ enterprise |
+| trial_ends_at | TIMESTAMP | 2026-04-15 | Trial expiry date |
+| max_employees | INTEGER | 500 | License cap per plan |
+| created_at | TIMESTAMP | 2026-03-22 | Onboarding date |
+
+# **3. Attendance Anti-Fraud System**
+
+## **3.1 Threat Model**
+
+Attendance fraud is the most common attack vector in HRMS systems. Employees or bots attempt to clock in/out without being physically present. The following attack methods must be prevented:
+
+| **Attack** | **Method** | **Severity** |
+| --- | --- | --- |
+| Buddy punching | Colleague clocks in on behalf of absent employee | HIGH |
+| Bot/script clock-in | Python script sends POST /api/clock with stolen credentials | CRITICAL |
+| Photo spoofing | Hold a printed photo or phone screen to face camera | HIGH |
+| Video replay | Play a pre-recorded video of the employee to camera | HIGH |
+| GPS spoofing | Fake GPS coordinates via developer tools or mock location apps | HIGH |
+| VPN/proxy clock-in | Clock in from home via VPN that exits near office IP | MEDIUM |
+| Token theft | Steal session token from browser and replay from different device | HIGH |
+| Time manipulation | Change device clock to clock in at a different time | MEDIUM |
+| Iris/face template theft | Extract biometric templates from device and replay them | CRITICAL |
+| Browser automation | Selenium/Puppeteer automates the web UI to clock in | HIGH |
+
+## **3.2 Defense Layers**
+
+### **3.2.1 Layer 1: Device Fingerprinting**
+
+Every clock action records a device fingerprint that includes:
+
+Browser: User-Agent, screen resolution, timezone, language, WebGL renderer hash, canvas fingerprint hash, installed fonts hash, audio context hash. These are combined into a single hash. If the same employee clocks in from two different fingerprints within 5 minutes, the second attempt is flagged for review.
+
+Mobile: device_id (ANDROID_ID / identifierForVendor), device model, OS version, app version. Registered via POST /api/mobile/devices. Only registered devices can clock in.
+
+Implementation: Add device_fingerprint TEXT column to clock_events. Add allowed_devices table (email, fingerprint_hash, registered_at, last_seen). Clock endpoint checks fingerprint against allowed list. Unknown devices require admin approval.
+
+### **3.2.2 Layer 2: Liveness Detection (Anti-Photo, Anti-Video)**
+
+For face recognition clock-in, a static photo check is not enough. The system must detect that a live human is present:
+
+**Passive liveness: **The camera captures 3-5 frames over 1.5 seconds. The system checks for micro-movements (blink detection, head micro-rotation, skin texture variation). A printed photo has zero micro-movement. A video has predictable, repeating patterns.
+
+**Active liveness challenge: **The UI asks the user to perform a random action: "Turn your head left," "Blink twice," "Smile." The action is verified against the captured frames. A pre-recorded video cannot respond to a random challenge.
+
+**Depth detection: **If the device has a depth sensor (iPhone TrueDepth, Android ToF), verify the face has 3D depth. A photo or screen is flat. This is the strongest anti-spoofing method.
+
+**Screen reflection detection: **Analyze the captured frames for screen moire patterns (visible grid pattern from LCD/OLED pixels). If detected, reject as a phone/tablet screen showing a photo.
+
+Implementation: liveness_check table (clock_event_id, method, score, passed, frames_analyzed). Minimum liveness score of 0.85 required to proceed. Failed liveness attempts logged with captured frames for admin review.
+
+### **3.2.3 Layer 3: Iris Anti-Replay**
+
+For iris scan clock-in, the following protections apply:
+
+Template freshness: Each scan includes a timestamp and a random nonce from the server. The client must include this nonce in the request. Server rejects requests with expired or reused nonces (sliding window of 30 seconds).
+
+Template encryption: Iris templates are encrypted at rest (AES-256-GCM) and transmitted over TLS. Even if database access is compromised, raw templates cannot be extracted.
+
+Presentation attack detection (PAD): The iris scanner hardware includes near-infrared (NIR) illumination that distinguishes living eye tissue from printed images. The PAD score is included in the scan metadata and verified server-side.
+
+### **3.2.4 Layer 4: Geo-Fencing with Anti-Spoof**
+
+Current implementation uses Haversine distance calculation. For anti-spoof:
+
+**Multi-source location: **Require BOTH GPS coordinates AND Wi-Fi BSSID (office router MAC address). GPS can be spoofed via mock location apps; Wi-Fi BSSID cannot be spoofed without being physically near the router.
+
+**Cell tower triangulation: **On mobile, collect nearby cell tower IDs. Cross-reference against known towers near the office. A VPN changes the IP but cannot change which cell towers the phone sees.
+
+**IP geolocation cross-check: **Compare GPS coordinates against IP geolocation. If GPS says "office in Mumbai" but IP geolocates to "residential ISP in Delhi," flag for review.
+
+**Mock location detection (Android): **Check Settings.Secure.ALLOW_MOCK_LOCATION and isFromMockProvider() on Location objects. If mock location is enabled, reject clock-in or flag for review.
+
+**Velocity check: **If an employee was at Location A 5 minutes ago and now claims to be at Location B 50km away, reject. No human travels 600km/h.
+
+Implementation: Add wifi_bssid, cell_towers_json, ip_address, mock_location_detected columns to clock_events. Add geo_verification_log table.
+
+### **3.2.5 Layer 5: Bot/Script Detection**
+
+Detect automated clock-in attempts from scripts:
+
+**Rate limiting: **Max 1 clock action per email per 30 seconds. Max 5 per hour. Already partially implemented in express-rate-limit.
+
+**CAPTCHA on suspicious patterns: **If 3+ clock failures in a row, or clock-in from a new device, require a CAPTCHA challenge before proceeding.
+
+**Browser attestation: **Use the Web Attestation API (Android SafetyNet / Apple App Attest / Google reCAPTCHA Enterprise) to verify the request comes from a genuine browser or app, not a headless script.
+
+**Request timing analysis: **Bots send requests with machine-precision timing (e.g., exactly every 60.000 seconds). Humans have natural jitter. Flag requests with suspiciously consistent timing patterns.
+
+**TLS fingerprinting: **Python requests library has a different TLS fingerprint than Chrome. Middleware can check the JA3 hash of the TLS handshake to detect non-browser clients.
+
+**Behavioral biometrics: **On the web UI, record mouse movement patterns, typing speed, and scroll behavior during the clock-in flow. Bots have no mouse movement; humans do. Store the behavioral score per clock event.
+
+### **3.2.6 Layer 6: Anomaly Detection**
+
+Machine learning or rule-based detection of unusual patterns:
+
+Pattern 1: Employee clocks in at exactly the same second every day for 30 days. Probability of a human doing this: near zero. Flag for review.
+
+Pattern 2: Employee never takes breaks but reports 9+ hours daily. Compare against peers in same department.
+
+Pattern 3: Employee always clocks in from the same IP but other employees on the same shift clock in from different IPs. May indicate a single person running multiple clock-ins.
+
+Pattern 4: Clock-in source is always "web" but employee has a registered mobile device. Why are they never using the app?
+
+Pattern 5: Face recognition confidence is always exactly 0.95 (the mock default). Real face scans have natural variation (0.88-0.97).
+
+Implementation: anomaly_flags table (email, date, rule_id, severity, details, reviewed_by, reviewed_at). Daily cron job runs anomaly rules. Admin dashboard shows flagged events.
+
+# **4. API Security**
+
+## **4.1 Authentication Hardening**
+
+| **Measure** | **Implementation** |
+| --- | --- |
+| Session tokens | Replace UUID session tokens with signed JWTs (RS256). Include tenant_id, email, role, exp, iat. Verify signature on every request. |
+| Token expiry | Access token: 15 minutes. Refresh token: 7 days. Refresh rotation: each use issues a new refresh token and invalidates the old one. |
+| CSRF protection | SameSite=Strict cookies + custom X-Requested-With header check on all state-changing endpoints. |
+| Brute force protection | Already implemented: 5 attempts -> 15min lockout. Add: progressive delay (1s, 2s, 4s, 8s between attempts). |
+| MFA (TOTP) | Optional per-tenant: TOTP via Google Authenticator / Authy. Required for admin accounts. totp_secret column on auth_credentials. |
+| API key authentication | For server-to-server integrations: HMAC-SHA256 signed requests with timestamp. Reject requests older than 5 minutes. |
+
+## **4.2 Input Validation**
+
+Every endpoint validates input before processing:
+
+String length limits: company_name max 200, email max 320, any text field max 10,000 characters.
+
+SQL injection: Parameterized queries only (already enforced by DatabaseEngine interface). No string concatenation in SQL.
+
+XSS: All user-generated content is HTML-escaped on output. Content-Security-Policy header prevents inline scripts.
+
+File upload: Max 10MB per file. Validate MIME type against file content (magic bytes), not just the Content-Type header. Reject executables, scripts, HTML files. Store with random filenames, never user-provided names.
+
+Rate limiting per tenant: Each tenant gets its own rate limit bucket. One tenant cannot exhaust the rate limit for another.
+
+## **4.3 Request Signing for Critical Actions**
+
+Clock-in, leave approval, and expense approval are high-value actions. These endpoints require request signing:
+
+Client generates: HMAC-SHA256(request_body + timestamp + nonce, session_secret)
+
+Server verifies: signature matches, timestamp within 30 seconds, nonce not reused.
+
+This prevents replay attacks even if an attacker captures a valid request.
+
+# **5. Encryption**
+
+## **5.1 Data at Rest**
+
+| **Data** | **Method** | **Key Management** |
+| --- | --- | --- |
+| Database | PostgreSQL TDE (Transparent Data Encryption) or disk-level encryption (LUKS/dm-crypt) | Server-managed. Key stored in hardware security module (HSM) or Vault. |
+| Biometric templates (face, iris) | AES-256-GCM per-row encryption. Each tenant has its own encryption key. | Per-tenant key derived from master key + tenant_id via HKDF. |
+| Passwords | bcrypt with 10 rounds (already implemented) | No key needed. One-way hash. |
+| LDAP bind password | AES-256-GCM encrypted in branding table | Platform master key in environment variable. |
+| File storage | S3 server-side encryption (SSE-S3 or SSE-KMS) | AWS/provider managed or customer-managed key (CMK). |
+| Backups | Encrypted with GPG before upload to cold storage | Backup encryption key stored in Vault, separate from DB key. |
+| PII fields (Aadhaar, PAN) | Application-level AES-256-GCM encryption | Per-tenant key. Decrypted only when displayed to authorized user. |
+
+## **5.2 Data in Transit**
+
+All connections use TLS 1.3 minimum. No exceptions.
+
+External: HTTPS with HSTS header (max-age=31536000, includeSubDomains, preload). Certificate via Let's Encrypt or provider-managed.
+
+Internal (app to database): TLS-encrypted PostgreSQL connection (sslmode=verify-full). Certificate pinning in production.
+
+Internal (app to Redis): TLS-encrypted Redis connection (rediss:// protocol).
+
+Internal (app to S3/storage): HTTPS only. No HTTP fallback.
+
+# **6. Audit Trail ****&**** Compliance**
+
+## **6.1 Immutable Audit Log**
+
+The existing audit_trail table already logs entity changes with PII redaction. For multi-tenant SaaS, additional requirements:
+
+Tenant isolation: audit_trail table also gets RLS policy. Each tenant only sees their own audit logs.
+
+Immutability: audit_trail table has no UPDATE or DELETE permissions for the application role. Only INSERT. Even if the application is compromised, historical audit entries cannot be modified.
+
+Platform audit: A separate platform_audit_log (not subject to tenant RLS) records cross-tenant events: tenant creation, suspension, plan changes, admin impersonation, data export requests.
+
+Retention: Minimum 7 years for compliance with Indian labor law (Shops and Establishments Act). Configurable per-tenant for industries with stricter requirements (banking: 10 years, healthcare: 15 years).
+
+## **6.2 Admin Impersonation**
+
+Platform support staff may need to access a tenant's data for troubleshooting. This must be logged and controlled:
+
+Impersonation requires: (1) Support ticket reference number, (2) 2FA verification, (3) Time-limited session (max 30 minutes), (4) Every action logged with impersonator identity, (5) Tenant admin notified via email that their account was accessed by support.
+
+No support staff can impersonate without all 5 conditions. This is enforced at the middleware level, not just policy.
+
+## **6.3 Data Residency**
+
+Indian companies may require data to remain within India (per proposed Personal Data Protection Bill). The platform must support:
+
+Region-specific database instances (Mumbai region PostgreSQL for Indian tenants).
+
+Region-specific file storage (S3 bucket in ap-south-1, Azure Blob in Central India).
+
+Tenant registry includes a region field. Routing middleware directs each tenant to their regional infrastructure.
+
+# **7. Subscription ****&**** License Enforcement**
+
+## **7.1 Plan Limits**
+
+| **Feature** | **Free** | **Starter** | **Business** | **Enterprise** |
+| --- | --- | --- | --- | --- |
+| Employees | 10 | 50 | 500 | Unlimited |
+| Modules | Clock + Leave | All Phase 1 | All Phase 1+2 | All + custom |
+| Auth providers | Email only | + Google/Microsoft | + OIDC/SAML | + LDAP/custom |
+| Storage | 1 GB | 10 GB | 100 GB | Unlimited |
+| Audit retention | 30 days | 1 year | 3 years | 7+ years |
+| Support | Community | Email | Priority | Dedicated |
+| AI Chatbot | No | Basic (10/day) | Full (100/day) | Unlimited |
+| Face/Iris clock | No | No | Yes | Yes |
+| Anti-fraud | Basic | Basic | Full | Full + custom rules |
+
+## **7.2 Enforcement Middleware**
+
+A plan enforcement middleware checks on every request:
+
+1. Is the tenant active? (not suspended, not deleted, trial not expired)
+
+2. Is the requested module enabled for this plan? (e.g., Free plan cannot access /api/training/*)
+
+3. Is the employee count within the plan limit? (creating the 51st member on a Starter plan is rejected)
+
+4. Is storage within quota? (file uploads rejected when quota exceeded)
+
+Enforcement is done at the API level, not the UI level. Even if someone bypasses the UI, the API rejects unauthorized access. The middleware reads the plan from the tenant registry (cached in Redis with 5-minute TTL) and applies rules before the request reaches the route handler.
+
+## **7.3 Grace Periods**
+
+Payment failed: 7-day grace period with email notifications on day 1, 3, 5, 7. During grace, full access continues.
+
+After grace: Tenant goes read-only. Employees can view data but cannot clock in, submit leaves, or upload files. Admin sees a banner with payment link.
+
+After 30 days read-only: Data export offered (JSON + CSV download of all tenant data). Tenant suspended.
+
+After 90 days suspended: Data deleted. Tenant record retained for 1 year for re-activation inquiries.
+
+# **8. Implementation Roadmap**
+
+## **8.1 Phase 1: Core Multi-Tenancy (Weeks 1-2)**
+
+Migration: Add tenant_id to all tables. Create RLS policies. Create tenant registry.
+
+Middleware: Tenant extraction from hostname. Tenant context setting on DB connection.
+
+Provisioning: Signup API that creates tenant record + runs onboarding.
+
+Auth: JWT tokens replacing UUID sessions. Tenant_id embedded in token.
+
+## **8.2 Phase 2: Anti-Fraud (Weeks 3-4)**
+
+Device fingerprinting on all clock endpoints.
+
+Liveness detection for face recognition (passive + active challenge).
+
+Iris nonce/freshness verification.
+
+Geo anti-spoof: Wi-Fi BSSID + mock location detection.
+
+Bot detection: request timing analysis + browser attestation.
+
+## **8.3 Phase 3: Billing ****&**** Plans (Weeks 5-6)**
+
+Stripe/Razorpay integration with webhook handlers.
+
+Plan enforcement middleware.
+
+Usage metering (employee count, storage, API calls).
+
+Billing dashboard for tenants.
+
+Admin ops dashboard for platform team.
+
+## **8.4 Phase 4: Compliance ****&**** Encryption (Weeks 7-8)**
+
+PII field encryption (Aadhaar, PAN, bank details).
+
+Biometric template encryption.
+
+Immutable audit log enforcement.
+
+Data residency routing.
+
+SOC 2 Type II preparation.
+
+# **9. Summary of Security Layers**
+
+| **#** | **Layer** | **Protects Against** | **Enforcement Level** |
+| --- | --- | --- | --- |
+| 1 | PostgreSQL RLS | Cross-tenant data access | Database engine (cannot be bypassed by application) |
+| 2 | Device fingerprinting | Buddy punching, unknown devices | Application middleware |
+| 3 | Liveness detection | Photo spoofing, video replay | Client-side + server verification |
+| 4 | Iris nonce + PAD | Template replay, iris spoofing | Hardware + server verification |
+| 5 | Geo anti-spoof | GPS spoofing, VPN clock-in | Multi-source verification (GPS + Wi-Fi + cell + IP) |
+| 6 | Bot/script detection | Automated clock-in, Selenium | TLS fingerprint + attestation + behavioral |
+| 7 | Anomaly detection | Subtle fraud patterns | Rule engine + ML scoring |
+| 8 | JWT + request signing | Token theft, replay attacks | Cryptographic verification |
+| 9 | Encryption (rest + transit) | Data breach, interception | AES-256-GCM + TLS 1.3 |
+| 10 | Immutable audit trail | Evidence tampering | Database permissions (INSERT only) |
+| 11 | Plan enforcement | Feature abuse, over-usage | API middleware + Redis cache |
+
+*This architecture ensures that Shaavir SaaS meets the security requirements for Indian enterprise HRMS deployment, including compliance with the IT Act 2000, proposed Personal Data Protection Bill, and industry-specific regulations for banking (RBI), healthcare (DISHA), and government (MeitY guidelines).*
