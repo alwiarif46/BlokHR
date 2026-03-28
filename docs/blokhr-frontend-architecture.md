@@ -12,9 +12,9 @@ The following source files are available and must be consulted during implementa
 
 | File | Location | Description |
 |------|----------|-------------|
-| Frontend monolith | `/mnt/user-data/uploads/index__3_.html` | 7,873 lines / 644 KB single HTML file containing all CSS, HTML, and JS for the entire BlokHR frontend |
-| Server codebase | `/mnt/user-data/uploads/shaavir-server-production-ready__1__tar.gz` | Complete backend: 35,334 lines of TypeScript, 971 tests across 43 files, 34 SQL migrations, ~332 API endpoint handlers |
-| Design reference | `/mnt/user-data/uploads/Shaavir_Horizon___Attendance_Board.html` | Live production design showing employee profile field-level access, 4-theme system, Lottie animations, clock UX, tenant-customizable settings |
+| Frontend monolith | `source-files/index__3_.html` | 7,873 lines / 644 KB single HTML file containing all CSS, HTML, and JS for the entire BlokHR frontend |
+| Server codebase | `source-files/shaavir-server-production-ready__1__tar.gz` | Complete backend: 35,334 lines of TypeScript, 971 tests across 43 files, 34 SQL migrations, ~332 API endpoint handlers |
+| Design reference | `source-files/Shaavir_Horizon___Attendance_Board.html` | Live production design showing employee profile field-level access, 4-theme system, Lottie animations, clock UX, tenant-customizable settings |
 
 ---
 

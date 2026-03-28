@@ -1,7 +1,7 @@
 # BlokHR Server Changes — Gap Fixes + Architecture Alignment
 
 **Repository:** `shaavir-server` (TypeScript/Express/SQLite or Postgres)  
-**Source archive:** `/mnt/user-data/uploads/shaavir-server-production-ready__1__tar.gz`  
+**Source archive:** `source-files/shaavir-server-production-ready__1__tar.gz`  
 **Test runner:** `vitest`  
 **Current state:** 971 tests, 43 files, 0 failures  
 **Zero regressions tolerance — all 971 existing tests must continue to pass after every fix.**
@@ -10,7 +10,7 @@
 
 ## How to Work
 
-1. Extract server: `tar -xzf /mnt/user-data/uploads/shaavir-server-production-ready__1__tar.gz && cd shaavir-server && npm install`
+1. Extract server: `tar -xzf source-files/shaavir-server-production-ready__1__tar.gz && cd shaavir-server && npm install`
 2. Fix one gap at a time in the order listed.
 3. After every gap, run `npx vitest run` — all tests green before proceeding.
 4. Write new tests described under each gap before writing the implementation.
