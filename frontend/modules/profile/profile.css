@@ -1,0 +1,243 @@
+/**
+ * modules/profile/profile.css
+ *
+ * Employee profile form with field-level access control.
+ * 5 sections: Organization, Shift, Contact, Financial & Identity, Account.
+ * Read-only fields: pf-readonly + disabled.
+ * Validation: pf-field-icon (tick/cross), pf-field-error (message).
+ * Missing fields bar, certification checkbox, save button.
+ * All colours use CSS custom properties.
+ */
+
+/* ── Profile form wrapper ── */
+.pf-form {
+  padding: 16px 20px 60px;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+/* ── Section ── */
+.pf-section {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 16px;
+  margin-bottom: 14px;
+  transition: all 0.3s ease;
+}
+.theme-clean .pf-section {
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+.pf-section:hover {
+  border-color: var(--accent);
+}
+.pf-section-title {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Form grid ── */
+.pf-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 700px) {
+  .pf-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Form field ── */
+.pf-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pf-form-label {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tx2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.pf-req {
+  color: var(--status-absent);
+  font-weight: 700;
+}
+
+/* ── Input wrap (input + icon) ── */
+.pf-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+.pf-form-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  padding: 8px 32px 8px 10px;
+  font-size: 13px;
+  color: var(--tx);
+  font-family: inherit;
+  outline: none;
+  transition: all 0.2s ease;
+}
+.theme-clean .pf-form-input {
+  border-radius: 10px;
+  padding: 10px 34px 10px 12px;
+}
+.pf-form-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.pf-form-input::placeholder {
+  color: var(--tx3);
+}
+
+/* ── Read-only fields ── */
+.pf-form-input.pf-readonly {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: var(--bg0);
+}
+.pf-form-input.pf-readonly:focus {
+  border-color: var(--bd);
+  box-shadow: none;
+}
+
+/* ── Validation icon ── */
+.pf-field-icon {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+  line-height: 1;
+  pointer-events: none;
+}
+.pf-field-icon.valid {
+  color: var(--status-in);
+}
+.pf-field-icon.invalid {
+  color: var(--status-absent);
+}
+
+/* ── Validation error ── */
+.pf-field-error {
+  font-size: 10px;
+  color: var(--status-absent);
+  min-height: 14px;
+  line-height: 14px;
+}
+
+/* ── Missing fields bar ── */
+.pf-missing {
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--status-absent);
+  margin: 14px 0;
+  transition: all 0.3s ease;
+}
+.theme-clean .pf-missing {
+  border-radius: 10px;
+}
+.pf-missing.complete {
+  background: rgba(59, 130, 246, 0.08);
+  border-color: rgba(59, 130, 246, 0.2);
+  color: var(--status-in);
+}
+
+/* ── Certification checkbox ── */
+.pf-cert {
+  margin: 14px 0;
+  padding: 12px 14px;
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+}
+.theme-clean .pf-cert {
+  border-radius: 10px;
+}
+.pf-cert-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--tx2);
+  cursor: pointer;
+  line-height: 1.5;
+}
+.pf-cert-label input[type="checkbox"] {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ── Save button ── */
+.pf-save {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 0.2s ease;
+}
+.theme-clean .pf-save {
+  border-radius: 10px;
+  color: #fff;
+  text-transform: none;
+  letter-spacing: 0;
+}
+.pf-save:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.pf-save:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ── Locked state ── */
+.pf-locked-banner {
+  background: rgba(59, 130, 246, 0.08);
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  font-size: 11px;
+  color: var(--status-in);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.theme-clean .pf-locked-banner {
+  border-radius: 10px;
+}
+
+/* ── Loading state ── */
+.pf-loading {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--tx3);
+  font-size: 12px;
+}

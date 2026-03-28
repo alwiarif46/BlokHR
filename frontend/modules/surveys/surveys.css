@@ -1,0 +1,47 @@
+/**
+ * modules/surveys/surveys.css
+ * Surveys module. All colours use CSS custom properties.
+ */
+.sv-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
+.sv-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.sv-spacer { flex: 1; }
+.sv-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
+.theme-clean .sv-btn { color: #fff; border-radius: 10px; }
+.sv-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+.sv-btn.ghost { background: transparent; color: var(--accent); }
+.sv-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.sv-stat { flex: 1; min-width: 100px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
+.theme-clean .sv-stat { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
+.sv-stat:hover { border-color: var(--accent); }
+.sv-stat-num { font-size: 24px; font-weight: 900; color: var(--tx); }
+.sv-stat-label { font-size: 9px; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-weight: 600; }
+.sv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.sv-card { background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 16px; transition: all 0.3s ease; animation: cardIn 0.4s var(--ease) both; }
+.sv-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.theme-chromium .sv-card { background: linear-gradient(170deg, var(--bg2), var(--bg1)); }
+.theme-neural .sv-card { border-radius: 0; }
+.theme-holodeck .sv-card { border-radius: 0; background: rgba(10, 20, 34, 0.5); }
+.theme-clean .sv-card { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
+.sv-card-title { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
+.sv-card-sub { font-size: 10px; color: var(--tx3); }
+.sv-card-badge { font-size: 8px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; }
+.theme-clean .sv-card-badge { border-radius: 6px; }
+.sv-card-actions { display: flex; gap: 4px; margin-top: 8px; }
+.sv-card-actions button { padding: 4px 10px; font-size: 10px; font-weight: 600; border: 1px solid var(--bd); border-radius: 4px; background: var(--bg3); color: var(--tx2); cursor: pointer; font-family: inherit; transition: all 0.2s ease; }
+.theme-clean .sv-card-actions button { border-radius: 8px; }
+.sv-card-actions button:hover { border-color: var(--accent); color: var(--accent); }
+.sv-card-actions button.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
+.sv-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.sv-modal.open { display: flex; }
+.sv-modal-box { background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
+.theme-clean .sv-modal-box { border-radius: 20px; }
+.sv-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
+.sv-field { margin-bottom: 14px; }
+.sv-field label { display: block; font-size: 10px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+.sv-field input, .sv-field select, .sv-field textarea { width: 100%; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r); padding: 10px 12px; color: var(--tx); font-family: inherit; font-size: 12px; outline: none; transition: all 0.25s ease; }
+.theme-clean .sv-field input, .theme-clean .sv-field select, .theme-clean .sv-field textarea { border-radius: 10px; }
+.sv-field input:focus, .sv-field select:focus, .sv-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.sv-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.sv-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
+.sv-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }
+.sv-empty-text { font-size: 13px; font-weight: 600; }

@@ -1,0 +1,18 @@
+<!--
+  modules/attendance/attendance.html
+  Team attendance grid with toolbar, stat pills, search, column toggle.
+  Rendered by renderAttendancePage() into the pgTeam container.
+  Detail views use theme-aware patterns from shared/modal.js.
+-->
+<div class="toolbar" id="attToolbar">
+  <div class="tb-title">Team</div>
+  <div class="stat-pills" id="statPills"></div>
+  <div class="tb-spacer"></div>
+  <input class="tb-search" id="teamSearch" placeholder="Search name, dept, email…">
+  <div class="col-toggle" id="colToggle"></div>
+</div>
+<div class="main-area">
+  <div class="grid-side">
+    <div class="egrid" id="empGrid"></div>
+  </div>
+</div>

@@ -1,0 +1,63 @@
+/**
+ * modules/timesheets/timesheets.css
+ *
+ * Weekly timesheet view with editable grid table,
+ * week navigation, stats bar, status badges.
+ * All colours use CSS custom properties.
+ */
+
+.ts-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
+.ts-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.ts-spacer { flex: 1; }
+.ts-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
+.theme-clean .ts-btn { color: #fff; border-radius: 10px; }
+.ts-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+.ts-btn.ghost { background: transparent; color: var(--accent); }
+
+/* ── Week navigation ── */
+.ts-week-nav { display: flex; align-items: center; gap: 8px; }
+.ts-week-nav button { background: var(--bg3); border: 1px solid var(--bd); border-radius: var(--r); width: 30px; height: 30px; color: var(--tx2); cursor: pointer; font-size: 12px; display: flex; align-items: center; justify-content: center; font-family: inherit; transition: all 0.2s ease; }
+.theme-clean .ts-week-nav button { border-radius: 10px; }
+.ts-week-nav button:hover { border-color: var(--accent); color: var(--accent); }
+.ts-week-label { font-size: 12px; font-weight: 700; color: var(--tx); min-width: 180px; text-align: center; }
+
+/* ── Stats ── */
+.ts-stats { display: flex; gap: 12px; margin-bottom: 16px; }
+.ts-stat { flex: 1; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
+.theme-clean .ts-stat { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
+.ts-stat:hover { border-color: var(--accent); }
+.ts-stat-num { font-size: 24px; font-weight: 900; color: var(--tx); }
+.ts-stat-label { font-size: 9px; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-weight: 600; }
+
+/* ── Table ── */
+.ts-table-wrap { overflow-x: auto; margin-bottom: 16px; }
+.ts-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 700px; }
+.ts-table th { text-align: center; padding: 10px 8px; font-size: 9px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--bd); background: var(--bg2); }
+.ts-table th:first-child { text-align: left; min-width: 140px; }
+.ts-table th.today { color: var(--accent); border-bottom-color: var(--accent); }
+.ts-table td { padding: 8px; text-align: center; border-bottom: 1px solid var(--bd); font-variant-numeric: tabular-nums; transition: background 0.2s ease; }
+.ts-table td:first-child { text-align: left; font-weight: 600; color: var(--tx); }
+.ts-table tr:hover td { background: var(--accent-dim); }
+.ts-table .ts-hours { font-weight: 700; color: var(--tx); }
+.ts-table .ts-total { font-weight: 800; color: var(--accent); }
+.ts-table .ts-short { color: var(--status-absent); }
+.ts-table .ts-over { color: var(--status-in); }
+.ts-table .ts-off { color: var(--tx4); font-style: italic; }
+.ts-table tfoot td { border-top: 2px solid var(--accent); font-weight: 800; color: var(--accent); background: var(--accent-dim); }
+
+/* ── Status badges ── */
+.ts-status { font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
+.theme-clean .ts-status { border-radius: 6px; }
+.ts-status.submitted { background: rgba(59, 130, 246, 0.1); color: var(--status-in); }
+.ts-status.approved { background: rgba(34, 197, 94, 0.1); color: var(--status-in); }
+.ts-status.draft { background: rgba(107, 114, 128, 0.1); color: var(--tx3); }
+.ts-status.rejected { background: rgba(239, 68, 68, 0.1); color: var(--status-absent); }
+
+/* ── Editable cell ── */
+.ts-edit-cell { width: 50px; background: var(--bg3); border: 1px solid var(--bd); border-radius: 4px; padding: 4px 6px; text-align: center; color: var(--tx); font-family: inherit; font-size: 11px; font-weight: 600; outline: none; font-variant-numeric: tabular-nums; transition: all 0.2s ease; }
+.ts-edit-cell:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+
+/* ── Empty ── */
+.ts-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
+.ts-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }
+.ts-empty-text { font-size: 13px; font-weight: 600; }

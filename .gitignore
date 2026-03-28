@@ -1,2 +1,4 @@
-shaavir-server/node_modules/
-shaavir-server/.env
+node_modules
+dist
+*.db
+.env
