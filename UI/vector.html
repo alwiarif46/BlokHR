@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vector — Task Tracker</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <link rel="stylesheet" href="css/tracker-common.css">
+  <style>
+    .task-priority { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.6875rem; font-weight: 500; }
+    .priority-urgent { background: rgba(239,68,68,0.15); color: var(--status-absent); }
+    .priority-high { background: rgba(249,115,22,0.15); color: var(--status-late); }
+    .priority-medium { background: rgba(251,191,36,0.15); color: var(--status-break); }
+    .priority-low { background: rgba(59,130,246,0.15); color: var(--status-in); }
+    .due-overdue { color: var(--status-absent); font-weight: 500; }
+  </style>
+</head>
+<body>
+  <div class="tracker">
+    <div class="tracker-header">
+      <span class="tracker-title">Task Tracker</span>
+      <div class="tracker-controls">
+        <input type="text" id="searchInput" class="tracker-search" placeholder="Search tasks...">
+        <select id="assigneeFilter" class="select" style="width:160px"><option value="">All Assignees</option></select>
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" data-view="kanban">Board</button>
+          <button class="view-toggle-btn" data-view="list">List</button>
+        </div>
+        <button class="btn btn-primary" id="addTaskBtn">New Task</button>
+      </div>
+    </div>
+    <div class="tracker-stats">
+      <div class="tracker-stat">Todo: <span class="tracker-stat-value" id="todoCount">-</span></div>
+      <div class="tracker-stat">In Progress: <span class="tracker-stat-value" id="progressCount">-</span></div>
+      <div class="tracker-stat">Done: <span class="tracker-stat-value" id="doneCount">-</span></div>
+      <div class="tracker-stat">Overdue: <span class="tracker-stat-value" id="overdueCount" style="color:var(--status-absent)">-</span></div>
+    </div>
+    <div id="kanbanView" class="kanban-board"></div>
+    <div id="listView" class="tracker-list hidden">
+      <table class="tracker-table">
+        <thead><tr><th>Task</th><th>Priority</th><th>Assignee</th><th>Status</th><th>Due</th><th>Tags</th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="detailOverlay" class="detail-overlay hidden">
+    <div class="detail-modal">
+      <div class="detail-header"><h3 id="detailTitle"></h3><button class="detail-close" id="detailClose">&times;</button></div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module">
+    import { httpClient } from './js/httpClient.js';
+    import { applyPrefsToDOM } from './js/prefsClient.js';
+
+    let settingsCache = null, currentUser = null, isAdmin = false;
+    let tasks = [];
+    const columns = ['Todo', 'In Progress', 'Review', 'Done'];
+    const priorityClasses = { urgent: 'priority-urgent', high: 'priority-high', medium: 'priority-medium', low: 'priority-low' };
+    const $ = id => document.getElementById(id);
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      try {
+        const ctx = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (ctx.v !== 1) return;
+        settingsCache = ctx.settings; currentUser = ctx.user; isAdmin = ctx.isAdmin;
+        if (ctx.prefs) applyPrefsToDOM(ctx.prefs);
+        init();
+      } catch (e) { console.error('Invalid CONTEXT', e); }
+    });
+    if (!window.frameElement) init();
+
+    async function init() {
+      await loadTasks(); renderKanban(); renderList(); updateStats(); populateAssigneeFilter();
+      initViewToggle(); initSearch(); initDetail();
+      $('assigneeFilter').addEventListener('change', () => { renderKanban(); renderList(); });
+    }
+
+    async function loadTasks() {
+      try { const res = await httpClient.get('/api/tasks'); tasks = res.tasks || res || []; }
+      catch (_e) { tasks = []; }
+    }
+
+    function filterTasks() {
+      let result = tasks;
+      const q = ($('searchInput').value || '').toLowerCase();
+      const assignee = $('assigneeFilter').value;
+      if (q) result = result.filter(t => (t.title || '').toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q));
+      if (assignee) result = result.filter(t => t.assignee === assignee);
+      return result;
+    }
+
+    function renderKanban() {
+      const board = $('kanbanView');
+      board.innerHTML = columns.map(col => {
+        const items = filterTasks().filter(t => t.status === col);
+        return `<div class="kanban-column">
+          <div class="kanban-col-header"><span class="kanban-col-title">${esc(col)}</span><span class="kanban-col-count">${items.length}</span></div>
+          <div class="kanban-col-body">${items.map(t => {
+            const overdue = t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'Done';
+            return `<div class="kanban-card" data-id="${esc(t.id)}">
+              <div class="kanban-card-title">${esc(t.title || '')}</div>
+              <div class="kanban-card-meta">
+                ${t.priority ? `<span class="task-priority ${priorityClasses[t.priority] || ''}">${esc(t.priority)}</span>` : ''}
+                <span>${esc(t.assignee || '')}</span>
+                ${t.dueDate ? `<span class="mf ${overdue ? 'due-overdue' : ''}" style="font-size:0.6875rem">${esc(t.dueDate)}</span>` : ''}
+              </div>
+              ${(t.tags || []).length ? `<div style="margin-top:4px">${t.tags.map(tag => `<span class="kanban-card-tag">${esc(tag)}</span>`).join(' ')}</div>` : ''}
+            </div>`;
+          }).join('')}</div>
+        </div>`;
+      }).join('');
+      board.querySelectorAll('.kanban-card').forEach(c => c.addEventListener('click', () => openDetail(c.dataset.id)));
+    }
+
+    function renderList() {
+      $('listBody').innerHTML = filterTasks().map(t => {
+        const overdue = t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'Done';
+        return `<tr data-id="${esc(t.id)}" style="cursor:pointer">
+          <td>${esc(t.title || '')}</td>
+          <td>${t.priority ? `<span class="task-priority ${priorityClasses[t.priority] || ''}">${esc(t.priority)}</span>` : '-'}</td>
+          <td>${esc(t.assignee || '')}</td><td>${esc(t.status || '')}</td>
+          <td class="mf ${overdue ? 'due-overdue' : ''}">${esc(t.dueDate || '-')}</td>
+          <td>${(t.tags || []).map(tag => `<span class="kanban-card-tag">${esc(tag)}</span>`).join(' ')}</td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="6" style="color:var(--tx3);text-align:center">No tasks</td></tr>';
+      $('listBody').querySelectorAll('tr[data-id]').forEach(r => r.addEventListener('click', () => openDetail(r.dataset.id)));
+    }
+
+    function updateStats() {
+      $('todoCount').textContent = tasks.filter(t => t.status === 'Todo').length;
+      $('progressCount').textContent = tasks.filter(t => t.status === 'In Progress').length;
+      $('doneCount').textContent = tasks.filter(t => t.status === 'Done').length;
+      $('overdueCount').textContent = tasks.filter(t => t.dueDate && new Date(t.dueDate) < new Date() && t.status !== 'Done').length;
+    }
+
+    function populateAssigneeFilter() {
+      const assignees = [...new Set(tasks.map(t => t.assignee).filter(Boolean))];
+      $('assigneeFilter').innerHTML = '<option value="">All Assignees</option>' + assignees.map(a => `<option value="${esc(a)}">${esc(a)}</option>`).join('');
+    }
+
+    function initViewToggle() {
+      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          $('kanbanView').classList.toggle('hidden', btn.dataset.view !== 'kanban');
+          $('listView').classList.toggle('hidden', btn.dataset.view !== 'list');
+        });
+      });
+    }
+
+    function initSearch() { $('searchInput').addEventListener('input', () => { renderKanban(); renderList(); }); }
+
+    function initDetail() {
+      $('detailClose').addEventListener('click', () => $('detailOverlay').classList.add('hidden'));
+      $('detailOverlay').addEventListener('click', (e) => { if (e.target === $('detailOverlay')) $('detailOverlay').classList.add('hidden'); });
+    }
+
+    function openDetail(id) {
+      const t = tasks.find(x => String(x.id) === String(id));
+      if (!t) return;
+      $('detailTitle').textContent = t.title || '';
+      $('detailBody').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Status</strong><div>${esc(t.status || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Priority</strong><div>${t.priority ? `<span class="task-priority ${priorityClasses[t.priority] || ''}">${esc(t.priority)}</span>` : '-'}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Assignee</strong><div>${esc(t.assignee || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Due Date</strong><div class="mf">${esc(t.dueDate || '-')}</div></div>
+        </div>
+        ${t.description ? `<div><strong style="font-size:0.75rem;color:var(--tx3)">Description</strong><p style="margin-top:4px;font-size:0.875rem">${esc(t.description)}</p></div>` : ''}
+        ${(t.tags || []).length ? `<div style="margin-top:12px"><strong style="font-size:0.75rem;color:var(--tx3)">Tags</strong><div style="margin-top:4px">${t.tags.map(tag => `<span class="kanban-card-tag">${esc(tag)}</span>`).join(' ')}</div></div>` : ''}
+      `;
+      $('detailOverlay').classList.remove('hidden');
+    }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>

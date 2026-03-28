@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zenith — Live Platform View</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <style>
+    .zenith { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .zenith-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: var(--bg1); border-bottom: 1px solid var(--bd); flex-shrink: 0; }
+    .zenith-title { font-size: 1.125rem; font-weight: 600; }
+    .zenith-body { flex: 1; overflow-y: auto; padding: 20px; }
+
+    .live-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+
+    .live-card { background: var(--bg1); border: 1px solid var(--bd); border-radius: var(--r); padding: 16px; }
+    .live-card-title { font-size: 0.875rem; font-weight: 600; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+    .live-indicator { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 2s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+    .live-stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .live-stat { background: var(--bg2); border-radius: var(--r); padding: 10px; text-align: center; }
+    .live-stat-value { font-size: 1.5rem; font-weight: 700; color: var(--accent); font-family: var(--font-mono); }
+    .live-stat-label { font-size: 0.6875rem; color: var(--tx3); margin-top: 2px; }
+
+    .live-list { margin-top: 12px; }
+    .live-list-item { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--bd); font-size: 0.8125rem; }
+    .live-list-item:last-child { border-bottom: none; }
+    .live-badge { padding: 2px 8px; border-radius: 12px; font-size: 0.6875rem; color: #fff; }
+
+    .activity-feed { max-height: 300px; overflow-y: auto; }
+    .activity-item { padding: 8px 0; border-bottom: 1px solid var(--bd); font-size: 0.8125rem; }
+    .activity-time { font-family: var(--font-mono); font-size: 0.75rem; color: var(--tx3); }
+  </style>
+</head>
+<body>
+  <div class="zenith">
+    <div class="zenith-header">
+      <span class="zenith-title">Live Platform View</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="live-indicator"></span>
+        <span style="font-size:0.8125rem;color:var(--tx2)" id="lastUpdated">Updating...</span>
+      </div>
+    </div>
+    <div class="zenith-body">
+      <div class="live-grid">
+        <!-- Attendance Overview -->
+        <div class="live-card">
+          <div class="live-card-title">Attendance Now<span class="live-indicator"></span></div>
+          <div class="live-stat-grid" id="attendanceStats"></div>
+        </div>
+        <!-- Department Breakdown -->
+        <div class="live-card">
+          <div class="live-card-title">By Department</div>
+          <div class="live-list" id="deptBreakdown"></div>
+        </div>
+        <!-- Recent Activity -->
+        <div class="live-card">
+          <div class="live-card-title">Recent Activity</div>
+          <div class="activity-feed" id="activityFeed"></div>
+        </div>
+        <!-- Late Arrivals -->
+        <div class="live-card">
+          <div class="live-card-title">Late Arrivals Today</div>
+          <div class="live-list" id="lateList"></div>
+        </div>
+        <!-- On Break -->
+        <div class="live-card">
+          <div class="live-card-title">Currently On Break</div>
+          <div class="live-list" id="breakList"></div>
+        </div>
+        <!-- System Health -->
+        <div class="live-card">
+          <div class="live-card-title">System Status</div>
+          <div class="live-list" id="systemStatus"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module">
+    import { httpClient } from './js/httpClient.js';
+    import { applyPrefsToDOM } from './js/prefsClient.js';
+
+    let settingsCache = null, currentUser = null, isAdmin = false;
+    let refreshTimer = null;
+    const $ = id => document.getElementById(id);
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      try {
+        const ctx = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (ctx.v !== 1) return;
+        settingsCache = ctx.settings; currentUser = ctx.user; isAdmin = ctx.isAdmin;
+        if (ctx.prefs) applyPrefsToDOM(ctx.prefs);
+        init();
+      } catch (e) { console.error('Invalid CONTEXT', e); }
+    });
+    if (!window.frameElement) init();
+
+    async function init() {
+      await refreshData();
+      if (refreshTimer) clearInterval(refreshTimer);
+      const interval = settingsCache?.ui?.boardRefreshMs || 15000;
+      refreshTimer = setInterval(refreshData, interval);
+    }
+
+    async function refreshData() {
+      try {
+        const res = await httpClient.get('/api/attendance/live');
+        const data = res.live || res;
+        renderAttendanceStats(data);
+        renderDeptBreakdown(data.departments || []);
+        renderActivityFeed(data.recentActivity || []);
+        renderLateList(data.lateArrivals || []);
+        renderBreakList(data.onBreak || []);
+        renderSystemStatus(data.system || {});
+        $('lastUpdated').textContent = `Updated ${new Date().toLocaleTimeString()}`;
+      } catch (_e) {
+        $('lastUpdated').textContent = 'Update failed';
+      }
+    }
+
+    function renderAttendanceStats(data) {
+      $('attendanceStats').innerHTML = [
+        { label: 'In', value: data.inCount || 0, color: 'var(--status-in)' },
+        { label: 'Break', value: data.breakCount || 0, color: 'var(--status-break)' },
+        { label: 'Absent', value: data.absentCount || 0, color: 'var(--status-absent)' },
+        { label: 'Total', value: data.totalCount || 0, color: 'var(--accent)' },
+      ].map(s => `<div class="live-stat"><div class="live-stat-value" style="color:${s.color}">${s.value}</div><div class="live-stat-label">${s.label}</div></div>`).join('');
+    }
+
+    function renderDeptBreakdown(depts) {
+      $('deptBreakdown').innerHTML = depts.map(d => `
+        <div class="live-list-item"><span>${esc(d.name || '')}</span><span style="font-family:var(--font-mono)">${d.inCount || 0}/${d.totalCount || 0}</span></div>
+      `).join('') || '<div style="color:var(--tx3);font-size:0.8125rem">No department data</div>';
+    }
+
+    function renderActivityFeed(activities) {
+      $('activityFeed').innerHTML = activities.map(a => `
+        <div class="activity-item"><span class="activity-time">${esc(a.time || '')}</span> <span>${esc(a.name || '')} — ${esc(a.action || '')}</span></div>
+      `).join('') || '<div style="color:var(--tx3);font-size:0.8125rem">No recent activity</div>';
+    }
+
+    function renderLateList(lates) {
+      $('lateList').innerHTML = lates.map(l => `
+        <div class="live-list-item"><span>${esc(l.name || '')}</span><span class="live-badge" style="background:var(--status-late)">${esc(l.lateBy || '')}</span></div>
+      `).join('') || '<div style="color:var(--tx3);font-size:0.8125rem">No late arrivals</div>';
+    }
+
+    function renderBreakList(breaks) {
+      $('breakList').innerHTML = breaks.map(b => `
+        <div class="live-list-item"><span>${esc(b.name || '')}</span><span class="mf" style="font-size:0.75rem;color:var(--tx3)">${esc(b.since || '')}</span></div>
+      `).join('') || '<div style="color:var(--tx3);font-size:0.8125rem">No one on break</div>';
+    }
+
+    function renderSystemStatus(sys) {
+      const items = [
+        { label: 'Database', status: sys.database || 'ok' },
+        { label: 'SSE', status: sys.sse || 'ok' },
+        { label: 'API', status: sys.api || 'ok' },
+      ];
+      $('systemStatus').innerHTML = items.map(i => `
+        <div class="live-list-item"><span>${esc(i.label)}</span><span class="live-badge" style="background:${i.status === 'ok' ? 'var(--accent)' : 'var(--status-absent)'}">${esc(i.status)}</span></div>
+      `).join('');
+    }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>

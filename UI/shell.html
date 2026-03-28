@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BlokHR</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <style>
+    /* ── Shell Layout ── */
+    .shell { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+    /* ── Header ── */
+    .shell-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      height: 56px;
+      background: var(--bg1);
+      border-bottom: 1px solid var(--bd);
+      z-index: 100;
+    }
+
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .header-logo { height: 32px; width: auto; }
+    .header-platform-name { font-size: 1rem; font-weight: 600; color: var(--tx); }
+
+    .header-center { display: flex; align-items: center; gap: 20px; }
+
+    .tz-clock {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: var(--font-mono);
+    }
+    .tz-clock-time { font-size: 0.9375rem; font-weight: 500; color: var(--tx); }
+    .tz-clock-label { font-size: 0.625rem; color: var(--tx3); text-transform: uppercase; }
+
+    .header-right { display: flex; align-items: center; gap: 12px; }
+
+    .user-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 0.75rem;
+      color: var(--bg0);
+      overflow: hidden;
+    }
+    .user-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .user-name { font-size: 0.8125rem; color: var(--tx2); }
+
+    .gear-btn {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: 1px solid var(--bd);
+      border-radius: var(--r);
+      color: var(--tx2);
+      cursor: pointer;
+      transition: all var(--transition);
+      font-size: 1.125rem;
+    }
+    .gear-btn:hover { color: var(--tx); border-color: var(--accent); }
+
+    /* ── Tab Bar ── */
+    .tab-bar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 0 20px;
+      height: 44px;
+      background: var(--bg1);
+      border-bottom: 1px solid var(--bd);
+      overflow-x: auto;
+    }
+
+    .tab-btn {
+      padding: 8px 16px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      color: var(--tx2);
+      font-family: var(--font-ui);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all var(--transition);
+    }
+    .tab-btn:hover { color: var(--tx); }
+    .tab-btn.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+
+    /* ── Module iframe ── */
+    .module-frame {
+      flex: 1;
+      border: none;
+      width: 100%;
+      background: var(--bg0);
+    }
+
+    /* ── Login Screen ── */
+    .login-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: var(--bg0);
+    }
+
+    .login-box {
+      background: var(--bg1);
+      border: 1px solid var(--bd);
+      border-radius: 12px;
+      padding: 40px;
+      width: min(90vw, 400px);
+      text-align: center;
+    }
+
+    .login-logo { height: 48px; margin-bottom: 16px; }
+    .login-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 8px; }
+    .login-subtitle { font-size: 0.875rem; color: var(--tx2); margin-bottom: 28px; }
+
+    .login-buttons { display: flex; flex-direction: column; gap: 10px; }
+
+    .login-provider-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px;
+      background: var(--bg3);
+      border: 1px solid var(--bd);
+      border-radius: var(--r);
+      color: var(--tx);
+      font-family: var(--font-ui);
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all var(--transition);
+    }
+    .login-provider-btn:hover { border-color: var(--accent); background: var(--bg4); }
+
+    /* ── Gear Panel (slide-out) ── */
+    .gear-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 500;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity var(--transition);
+    }
+    .gear-overlay.open { opacity: 1; pointer-events: auto; }
+
+    .gear-panel {
+      position: fixed;
+      top: 0;
+      right: -340px;
+      width: 340px;
+      height: 100%;
+      background: var(--bg1);
+      border-left: 1px solid var(--bd);
+      z-index: 501;
+      overflow-y: auto;
+      transition: right 300ms ease;
+      display: flex;
+      flex-direction: column;
+    }
+    .gear-panel.open { right: 0; }
+
+    .gear-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--bd);
+    }
+    .gear-panel-header h3 { font-size: 1rem; }
+
+    .gear-close {
+      background: transparent;
+      border: none;
+      color: var(--tx2);
+      cursor: pointer;
+      font-size: 1.25rem;
+      padding: 4px;
+    }
+    .gear-close:hover { color: var(--tx); }
+
+    .gear-section {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--bd);
+    }
+    .gear-section-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--tx3);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 12px;
+    }
+
+    .theme-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+
+    .theme-card {
+      padding: 10px;
+      background: var(--bg2);
+      border: 2px solid var(--bd);
+      border-radius: var(--r);
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--tx2);
+      transition: all var(--transition);
+    }
+    .theme-card:hover { border-color: var(--tx3); }
+    .theme-card.active { border-color: var(--accent); color: var(--accent); }
+
+    .dark-mode-row {
+      display: flex;
+      gap: 8px;
+    }
+    .dark-mode-btn {
+      flex: 1;
+      padding: 8px;
+      background: var(--bg2);
+      border: 2px solid var(--bd);
+      border-radius: var(--r);
+      text-align: center;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      color: var(--tx2);
+      font-family: var(--font-ui);
+      transition: all var(--transition);
+    }
+    .dark-mode-btn:hover { border-color: var(--tx3); }
+    .dark-mode-btn.active { border-color: var(--accent); color: var(--accent); }
+
+    .color-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .color-row label { font-size: 0.8125rem; color: var(--tx2); }
+    .color-row input[type="color"] {
+      width: 32px;
+      height: 28px;
+      border: 1px solid var(--bd);
+      border-radius: 4px;
+      cursor: pointer;
+      background: transparent;
+    }
+
+    .tz-slot {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .tz-slot-label { font-size: 0.8125rem; color: var(--tx2); width: 50px; }
+    .tz-slot select { flex: 1; }
+
+    .bg-upload-area {
+      border: 2px dashed var(--bd);
+      border-radius: var(--r);
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      color: var(--tx3);
+      font-size: 0.8125rem;
+      transition: border-color var(--transition);
+    }
+    .bg-upload-area:hover { border-color: var(--accent); }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .slider-row label { font-size: 0.75rem; color: var(--tx3); width: 60px; }
+    .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+
+    /* ── Loading ── */
+    .loading-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: var(--bg0);
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--bd);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 800ms linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Admin-only visibility ── */
+    .admin-only { display: none; }
+    .is-admin .admin-only { display: block; }
+
+    /* ── Toast container ── */
+    #toastContainer { position: fixed; top: 16px; right: 16px; z-index: 10000; display: flex; flex-direction: column; gap: 8px; }
+  </style>
+</head>
+<body>
+  <!-- Loading State -->
+  <div id="loadingScreen" class="loading-screen">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Login Screen -->
+  <div id="loginScreen" class="login-screen hidden">
+    <div class="login-box">
+      <img id="loginLogo" class="login-logo" src="" alt="">
+      <h2 id="loginTitle" class="login-title"></h2>
+      <p class="login-subtitle">Sign in to continue</p>
+      <div id="loginButtons" class="login-buttons"></div>
+    </div>
+  </div>
+
+  <!-- Main Shell -->
+  <div id="shellMain" class="shell hidden">
+    <!-- Header -->
+    <header class="shell-header">
+      <div class="header-left">
+        <img id="headerLogo" class="header-logo" src="" alt="">
+        <span id="headerPlatformName" class="header-platform-name"></span>
+      </div>
+      <div class="header-center">
+        <div class="tz-clock" id="tzClock1"><span class="tz-clock-time">--:--</span><span class="tz-clock-label">—</span></div>
+        <div class="tz-clock" id="tzClock2"><span class="tz-clock-time">--:--</span><span class="tz-clock-label">—</span></div>
+        <div class="tz-clock" id="tzClock3"><span class="tz-clock-time">--:--</span><span class="tz-clock-label">—</span></div>
+        <div class="tz-clock" id="tzClock4"><span class="tz-clock-time">--:--</span><span class="tz-clock-label">—</span></div>
+      </div>
+      <div class="header-right">
+        <span id="userName" class="user-name"></span>
+        <div id="userAvatar" class="user-avatar"><span id="userInitials"></span></div>
+        <button id="gearBtn" class="gear-btn" aria-label="Settings" title="Settings">&#9881;</button>
+      </div>
+    </header>
+
+    <!-- Tab Bar -->
+    <nav id="tabBar" class="tab-bar" role="tablist"></nav>
+
+    <!-- Module iframe -->
+    <iframe id="moduleFrame" class="module-frame" title="Module content" sandbox="allow-scripts allow-same-origin allow-forms allow-popups"></iframe>
+  </div>
+
+  <!-- Gear Panel Overlay -->
+  <div id="gearOverlay" class="gear-overlay"></div>
+
+  <!-- Gear Panel -->
+  <aside id="gearPanel" class="gear-panel">
+    <div class="gear-panel-header">
+      <h3>Settings</h3>
+      <button id="gearClose" class="gear-close" aria-label="Close settings">&times;</button>
+    </div>
+
+    <!-- Theme -->
+    <div class="gear-section">
+      <div class="gear-section-title">Theme</div>
+      <div id="themeGrid" class="theme-grid">
+        <button class="theme-card" data-theme="chromium">Chromium</button>
+        <button class="theme-card" data-theme="neural">Neural</button>
+        <button class="theme-card" data-theme="holodeck">Holodeck</button>
+        <button class="theme-card" data-theme="clean">Clean</button>
+      </div>
+    </div>
+
+    <!-- Dark Mode -->
+    <div class="gear-section">
+      <div class="gear-section-title">Appearance</div>
+      <div id="darkModeRow" class="dark-mode-row">
+        <button class="dark-mode-btn" data-mode="dark">Dark</button>
+        <button class="dark-mode-btn" data-mode="light">Light</button>
+        <button class="dark-mode-btn" data-mode="system">System</button>
+      </div>
+    </div>
+
+    <!-- Colours -->
+    <div class="gear-section">
+      <div class="gear-section-title">Colours</div>
+      <div class="color-row"><label>Accent</label><input type="color" data-css-var="--accent" data-pref-key="color_accent"></div>
+      <div class="color-row"><label>Clock In</label><input type="color" data-css-var="--status-in" data-pref-key="color_status_in"></div>
+      <div class="color-row"><label>Break</label><input type="color" data-css-var="--status-break" data-pref-key="color_status_break"></div>
+      <div class="color-row"><label>Absent</label><input type="color" data-css-var="--status-absent" data-pref-key="color_status_absent"></div>
+    </div>
+
+    <!-- Timezones -->
+    <div class="gear-section">
+      <div class="gear-section-title">Timezone Clocks</div>
+      <div id="timezoneSlots">
+        <div class="tz-slot"><span class="tz-slot-label">Slot 1</span><select class="select" data-slot="1"></select></div>
+        <div class="tz-slot"><span class="tz-slot-label">Slot 2</span><select class="select" data-slot="2"></select></div>
+        <div class="tz-slot"><span class="tz-slot-label">Slot 3</span><select class="select" data-slot="3"></select></div>
+        <div class="tz-slot"><span class="tz-slot-label">Slot 4</span><select class="select" data-slot="4"></select></div>
+      </div>
+    </div>
+
+    <!-- Background -->
+    <div class="gear-section">
+      <div class="gear-section-title">Background</div>
+      <div id="bgUpload" class="bg-upload-area">Click or drag to upload background image</div>
+      <input type="file" id="bgFileInput" accept="image/*" class="hidden">
+      <div class="slider-row"><label>Opacity</label><input type="range" id="bgOpacity" min="0" max="100" value="100" data-pref-key="bg_opacity"></div>
+      <div class="slider-row"><label>Blur</label><input type="range" id="bgBlur" min="0" max="20" value="0" data-pref-key="bg_blur"></div>
+      <div class="slider-row"><label>Darken</label><input type="range" id="bgDarken" min="0" max="100" value="0" data-pref-key="bg_darken"></div>
+    </div>
+
+    <!-- Admin-Only: Branding -->
+    <div class="gear-section admin-only">
+      <div class="gear-section-title">Admin: Branding</div>
+      <div style="margin-bottom:8px">
+        <label class="label">Platform Name</label>
+        <input type="text" id="adminPlatformName" class="input" placeholder="Company HRMS">
+      </div>
+      <div style="margin-bottom:8px">
+        <label class="label">Logo</label>
+        <div id="adminLogoUpload" class="bg-upload-area">Upload logo</div>
+        <input type="file" id="adminLogoFile" accept="image/*" class="hidden">
+      </div>
+      <div>
+        <label class="label">Favicon</label>
+        <div id="adminFaviconUpload" class="bg-upload-area">Upload favicon</div>
+        <input type="file" id="adminFaviconFile" accept="image/*" class="hidden">
+      </div>
+    </div>
+
+    <!-- Session -->
+    <div class="gear-section">
+      <div class="gear-section-title">Session</div>
+      <button id="signOutBtn" class="btn btn-danger w-full">Sign Out</button>
+    </div>
+  </aside>
+
+  <!-- Toast Container -->
+  <div id="toastContainer"></div>
+
+  <script type="module">
+    import { httpClient, SAFE_ORIGIN } from './js/httpClient.js';
+    import { loadPrefs, savePref, applyPrefsToDOM } from './js/prefsClient.js';
+    import { loadSettings, getSettings, updateSettings } from './js/settingsCache.js';
+    import { setTheme, getTheme, setDarkMode, getDarkMode } from './js/themeManager.js';
+    import { connectSSE, onSSE } from './js/sseClient.js';
+    import { initRouter, navigate } from './js/router.js';
+
+    // ── State ──
+    let settingsCache = null;
+    let memberPrefs = null;
+    let currentUser = null;
+    let currentMember = null;
+    let isAdmin = false;
+
+    // ── DOM refs ──
+    const $ = id => document.getElementById(id);
+    const loadingScreen = $('loadingScreen');
+    const loginScreen = $('loginScreen');
+    const shellMain = $('shellMain');
+    const moduleFrame = $('moduleFrame');
+    const tabBar = $('tabBar');
+    const gearPanel = $('gearPanel');
+    const gearOverlay = $('gearOverlay');
+    const toastContainer = $('toastContainer');
+
+    // ── Boot ──
+    boot().catch(err => {
+      console.error('Boot failed:', err);
+      showToast('Failed to load application', 'error');
+    });
+
+    async function boot() {
+      // 1. Load settings
+      settingsCache = await loadSettings();
+
+      // 2. Apply tenant branding
+      document.title = settingsCache?.tenant?.platformName || 'BlokHR';
+      $('headerLogo').src = settingsCache?.tenant?.logoDataUrl || '';
+      $('headerPlatformName').textContent = settingsCache?.tenant?.platformName || '';
+      $('loginLogo').src = settingsCache?.tenant?.logoDataUrl || '';
+      $('loginTitle').textContent = settingsCache?.tenant?.platformName || 'Welcome';
+
+      // 3. Check for existing session
+      const tenantId = settingsCache?.tenant?.id || 'default';
+      const sessionToken = localStorage.getItem(`session_${tenantId}`);
+
+      if (sessionToken) {
+        try {
+          await authenticatedBoot();
+        } catch (_e) {
+          showLogin();
+        }
+      } else {
+        showLogin();
+      }
+    }
+
+    function showLogin() {
+      loadingScreen.classList.add('hidden');
+      loginScreen.classList.remove('hidden');
+      shellMain.classList.add('hidden');
+      renderLoginButtons(settingsCache?.auth?.providers || {});
+    }
+
+    async function authenticatedBoot() {
+      // Load user prefs from server
+      memberPrefs = await loadPrefs();
+
+      // Load member record
+      try {
+        const res = await httpClient.get('/api/members/me');
+        currentMember = res.member || res;
+      } catch (_e) {
+        currentMember = {};
+      }
+
+      currentUser = {
+        email: sessionStorage.getItem('blokhr_email') || '',
+        name: sessionStorage.getItem('blokhr_name') || '',
+        photo: currentMember?.photo || '',
+      };
+
+      // Check admin
+      const admins = settingsCache?.admins || [];
+      isAdmin = admins.includes(currentUser.email);
+
+      // Show shell
+      loadingScreen.classList.add('hidden');
+      loginScreen.classList.add('hidden');
+      shellMain.classList.remove('hidden');
+      if (isAdmin) document.body.classList.add('is-admin');
+
+      // Render header
+      $('userName').textContent = currentUser.name;
+      renderAvatar(currentUser);
+
+      // Render tabs from settings
+      const tabs = (settingsCache?.tabs || []).filter(t => t.enabled);
+      renderTabs(tabs);
+
+      // Init router
+      initRouter(tabs, loadModule);
+
+      // Timezone clocks
+      initTimezoneClocks();
+
+      // SSE
+      connectSSE('/api/sse');
+      onSSE('settings-update', handleSettingsUpdate);
+      onSSE('notification', handleNotification);
+
+      // Init gear panel
+      initGearPanel();
+    }
+
+    // ── Login ──
+    function renderLoginButtons(providers) {
+      const container = $('loginButtons');
+      container.innerHTML = '';
+
+      const providerLabels = {
+        msal: 'Microsoft',
+        google: 'Google',
+        okta: 'Okta',
+        teamsSso: 'Teams SSO',
+        github: 'GitHub',
+        saml: 'SAML 2.0',
+        customJwt: 'Custom JWT',
+        magicLink: 'Magic Link',
+        localPin: 'Local PIN',
+      };
+
+      Object.entries(providers).forEach(([key, config]) => {
+        if (!config.enabled) return;
+        const btn = document.createElement('button');
+        btn.className = 'login-provider-btn';
+        btn.textContent = `Sign in with ${providerLabels[key] || key}`;
+        btn.addEventListener('click', () => handleLogin(key, config));
+        container.appendChild(btn);
+      });
+
+      if (container.children.length === 0) {
+        container.innerHTML = '<p style="color:var(--tx3)">No authentication providers configured.</p>';
+      }
+    }
+
+    async function handleLogin(providerKey, _config) {
+      // Auth flow is provider-specific; this dispatches to the right handler
+      // For now, placeholder that sets session data
+      try {
+        const res = await httpClient.post('/api/auth/login', { provider: providerKey });
+        const { token, user } = res;
+        const tenantId = settingsCache?.tenant?.id || 'default';
+        localStorage.setItem(`session_${tenantId}`, token);
+        sessionStorage.setItem('blokhr_email', user.email);
+        sessionStorage.setItem('blokhr_name', user.name);
+        await authenticatedBoot();
+      } catch (err) {
+        showToast('Login failed: ' + (err.message || 'Unknown error'), 'error');
+      }
+    }
+
+    // ── Tabs ──
+    function renderTabs(tabs) {
+      tabBar.innerHTML = '';
+      tabs.forEach(tab => {
+        const btn = document.createElement('button');
+        btn.className = 'tab-btn';
+        btn.textContent = tab.label;
+        btn.setAttribute('role', 'tab');
+        btn.dataset.tabId = tab.id;
+        btn.addEventListener('click', () => navigate(tab.id));
+        tabBar.appendChild(btn);
+      });
+    }
+
+    function loadModule(tab) {
+      // Update active tab
+      tabBar.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tabId === tab.id);
+      });
+
+      // Load iframe
+      const src = `${tab.src}?iframe=1`;
+      if (moduleFrame.src !== new URL(src, window.location.origin).href) {
+        moduleFrame.src = src;
+      }
+
+      // Dispatch CONTEXT when iframe loads
+      moduleFrame.onload = () => dispatchContext();
+    }
+
+    function dispatchContext() {
+      const ctx = {
+        v: 1,
+        token: localStorage.getItem(`session_${settingsCache?.tenant?.id || 'default'}`),
+        user: currentUser,
+        isAdmin,
+        settings: settingsCache,
+        member: currentMember,
+        prefs: memberPrefs,
+      };
+      moduleFrame.contentWindow.postMessage(JSON.stringify(ctx), SAFE_ORIGIN);
+    }
+
+    // ── Avatar ──
+    function renderAvatar(user) {
+      const avatar = $('userAvatar');
+      const initials = $('userInitials');
+      if (user.photo) {
+        avatar.innerHTML = `<img src="${escapeAttr(user.photo)}" alt="${escapeAttr(user.name)}">`;
+      } else {
+        const parts = (user.name || '?').split(' ');
+        initials.textContent = parts.map(p => p[0]).join('').slice(0, 2).toUpperCase();
+      }
+    }
+
+    // ── Timezone Clocks ──
+    let _tzInterval = null;
+
+    function initTimezoneClocks() {
+      updateClocks();
+      if (_tzInterval) clearInterval(_tzInterval);
+      _tzInterval = setInterval(updateClocks, 1000);
+    }
+
+    function updateClocks() {
+      for (let i = 1; i <= 4; i++) {
+        const prefKey = `timezone_slot_${i}`;
+        const iana = memberPrefs?.[prefKey];
+        const el = $(`tzClock${i}`);
+        if (!el) continue;
+        if (iana) {
+          try {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-GB', { timeZone: iana, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            el.querySelector('.tz-clock-time').textContent = timeStr;
+            el.querySelector('.tz-clock-label').textContent = iana.split('/').pop().replace(/_/g, ' ');
+            el.style.display = '';
+          } catch (_e) {
+            el.style.display = 'none';
+          }
+        } else {
+          el.style.display = 'none';
+        }
+      }
+    }
+
+    // ── Gear Panel ──
+    function initGearPanel() {
+      $('gearBtn').addEventListener('click', openGear);
+      $('gearClose').addEventListener('click', closeGear);
+      gearOverlay.addEventListener('click', closeGear);
+
+      // Themes
+      document.querySelectorAll('.theme-card').forEach(card => {
+        card.addEventListener('click', () => {
+          setTheme(card.dataset.theme);
+          savePref('theme', card.dataset.theme);
+          updateThemeUI();
+        });
+      });
+      updateThemeUI();
+
+      // Dark mode
+      document.querySelectorAll('.dark-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          setDarkMode(btn.dataset.mode);
+          savePref('dark_mode', btn.dataset.mode);
+          updateDarkModeUI();
+        });
+      });
+      updateDarkModeUI();
+
+      // Colours
+      document.querySelectorAll('input[data-css-var]').forEach(input => {
+        const currentVal = getComputedStyle(document.documentElement).getPropertyValue(input.dataset.cssVar).trim();
+        if (currentVal) input.value = currentVal;
+        input.addEventListener('input', () => {
+          document.documentElement.style.setProperty(input.dataset.cssVar, input.value);
+          savePref(input.dataset.prefKey, input.value);
+        });
+      });
+
+      // Timezones
+      const tzOptions = Intl.supportedValuesOf ? Intl.supportedValuesOf('timeZone') : ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo'];
+      document.querySelectorAll('#timezoneSlots select').forEach(sel => {
+        sel.innerHTML = '<option value="">— None —</option>' + tzOptions.map(tz => `<option value="${escapeAttr(tz)}">${tz}</option>`).join('');
+        const slot = sel.dataset.slot;
+        const current = memberPrefs?.[`timezone_slot_${slot}`] || '';
+        sel.value = current;
+        sel.addEventListener('change', () => {
+          savePref(`timezone_slot_${slot}`, sel.value);
+          if (memberPrefs) memberPrefs[`timezone_slot_${slot}`] = sel.value;
+          updateClocks();
+        });
+      });
+
+      // Background upload
+      $('bgUpload').addEventListener('click', () => $('bgFileInput').click());
+      $('bgFileInput').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const dataUrl = await fileToDataUrl(file);
+        document.documentElement.style.setProperty('--bg-image', `url(${dataUrl})`);
+        await savePref('bg_image_url', dataUrl);
+      });
+
+      // Background sliders
+      ['bgOpacity', 'bgBlur', 'bgDarken'].forEach(id => {
+        const slider = $(id);
+        const key = slider.dataset.prefKey;
+        if (memberPrefs?.[key] != null) slider.value = memberPrefs[key];
+        slider.addEventListener('input', () => {
+          const val = Number(slider.value);
+          savePref(key, val);
+          if (key === 'bg_opacity') document.documentElement.style.setProperty('--bg-opacity', String(val / 100));
+          if (key === 'bg_blur') document.documentElement.style.setProperty('--bg-blur', `${val}px`);
+          if (key === 'bg_darken') document.documentElement.style.setProperty('--bg-darken', String(val / 100));
+        });
+      });
+
+      // Admin: branding
+      $('adminPlatformName').value = settingsCache?.tenant?.platformName || '';
+      $('adminPlatformName').addEventListener('change', async () => {
+        const name = $('adminPlatformName').value.trim();
+        if (!name) return;
+        await httpClient.post('/api/settings', { tenant: { platformName: name } });
+        $('headerPlatformName').textContent = name;
+        document.title = name;
+        showToast('Platform name updated', 'success');
+      });
+
+      $('adminLogoUpload').addEventListener('click', () => $('adminLogoFile').click());
+      $('adminLogoFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const dataUrl = await fileToDataUrl(file);
+        await httpClient.post('/api/settings', { tenant: { logoDataUrl: dataUrl } });
+        $('headerLogo').src = dataUrl;
+        showToast('Logo updated', 'success');
+      });
+
+      $('adminFaviconUpload').addEventListener('click', () => $('adminFaviconFile').click());
+      $('adminFaviconFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const dataUrl = await fileToDataUrl(file);
+        await httpClient.post('/api/settings', { tenant: { faviconDataUrl: dataUrl } });
+        updateFavicon(dataUrl);
+        showToast('Favicon updated', 'success');
+      });
+
+      // Sign out
+      $('signOutBtn').addEventListener('click', () => {
+        const tenantId = settingsCache?.tenant?.id || 'default';
+        localStorage.removeItem(`session_${tenantId}`);
+        sessionStorage.clear();
+        window.location.reload();
+      });
+    }
+
+    function openGear() { gearPanel.classList.add('open'); gearOverlay.classList.add('open'); }
+    function closeGear() { gearPanel.classList.remove('open'); gearOverlay.classList.remove('open'); }
+
+    function updateThemeUI() {
+      const current = getTheme();
+      document.querySelectorAll('.theme-card').forEach(c => {
+        c.classList.toggle('active', c.dataset.theme === current);
+      });
+    }
+
+    function updateDarkModeUI() {
+      const current = getDarkMode();
+      document.querySelectorAll('.dark-mode-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.mode === current);
+      });
+    }
+
+    // ── SSE handlers ──
+    async function handleSettingsUpdate() {
+      settingsCache = await loadSettings();
+      updateSettings(settingsCache);
+      dispatchContext();
+      showToast('Settings updated', 'info');
+    }
+
+    function handleNotification(event) {
+      try {
+        const data = JSON.parse(event.data);
+        showToast(data.message || 'New notification', 'info');
+      } catch (_e) {
+        showToast('New notification', 'info');
+      }
+    }
+
+    // ── Toast ──
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      toastContainer.appendChild(toast);
+      setTimeout(() => toast.remove(), settingsCache?.ui?.toastDurationMs || 4000);
+    }
+
+    // ── Helpers ──
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function updateFavicon(dataUrl) {
+      let link = document.querySelector("link[rel*='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = dataUrl;
+    }
+
+    function escapeAttr(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  </script>
+</body>
+</html>

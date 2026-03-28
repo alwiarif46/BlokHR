@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nebula — PD Tracker</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <link rel="stylesheet" href="css/tracker-common.css">
+  <style>
+    .pd-type { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.6875rem; }
+    .type-course { background: rgba(59,130,246,0.15); color: var(--status-in); }
+    .type-cert { background: rgba(5,150,105,0.15); color: var(--accent); }
+    .type-workshop { background: rgba(251,191,36,0.15); color: var(--status-break); }
+    .type-conference { background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .progress-bar { height: 6px; background: var(--bg4); border-radius: 3px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width var(--transition); }
+  </style>
+</head>
+<body>
+  <div class="tracker">
+    <div class="tracker-header">
+      <span class="tracker-title">Professional Development Tracker</span>
+      <div class="tracker-controls">
+        <input type="text" id="searchInput" class="tracker-search" placeholder="Search programs...">
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" data-view="kanban">Board</button>
+          <button class="view-toggle-btn" data-view="list">List</button>
+        </div>
+        <button class="btn btn-primary" id="addPdBtn">New Program</button>
+      </div>
+    </div>
+    <div class="tracker-stats">
+      <div class="tracker-stat">In Progress: <span class="tracker-stat-value" id="inProgressCount">-</span></div>
+      <div class="tracker-stat">Completed: <span class="tracker-stat-value" id="completedCount">-</span></div>
+      <div class="tracker-stat">Certifications: <span class="tracker-stat-value" id="certCount">-</span></div>
+    </div>
+    <div id="kanbanView" class="kanban-board"></div>
+    <div id="listView" class="tracker-list hidden">
+      <table class="tracker-table">
+        <thead><tr><th>Program</th><th>Type</th><th>Employee</th><th>Progress</th><th>Status</th><th>Due Date</th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="detailOverlay" class="detail-overlay hidden">
+    <div class="detail-modal">
+      <div class="detail-header"><h3 id="detailTitle"></h3><button class="detail-close" id="detailClose">&times;</button></div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module">
+    import { httpClient } from './js/httpClient.js';
+    import { applyPrefsToDOM } from './js/prefsClient.js';
+
+    let settingsCache = null, currentUser = null, isAdmin = false;
+    let programs = [];
+    const statuses = ['Planned', 'In Progress', 'Completed', 'Expired'];
+    const typeClasses = { course: 'type-course', certification: 'type-cert', workshop: 'type-workshop', conference: 'type-conference' };
+    const $ = id => document.getElementById(id);
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      try {
+        const ctx = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (ctx.v !== 1) return;
+        settingsCache = ctx.settings; currentUser = ctx.user; isAdmin = ctx.isAdmin;
+        if (ctx.prefs) applyPrefsToDOM(ctx.prefs);
+        init();
+      } catch (e) { console.error('Invalid CONTEXT', e); }
+    });
+    if (!window.frameElement) init();
+
+    async function init() {
+      await loadPrograms();
+      renderKanban(); renderList(); updateStats();
+      initViewToggle(); initSearch(); initDetail();
+    }
+
+    async function loadPrograms() {
+      try { const res = await httpClient.get('/api/pd/programs'); programs = res.programs || res || []; }
+      catch (_e) { programs = []; }
+    }
+
+    function renderKanban() {
+      const board = $('kanbanView');
+      board.innerHTML = statuses.map(status => {
+        const items = filter().filter(p => p.status === status);
+        return `<div class="kanban-column">
+          <div class="kanban-col-header"><span class="kanban-col-title">${esc(status)}</span><span class="kanban-col-count">${items.length}</span></div>
+          <div class="kanban-col-body">${items.map(p => `
+            <div class="kanban-card" data-id="${esc(p.id)}">
+              <div class="kanban-card-title">${esc(p.name || '')}</div>
+              <div class="kanban-card-meta" style="margin-bottom:4px">
+                <span class="pd-type ${typeClasses[p.type] || ''}">${esc(p.type || '')}</span>
+                <span>${esc(p.employee || '')}</span>
+              </div>
+              <div class="progress-bar"><div class="progress-fill" style="width:${p.progress || 0}%"></div></div>
+            </div>
+          `).join('')}</div>
+        </div>`;
+      }).join('');
+      board.querySelectorAll('.kanban-card').forEach(c => c.addEventListener('click', () => openDetail(c.dataset.id)));
+    }
+
+    function renderList() {
+      $('listBody').innerHTML = filter().map(p => `<tr data-id="${esc(p.id)}" style="cursor:pointer">
+        <td>${esc(p.name || '')}</td>
+        <td><span class="pd-type ${typeClasses[p.type] || ''}">${esc(p.type || '')}</span></td>
+        <td>${esc(p.employee || '')}</td>
+        <td><div class="progress-bar" style="width:80px;display:inline-block;vertical-align:middle"><div class="progress-fill" style="width:${p.progress || 0}%"></div></div> <span class="mf" style="font-size:0.75rem">${p.progress || 0}%</span></td>
+        <td>${esc(p.status || '')}</td><td class="mf">${esc(p.dueDate || '')}</td>
+      </tr>`).join('') || '<tr><td colspan="6" style="color:var(--tx3);text-align:center">No programs</td></tr>';
+      $('listBody').querySelectorAll('tr[data-id]').forEach(r => r.addEventListener('click', () => openDetail(r.dataset.id)));
+    }
+
+    function filter() {
+      const q = ($('searchInput').value || '').toLowerCase();
+      if (!q) return programs;
+      return programs.filter(p => (p.name || '').toLowerCase().includes(q) || (p.employee || '').toLowerCase().includes(q));
+    }
+
+    function updateStats() {
+      $('inProgressCount').textContent = programs.filter(p => p.status === 'In Progress').length;
+      $('completedCount').textContent = programs.filter(p => p.status === 'Completed').length;
+      $('certCount').textContent = programs.filter(p => p.type === 'certification' && p.status === 'Completed').length;
+    }
+
+    function initViewToggle() {
+      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          $('kanbanView').classList.toggle('hidden', btn.dataset.view !== 'kanban');
+          $('listView').classList.toggle('hidden', btn.dataset.view !== 'list');
+        });
+      });
+    }
+
+    function initSearch() { $('searchInput').addEventListener('input', () => { renderKanban(); renderList(); }); }
+
+    function initDetail() {
+      $('detailClose').addEventListener('click', () => $('detailOverlay').classList.add('hidden'));
+      $('detailOverlay').addEventListener('click', (e) => { if (e.target === $('detailOverlay')) $('detailOverlay').classList.add('hidden'); });
+    }
+
+    function openDetail(id) {
+      const p = programs.find(x => String(x.id) === String(id));
+      if (!p) return;
+      $('detailTitle').textContent = p.name || '';
+      $('detailBody').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Type</strong><div><span class="pd-type ${typeClasses[p.type] || ''}">${esc(p.type || '')}</span></div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Employee</strong><div>${esc(p.employee || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Status</strong><div>${esc(p.status || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Due Date</strong><div class="mf">${esc(p.dueDate || '-')}</div></div>
+          <div style="grid-column:1/-1"><strong style="font-size:0.75rem;color:var(--tx3)">Progress</strong><div style="margin-top:4px"><div class="progress-bar"><div class="progress-fill" style="width:${p.progress||0}%"></div></div><span class="mf" style="font-size:0.75rem">${p.progress||0}%</span></div></div>
+        </div>
+        ${p.description ? `<div style="margin-top:16px"><strong style="font-size:0.75rem;color:var(--tx3)">Description</strong><p style="margin-top:4px;font-size:0.875rem">${esc(p.description)}</p></div>` : ''}
+      `;
+      $('detailOverlay').classList.remove('hidden');
+    }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>

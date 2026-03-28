@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nova — Software Dev Tracker</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <link rel="stylesheet" href="css/tracker-common.css">
+  <style>
+    .issue-type { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.6875rem; font-weight: 500; }
+    .type-bug { background: rgba(239,68,68,0.15); color: var(--status-absent); }
+    .type-feature { background: rgba(59,130,246,0.15); color: var(--status-in); }
+    .type-improvement { background: rgba(5,150,105,0.15); color: var(--accent); }
+    .type-task { background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .sprint-badge { padding: 2px 8px; border-radius: 4px; font-size: 0.6875rem; background: var(--bg3); color: var(--tx2); }
+  </style>
+</head>
+<body>
+  <div class="tracker">
+    <div class="tracker-header">
+      <span class="tracker-title">Software Development Tracker</span>
+      <div class="tracker-controls">
+        <input type="text" id="searchInput" class="tracker-search" placeholder="Search issues...">
+        <select id="sprintFilter" class="select" style="width:160px"><option value="">All Sprints</option></select>
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" data-view="kanban">Board</button>
+          <button class="view-toggle-btn" data-view="list">List</button>
+        </div>
+        <button class="btn btn-primary" id="addIssueBtn">New Issue</button>
+      </div>
+    </div>
+    <div class="tracker-stats">
+      <div class="tracker-stat">Backlog: <span class="tracker-stat-value" id="backlogCount">-</span></div>
+      <div class="tracker-stat">In Dev: <span class="tracker-stat-value" id="devCount">-</span></div>
+      <div class="tracker-stat">In QA: <span class="tracker-stat-value" id="qaCount">-</span></div>
+      <div class="tracker-stat">Shipped: <span class="tracker-stat-value" id="shippedCount">-</span></div>
+      <div class="tracker-stat">Bugs: <span class="tracker-stat-value" id="bugCount" style="color:var(--status-absent)">-</span></div>
+    </div>
+    <div id="kanbanView" class="kanban-board"></div>
+    <div id="listView" class="tracker-list hidden">
+      <table class="tracker-table">
+        <thead><tr><th>ID</th><th>Title</th><th>Type</th><th>Priority</th><th>Assignee</th><th>Sprint</th><th>Status</th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="detailOverlay" class="detail-overlay hidden">
+    <div class="detail-modal">
+      <div class="detail-header"><h3 id="detailTitle"></h3><button class="detail-close" id="detailClose">&times;</button></div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module">
+    import { httpClient } from './js/httpClient.js';
+    import { applyPrefsToDOM } from './js/prefsClient.js';
+
+    let settingsCache = null, currentUser = null, isAdmin = false;
+    let issues = [];
+    const columns = ['Backlog', 'In Dev', 'In QA', 'Done', 'Shipped'];
+    const typeClasses = { bug: 'type-bug', feature: 'type-feature', improvement: 'type-improvement', task: 'type-task' };
+    const priorityClasses = { critical: 'priority-urgent', high: 'priority-high', medium: 'priority-medium', low: 'priority-low' };
+    const $ = id => document.getElementById(id);
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      try {
+        const ctx = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (ctx.v !== 1) return;
+        settingsCache = ctx.settings; currentUser = ctx.user; isAdmin = ctx.isAdmin;
+        if (ctx.prefs) applyPrefsToDOM(ctx.prefs);
+        init();
+      } catch (e) { console.error('Invalid CONTEXT', e); }
+    });
+    if (!window.frameElement) init();
+
+    async function init() {
+      await loadIssues(); renderKanban(); renderList(); updateStats(); populateSprintFilter();
+      initViewToggle(); initSearch(); initDetail();
+      $('sprintFilter').addEventListener('change', () => { renderKanban(); renderList(); });
+    }
+
+    async function loadIssues() {
+      try { const res = await httpClient.get('/api/dev/issues'); issues = res.issues || res || []; }
+      catch (_e) { issues = []; }
+    }
+
+    function filterIssues() {
+      let result = issues;
+      const q = ($('searchInput').value || '').toLowerCase();
+      const sprint = $('sprintFilter').value;
+      if (q) result = result.filter(i => (i.title || '').toLowerCase().includes(q) || (i.id || '').toString().includes(q));
+      if (sprint) result = result.filter(i => i.sprint === sprint);
+      return result;
+    }
+
+    function renderKanban() {
+      const board = $('kanbanView');
+      board.innerHTML = columns.map(col => {
+        const items = filterIssues().filter(i => i.status === col);
+        return `<div class="kanban-column">
+          <div class="kanban-col-header"><span class="kanban-col-title">${esc(col)}</span><span class="kanban-col-count">${items.length}</span></div>
+          <div class="kanban-col-body">${items.map(i => `
+            <div class="kanban-card" data-id="${esc(i.id)}">
+              <div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">
+                <span class="mf" style="font-size:0.6875rem;color:var(--tx3)">${esc(i.id || '')}</span>
+                ${i.type ? `<span class="issue-type ${typeClasses[i.type] || ''}">${esc(i.type)}</span>` : ''}
+              </div>
+              <div class="kanban-card-title">${esc(i.title || '')}</div>
+              <div class="kanban-card-meta">
+                ${i.priority ? `<span class="kanban-card-tag ${priorityClasses[i.priority] || ''}">${esc(i.priority)}</span>` : ''}
+                <span>${esc(i.assignee || '')}</span>
+                ${i.sprint ? `<span class="sprint-badge">${esc(i.sprint)}</span>` : ''}
+              </div>
+            </div>
+          `).join('')}</div>
+        </div>`;
+      }).join('');
+      board.querySelectorAll('.kanban-card').forEach(c => c.addEventListener('click', () => openDetail(c.dataset.id)));
+    }
+
+    function renderList() {
+      $('listBody').innerHTML = filterIssues().map(i => `<tr data-id="${esc(i.id)}" style="cursor:pointer">
+        <td class="mf">${esc(i.id || '')}</td><td>${esc(i.title || '')}</td>
+        <td>${i.type ? `<span class="issue-type ${typeClasses[i.type] || ''}">${esc(i.type)}</span>` : '-'}</td>
+        <td>${i.priority ? `<span class="kanban-card-tag ${priorityClasses[i.priority] || ''}">${esc(i.priority)}</span>` : '-'}</td>
+        <td>${esc(i.assignee || '')}</td><td>${i.sprint ? `<span class="sprint-badge">${esc(i.sprint)}</span>` : '-'}</td>
+        <td>${esc(i.status || '')}</td>
+      </tr>`).join('') || '<tr><td colspan="7" style="color:var(--tx3);text-align:center">No issues</td></tr>';
+      $('listBody').querySelectorAll('tr[data-id]').forEach(r => r.addEventListener('click', () => openDetail(r.dataset.id)));
+    }
+
+    function updateStats() {
+      $('backlogCount').textContent = issues.filter(i => i.status === 'Backlog').length;
+      $('devCount').textContent = issues.filter(i => i.status === 'In Dev').length;
+      $('qaCount').textContent = issues.filter(i => i.status === 'In QA').length;
+      $('shippedCount').textContent = issues.filter(i => i.status === 'Shipped').length;
+      $('bugCount').textContent = issues.filter(i => i.type === 'bug' && i.status !== 'Shipped' && i.status !== 'Done').length;
+    }
+
+    function populateSprintFilter() {
+      const sprints = [...new Set(issues.map(i => i.sprint).filter(Boolean))];
+      $('sprintFilter').innerHTML = '<option value="">All Sprints</option>' + sprints.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+    }
+
+    function initViewToggle() {
+      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          $('kanbanView').classList.toggle('hidden', btn.dataset.view !== 'kanban');
+          $('listView').classList.toggle('hidden', btn.dataset.view !== 'list');
+        });
+      });
+    }
+
+    function initSearch() { $('searchInput').addEventListener('input', () => { renderKanban(); renderList(); }); }
+
+    function initDetail() {
+      $('detailClose').addEventListener('click', () => $('detailOverlay').classList.add('hidden'));
+      $('detailOverlay').addEventListener('click', (e) => { if (e.target === $('detailOverlay')) $('detailOverlay').classList.add('hidden'); });
+    }
+
+    function openDetail(id) {
+      const i = issues.find(x => String(x.id) === String(id));
+      if (!i) return;
+      $('detailTitle').textContent = `${i.id} — ${i.title || ''}`;
+      $('detailBody').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Type</strong><div>${i.type ? `<span class="issue-type ${typeClasses[i.type] || ''}">${esc(i.type)}</span>` : '-'}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Priority</strong><div>${i.priority ? `<span class="kanban-card-tag ${priorityClasses[i.priority] || ''}">${esc(i.priority)}</span>` : '-'}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Assignee</strong><div>${esc(i.assignee || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Sprint</strong><div>${i.sprint ? `<span class="sprint-badge">${esc(i.sprint)}</span>` : '-'}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Status</strong><div>${esc(i.status || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Created</strong><div class="mf">${esc(i.created || '-')}</div></div>
+        </div>
+        ${i.description ? `<div><strong style="font-size:0.75rem;color:var(--tx3)">Description</strong><p style="margin-top:4px;font-size:0.875rem;white-space:pre-wrap">${esc(i.description)}</p></div>` : ''}
+      `;
+      $('detailOverlay').classList.remove('hidden');
+    }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>

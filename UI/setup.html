@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Setup — BlokHR</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <style>
+    .setup-container {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+
+    .setup-box {
+      background: var(--bg1);
+      border: 1px solid var(--bd);
+      border-radius: 12px;
+      width: min(90vw, 600px);
+      padding: 40px;
+    }
+
+    .setup-header { text-align: center; margin-bottom: 32px; }
+    .setup-header h1 { font-size: 1.5rem; margin-bottom: 8px; }
+    .setup-header p { color: var(--tx2); font-size: 0.875rem; }
+
+    /* ── Progress ── */
+    .setup-progress {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-bottom: 32px;
+    }
+    .progress-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--bg4);
+      transition: background var(--transition);
+    }
+    .progress-dot.active { background: var(--accent); }
+    .progress-dot.done { background: var(--accent); opacity: 0.5; }
+    .progress-line {
+      width: 24px;
+      height: 2px;
+      background: var(--bg4);
+    }
+    .progress-line.done { background: var(--accent); opacity: 0.5; }
+
+    /* ── Steps ── */
+    .setup-step { display: none; }
+    .setup-step.active { display: block; }
+
+    .setup-step h2 { font-size: 1.125rem; margin-bottom: 8px; }
+    .setup-step p { font-size: 0.875rem; color: var(--tx2); margin-bottom: 20px; }
+
+    /* ── Grid Cards ── */
+    .backend-grid, .auth-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .backend-grid { grid-template-columns: 1fr; }
+    .auth-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+
+    .backend-card, .auth-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 14px;
+      background: var(--bg2);
+      border: 2px solid var(--bd);
+      border-radius: var(--r);
+      cursor: pointer;
+      transition: border-color var(--transition);
+    }
+    .backend-card:hover, .auth-card:hover { border-color: var(--tx3); }
+    .backend-card:has(input:checked), .auth-card:has(input:checked) {
+      border-color: var(--accent);
+    }
+
+    .backend-card input, .auth-card input { margin-top: 2px; accent-color: var(--accent); }
+    .backend-name, .auth-card span { font-weight: 500; font-size: 0.875rem; }
+    .backend-desc { font-size: 0.75rem; color: var(--tx3); margin-top: 2px; }
+
+    .backend-info { display: flex; flex-direction: column; }
+
+    /* ── Mirrored sub-fields ── */
+    .mirrored-fields {
+      display: none;
+      margin-top: 12px;
+      padding: 12px;
+      background: var(--bg3);
+      border-radius: var(--r);
+    }
+    .mirrored-fields.show { display: block; }
+    .mirrored-fields label { font-size: 0.8125rem; color: var(--tx2); margin-bottom: 4px; display: block; }
+    .mirrored-fields select { margin-bottom: 8px; }
+
+    /* ── Form fields ── */
+    .form-group { margin-bottom: 16px; }
+    .form-group label { display: block; font-size: 0.8125rem; color: var(--tx2); margin-bottom: 4px; }
+
+    /* ── Connection string fields ── */
+    .conn-fields { margin-top: 16px; }
+    .conn-field { display: none; }
+    .conn-field.show { display: block; }
+
+    /* ── Nav buttons ── */
+    .setup-nav {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 28px;
+      padding-top: 20px;
+      border-top: 1px solid var(--bd);
+    }
+
+    /* ── Done ── */
+    .setup-done {
+      text-align: center;
+      padding: 40px 0;
+    }
+    .setup-done h2 { font-size: 1.375rem; margin-bottom: 12px; color: var(--accent); }
+    .setup-done p { color: var(--tx2); margin-bottom: 24px; }
+
+    /* ── Test result ── */
+    .test-result {
+      padding: 16px;
+      border-radius: var(--r);
+      margin-top: 16px;
+      font-size: 0.875rem;
+    }
+    .test-result.success { background: rgba(5, 150, 105, 0.15); color: #34d399; border: 1px solid rgba(5, 150, 105, 0.3); }
+    .test-result.error { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.3); }
+    .test-result.pending { background: var(--bg3); color: var(--tx2); }
+  </style>
+</head>
+<body class="theme-chromium dark-mode">
+
+  <div class="setup-container">
+    <div class="setup-box">
+      <div class="setup-header">
+        <h1>Welcome to BlokHR</h1>
+        <p>Let's set up your HRMS in a few steps.</p>
+      </div>
+
+      <!-- Progress -->
+      <div id="progressBar" class="setup-progress"></div>
+
+      <!-- Step 1: Database -->
+      <div class="setup-step active" id="step1">
+        <h2>Choose your database</h2>
+        <p>Select the storage backend for your data.</p>
+        <div class="backend-grid">
+          <label class="backend-card">
+            <input type="radio" name="backend" value="sqlite" checked>
+            <div class="backend-info">
+              <span class="backend-name">SQLite</span>
+              <span class="backend-desc">Local file. Simple. Great for single-server deploys.</span>
+            </div>
+          </label>
+          <label class="backend-card">
+            <input type="radio" name="backend" value="postgres">
+            <div class="backend-info">
+              <span class="backend-name">PostgreSQL</span>
+              <span class="backend-desc">Production-grade. Multi-server ready.</span>
+            </div>
+          </label>
+          <label class="backend-card">
+            <input type="radio" name="backend" value="azure-tables">
+            <div class="backend-info">
+              <span class="backend-name">Azure Table Storage</span>
+              <span class="backend-desc">Ideal for Azure-hosted deployments.</span>
+            </div>
+          </label>
+          <label class="backend-card">
+            <input type="radio" name="backend" value="sharepoint">
+            <div class="backend-info">
+              <span class="backend-name">SharePoint Lists</span>
+              <span class="backend-desc">For Microsoft 365 tenants.</span>
+            </div>
+          </label>
+          <label class="backend-card">
+            <input type="radio" name="backend" value="mirrored">
+            <div class="backend-info">
+              <span class="backend-name">Mirrored</span>
+              <span class="backend-desc">Write to two backends. Read from primary.</span>
+            </div>
+          </label>
+        </div>
+        <div id="mirroredFields" class="mirrored-fields">
+          <label>Primary backend</label>
+          <select id="mirrorPrimary" class="select"><option value="postgres">PostgreSQL</option><option value="sqlite">SQLite</option><option value="azure-tables">Azure Tables</option><option value="sharepoint">SharePoint</option></select>
+          <label>Mirror backend</label>
+          <select id="mirrorSecondary" class="select"><option value="azure-tables">Azure Tables</option><option value="postgres">PostgreSQL</option><option value="sqlite">SQLite</option><option value="sharepoint">SharePoint</option></select>
+        </div>
+        <div class="conn-fields">
+          <div class="conn-field" id="connSqlite">
+            <div class="form-group"><label>Database file path</label><input type="text" class="input" id="sqlitePath" placeholder="./data/blokhr.db" value="./data/blokhr.db"></div>
+          </div>
+          <div class="conn-field" id="connPostgres">
+            <div class="form-group"><label>Connection URL</label><input type="text" class="input" id="postgresUrl" placeholder="postgresql://user:pass@host:5432/blokhr"></div>
+          </div>
+          <div class="conn-field" id="connAzure">
+            <div class="form-group"><label>Azure Storage connection string</label><input type="text" class="input" id="azureConn" placeholder="DefaultEndpointsProtocol=https;AccountName=..."></div>
+          </div>
+          <div class="conn-field" id="connSharepoint">
+            <div class="form-group"><label>SharePoint site URL</label><input type="text" class="input" id="sharepointUrl" placeholder="https://company.sharepoint.com/sites/hrms"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 2: Auth Providers -->
+      <div class="setup-step" id="step2">
+        <h2>Authentication methods</h2>
+        <p>Select all methods your organisation will use. You can change this later.</p>
+        <div class="auth-grid">
+          <label class="auth-card"><input type="checkbox" name="auth" value="msal"><span>Microsoft (MSAL)</span></label>
+          <label class="auth-card"><input type="checkbox" name="auth" value="google"><span>Google OAuth</span></label>
+          <label class="auth-card"><input type="checkbox" name="auth" value="okta"><span>Okta</span></label>
+          <label class="auth-card"><input type="checkbox" name="auth" value="teamsSso"><span>Teams SSO</span></label>
+          <label class="auth-card"><input type="checkbox" name="auth" value="github"><span>GitHub OAuth</span></label>
+          <label class="auth-card"><input type="checkbox" name="auth" value="saml"><span>SAML 2.0</span></label>
+          <label class="auth-card"><input type="checkbox" name="auth" value="customJwt"><span>Custom JWT</span></label>
+          <label class="auth-card"><input type="checkbox" name="auth" value="magicLink"><span>Magic Link (email)</span></label>
+          <label class="auth-card"><input type="checkbox" name="auth" value="localPin"><span>Local PIN (kiosk)</span></label>
+        </div>
+      </div>
+
+      <!-- Step 3: First Admin -->
+      <div class="setup-step" id="step3">
+        <h2>First administrator</h2>
+        <p>This person will have full access to all settings.</p>
+        <div class="form-group"><label>Email</label><input type="email" class="input" id="adminEmail" placeholder="admin@yourcompany.com" required></div>
+        <div class="form-group"><label>Full name</label><input type="text" class="input" id="adminName" placeholder="Jane Smith" required></div>
+      </div>
+
+      <!-- Step 4: Company Identity -->
+      <div class="setup-step" id="step4">
+        <h2>Company identity</h2>
+        <p>These values can be changed anytime from the settings panel.</p>
+        <div class="form-group"><label>Company / Platform name</label><input type="text" class="input" id="companyName" placeholder="Your Company HRMS" required></div>
+        <div class="form-group"><label>Default timezone</label>
+          <select class="select" id="defaultTimezone"></select>
+        </div>
+        <div class="form-group">
+          <label>Logo (optional)</label>
+          <div id="logoUploadArea" class="bg-upload-area">Click to upload logo</div>
+          <input type="file" id="logoFile" accept="image/*" class="hidden">
+          <img id="logoPreview" class="hidden" style="max-height:48px;margin-top:8px;border-radius:4px" alt="">
+        </div>
+      </div>
+
+      <!-- Step 5: Test Connection -->
+      <div class="setup-step" id="step5">
+        <h2>Test connection</h2>
+        <p>Let's verify everything works before finishing.</p>
+        <div id="testSummary" style="margin-bottom:16px"></div>
+        <button id="testBtn" class="btn btn-primary">Test Connection</button>
+        <div id="testResult" class="test-result pending hidden">Waiting...</div>
+      </div>
+
+      <!-- Step 6: Done -->
+      <div class="setup-step" id="step6">
+        <div class="setup-done">
+          <h2>Setup complete</h2>
+          <p>Your HRMS is ready. Redirecting to the main application...</p>
+          <button id="launchBtn" class="btn btn-primary">Launch BlokHR</button>
+        </div>
+      </div>
+
+      <!-- Navigation -->
+      <div id="setupNav" class="setup-nav">
+        <button id="prevBtn" class="btn btn-secondary hidden">Back</button>
+        <button id="nextBtn" class="btn btn-primary">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module">
+    const TOTAL_STEPS = 6;
+    let currentStep = 1;
+    let logoDataUrl = '';
+
+    const $ = id => document.getElementById(id);
+    const prevBtn = $('prevBtn');
+    const nextBtn = $('nextBtn');
+    const setupNav = $('setupNav');
+
+    // ── Init ──
+    renderProgress();
+    showStep(1);
+    initDbFields();
+    initTimezoneSelect();
+    initLogoUpload();
+    initTestBtn();
+    initLaunch();
+
+    prevBtn.addEventListener('click', () => goTo(currentStep - 1));
+    nextBtn.addEventListener('click', () => handleNext());
+
+    // ── Step Navigation ──
+    function goTo(step) {
+      if (step < 1 || step > TOTAL_STEPS) return;
+      currentStep = step;
+      showStep(step);
+      renderProgress();
+      updateNavButtons();
+    }
+
+    function showStep(step) {
+      document.querySelectorAll('.setup-step').forEach(el => el.classList.remove('active'));
+      const el = $(`step${step}`);
+      if (el) el.classList.add('active');
+    }
+
+    function renderProgress() {
+      const bar = $('progressBar');
+      bar.innerHTML = '';
+      for (let i = 1; i <= TOTAL_STEPS; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'progress-dot';
+        if (i === currentStep) dot.classList.add('active');
+        else if (i < currentStep) dot.classList.add('done');
+        bar.appendChild(dot);
+        if (i < TOTAL_STEPS) {
+          const line = document.createElement('span');
+          line.className = 'progress-line';
+          if (i < currentStep) line.classList.add('done');
+          bar.appendChild(line);
+        }
+      }
+    }
+
+    function updateNavButtons() {
+      prevBtn.classList.toggle('hidden', currentStep <= 1);
+      if (currentStep >= TOTAL_STEPS) {
+        setupNav.classList.add('hidden');
+      } else {
+        setupNav.classList.remove('hidden');
+        nextBtn.textContent = currentStep === TOTAL_STEPS - 1 ? 'Finish' : 'Next';
+      }
+    }
+
+    function handleNext() {
+      if (!validateStep(currentStep)) return;
+      if (currentStep === 5) {
+        submitSetup();
+        return;
+      }
+      goTo(currentStep + 1);
+      if (currentStep === 5) renderTestSummary();
+    }
+
+    // ── Validation ──
+    function validateStep(step) {
+      if (step === 2) {
+        const checked = document.querySelectorAll('input[name="auth"]:checked');
+        if (checked.length === 0) {
+          showToast('Select at least one authentication method.', 'warning');
+          return false;
+        }
+      }
+      if (step === 3) {
+        if (!$('adminEmail').value.trim() || !$('adminName').value.trim()) {
+          showToast('Email and name are required.', 'warning');
+          return false;
+        }
+      }
+      if (step === 4) {
+        if (!$('companyName').value.trim()) {
+          showToast('Company name is required.', 'warning');
+          return false;
+        }
+      }
+      return true;
+    }
+
+    // ── DB field visibility ──
+    function initDbFields() {
+      const connMap = { sqlite: 'connSqlite', postgres: 'connPostgres', 'azure-tables': 'connAzure', sharepoint: 'connSharepoint' };
+      function updateConn() {
+        const val = document.querySelector('input[name="backend"]:checked')?.value;
+        Object.values(connMap).forEach(id => $(id).classList.remove('show'));
+        $('mirroredFields').classList.remove('show');
+        if (val === 'mirrored') {
+          $('mirroredFields').classList.add('show');
+        } else if (connMap[val]) {
+          $(connMap[val]).classList.add('show');
+        }
+      }
+      document.querySelectorAll('input[name="backend"]').forEach(r => r.addEventListener('change', updateConn));
+      updateConn();
+    }
+
+    // ── Timezone ──
+    function initTimezoneSelect() {
+      const sel = $('defaultTimezone');
+      const tzList = (typeof Intl !== 'undefined' && Intl.supportedValuesOf) ? Intl.supportedValuesOf('timeZone') : ['UTC', 'America/New_York', 'Europe/London', 'Asia/Tokyo'];
+      sel.innerHTML = tzList.map(tz => `<option value="${tz}">${tz}</option>`).join('');
+      sel.value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    }
+
+    // ── Logo upload ──
+    function initLogoUpload() {
+      $('logoUploadArea').addEventListener('click', () => $('logoFile').click());
+      $('logoFile').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        logoDataUrl = await fileToDataUrl(file);
+        $('logoPreview').src = logoDataUrl;
+        $('logoPreview').classList.remove('hidden');
+      });
+    }
+
+    // ── Test summary ──
+    function renderTestSummary() {
+      const backend = document.querySelector('input[name="backend"]:checked')?.value || 'sqlite';
+      const authProviders = Array.from(document.querySelectorAll('input[name="auth"]:checked')).map(c => c.value);
+      const html = `
+        <div class="card" style="margin-bottom:8px"><strong>Database:</strong> ${escapeHtml(backend)}</div>
+        <div class="card" style="margin-bottom:8px"><strong>Auth:</strong> ${authProviders.map(escapeHtml).join(', ')}</div>
+        <div class="card" style="margin-bottom:8px"><strong>Admin:</strong> ${escapeHtml($('adminEmail').value)}</div>
+        <div class="card"><strong>Company:</strong> ${escapeHtml($('companyName').value)}</div>
+      `;
+      $('testSummary').innerHTML = html;
+    }
+
+    // ── Test connection ──
+    function initTestBtn() {
+      $('testBtn').addEventListener('click', async () => {
+        const result = $('testResult');
+        result.classList.remove('hidden', 'success', 'error');
+        result.classList.add('pending');
+        result.textContent = 'Testing connection...';
+        $('testBtn').disabled = true;
+
+        try {
+          const payload = gatherPayload();
+          const res = await fetch('/setup/test', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          });
+          const data = await res.json();
+          if (data.ok) {
+            result.classList.remove('pending');
+            result.classList.add('success');
+            result.textContent = 'Connection successful! You can proceed.';
+          } else {
+            throw new Error(data.error || 'Connection failed');
+          }
+        } catch (err) {
+          result.classList.remove('pending');
+          result.classList.add('error');
+          result.textContent = 'Error: ' + (err.message || 'Connection test failed');
+        } finally {
+          $('testBtn').disabled = false;
+        }
+      });
+    }
+
+    // ── Submit ──
+    async function submitSetup() {
+      nextBtn.disabled = true;
+      nextBtn.textContent = 'Setting up...';
+
+      try {
+        const payload = gatherPayload();
+        const res = await fetch('/setup/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!data.ok) throw new Error(data.error || 'Setup failed');
+        goTo(6);
+      } catch (err) {
+        showToast('Setup failed: ' + (err.message || 'Unknown error'), 'error');
+        nextBtn.disabled = false;
+        nextBtn.textContent = 'Finish';
+      }
+    }
+
+    // ── Launch ──
+    function initLaunch() {
+      $('launchBtn').addEventListener('click', () => {
+        window.location.href = '/shell.html';
+      });
+    }
+
+    // ── Gather payload ──
+    function gatherPayload() {
+      const backend = document.querySelector('input[name="backend"]:checked')?.value || 'sqlite';
+      const authProviders = {};
+      document.querySelectorAll('input[name="auth"]:checked').forEach(c => {
+        authProviders[c.value] = { enabled: true };
+      });
+
+      const payload = {
+        database: { backend },
+        auth: { providers: authProviders },
+        admin: { email: $('adminEmail').value.trim(), name: $('adminName').value.trim() },
+        tenant: {
+          platformName: $('companyName').value.trim(),
+          timezone: $('defaultTimezone').value,
+          logoDataUrl: logoDataUrl || '',
+        },
+      };
+
+      if (backend === 'sqlite') payload.database.path = $('sqlitePath').value.trim();
+      if (backend === 'postgres') payload.database.url = $('postgresUrl').value.trim();
+      if (backend === 'azure-tables') payload.database.connectionString = $('azureConn').value.trim();
+      if (backend === 'sharepoint') payload.database.siteUrl = $('sharepointUrl').value.trim();
+      if (backend === 'mirrored') {
+        payload.database.primary = $('mirrorPrimary').value;
+        payload.database.mirror = $('mirrorSecondary').value;
+      }
+
+      return payload;
+    }
+
+    // ── Helpers ──
+    function fileToDataUrl(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function showToast(message, type = 'info') {
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      toast.textContent = message;
+      $('toastContainer').appendChild(toast);
+      setTimeout(() => toast.remove(), 4000);
+    }
+
+    function escapeHtml(str) {
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+  </script>
+</body>
+</html>

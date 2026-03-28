@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Kiosk — Clock In</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <style>
+    .kiosk {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100vh; padding: 40px;
+      text-align: center;
+    }
+    .kiosk-logo { height: 48px; margin-bottom: 16px; }
+    .kiosk-title { font-size: 1.5rem; font-weight: 600; margin-bottom: 8px; }
+    .kiosk-subtitle { font-size: 0.875rem; color: var(--tx2); margin-bottom: 32px; }
+
+    .kiosk-time {
+      font-family: var(--font-mono); font-size: 3rem; font-weight: 700;
+      color: var(--accent); margin-bottom: 8px;
+    }
+    .kiosk-date { font-size: 1rem; color: var(--tx2); margin-bottom: 40px; }
+
+    .pin-section { max-width: 320px; width: 100%; margin-bottom: 32px; }
+    .pin-display {
+      display: flex; justify-content: center; gap: 12px; margin-bottom: 20px;
+    }
+    .pin-dot {
+      width: 16px; height: 16px; border-radius: 50%;
+      background: var(--bg4); border: 2px solid var(--bd);
+      transition: all var(--transition);
+    }
+    .pin-dot.filled { background: var(--accent); border-color: var(--accent); }
+
+    .pin-pad {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 8px; max-width: 240px; margin: 0 auto;
+    }
+    .pin-key {
+      width: 64px; height: 64px; border: 1px solid var(--bd);
+      border-radius: var(--r); background: var(--bg2);
+      color: var(--tx); font-family: var(--font-mono);
+      font-size: 1.5rem; font-weight: 600; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all var(--transition);
+    }
+    .pin-key:hover { border-color: var(--accent); background: var(--bg3); }
+    .pin-key:active { transform: scale(0.95); }
+    .pin-key.action { font-size: 0.875rem; background: transparent; }
+    .pin-key.enter { background: var(--accent); color: var(--bg0); border-color: var(--accent); }
+
+    .kiosk-feedback {
+      padding: 16px 24px; border-radius: var(--r);
+      font-size: 1.125rem; font-weight: 600;
+      margin-top: 20px; min-height: 56px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .feedback-success { background: rgba(5,150,105,0.15); color: var(--accent); }
+    .feedback-error { background: rgba(239,68,68,0.15); color: var(--status-absent); }
+    .feedback-hidden { visibility: hidden; }
+
+    .kiosk-actions {
+      display: flex; gap: 12px; margin-top: 16px;
+    }
+    .kiosk-action-btn {
+      padding: 12px 24px; border: 2px solid var(--bd); border-radius: var(--r);
+      background: var(--bg2); color: var(--tx); font-family: var(--font-ui);
+      font-size: 1rem; font-weight: 600; cursor: pointer;
+      transition: all var(--transition);
+    }
+    .kiosk-action-btn:hover { border-color: var(--accent); }
+    .kiosk-action-btn.active { border-color: var(--accent); background: var(--accent); color: var(--bg0); }
+  </style>
+</head>
+<body class="theme-chromium dark-mode">
+  <div class="kiosk">
+    <img id="kioskLogo" class="kiosk-logo" src="" alt="">
+    <h1 id="kioskTitle" class="kiosk-title"></h1>
+    <p class="kiosk-subtitle">Enter your PIN to clock in or out</p>
+
+    <div class="kiosk-time" id="kioskTime">--:--:--</div>
+    <div class="kiosk-date" id="kioskDate"></div>
+
+    <div class="kiosk-actions">
+      <button class="kiosk-action-btn active" id="actionIn" data-action="in">Clock In</button>
+      <button class="kiosk-action-btn" id="actionBreak" data-action="break">Break</button>
+      <button class="kiosk-action-btn" id="actionBack" data-action="back">Back</button>
+      <button class="kiosk-action-btn" id="actionOut" data-action="out">Clock Out</button>
+    </div>
+
+    <div class="pin-section">
+      <div class="pin-display">
+        <span class="pin-dot" id="dot0"></span>
+        <span class="pin-dot" id="dot1"></span>
+        <span class="pin-dot" id="dot2"></span>
+        <span class="pin-dot" id="dot3"></span>
+      </div>
+      <div class="pin-pad">
+        <button class="pin-key" data-key="1">1</button>
+        <button class="pin-key" data-key="2">2</button>
+        <button class="pin-key" data-key="3">3</button>
+        <button class="pin-key" data-key="4">4</button>
+        <button class="pin-key" data-key="5">5</button>
+        <button class="pin-key" data-key="6">6</button>
+        <button class="pin-key" data-key="7">7</button>
+        <button class="pin-key" data-key="8">8</button>
+        <button class="pin-key" data-key="9">9</button>
+        <button class="pin-key action" data-key="clear">CLR</button>
+        <button class="pin-key" data-key="0">0</button>
+        <button class="pin-key enter" data-key="enter">&#10003;</button>
+      </div>
+    </div>
+
+    <div id="feedback" class="kiosk-feedback feedback-hidden">&nbsp;</div>
+  </div>
+
+  <script type="module">
+    import { httpClient } from './js/httpClient.js';
+    import { applyPrefsToDOM } from './js/prefsClient.js';
+
+    let settingsCache = null;
+    let pin = '';
+    let selectedAction = 'in';
+    const $ = id => document.getElementById(id);
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      try {
+        const ctx = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (ctx.v !== 1) return;
+        settingsCache = ctx.settings;
+        if (ctx.prefs) applyPrefsToDOM(ctx.prefs);
+        init();
+      } catch (e) { console.error('Invalid CONTEXT', e); }
+    });
+    if (!window.frameElement) init();
+
+    async function init() {
+      if (!settingsCache) {
+        try { const res = await httpClient.get('/api/settings'); settingsCache = res.settings || res; }
+        catch (_e) { settingsCache = {}; }
+      }
+      $('kioskLogo').src = settingsCache?.tenant?.logoDataUrl || '';
+      $('kioskTitle').textContent = settingsCache?.tenant?.platformName || 'Clock In';
+      startClock();
+      initPinPad();
+      initActions();
+    }
+
+    function startClock() {
+      function update() {
+        const now = new Date();
+        $('kioskTime').textContent = now.toLocaleTimeString('en-GB');
+        $('kioskDate').textContent = now.toLocaleDateString('en-GB', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+      }
+      update();
+      setInterval(update, 1000);
+    }
+
+    function initPinPad() {
+      document.querySelectorAll('.pin-key').forEach(key => {
+        key.addEventListener('click', () => handleKey(key.dataset.key));
+      });
+    }
+
+    function initActions() {
+      document.querySelectorAll('.kiosk-action-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.kiosk-action-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          selectedAction = btn.dataset.action;
+        });
+      });
+    }
+
+    function handleKey(key) {
+      if (key === 'clear') {
+        pin = '';
+        updateDots();
+        return;
+      }
+      if (key === 'enter') {
+        if (pin.length === 4) submitPin();
+        return;
+      }
+      if (pin.length < 4) {
+        pin += key;
+        updateDots();
+        if (pin.length === 4) submitPin();
+      }
+    }
+
+    function updateDots() {
+      for (let i = 0; i < 4; i++) {
+        $(`dot${i}`).classList.toggle('filled', i < pin.length);
+      }
+    }
+
+    async function submitPin() {
+      try {
+        const res = await httpClient.post('/api/clock/kiosk', { pin, action: selectedAction });
+        showFeedback(`${res.name || 'Employee'} — ${selectedAction} recorded`, 'success');
+      } catch (err) {
+        showFeedback(err.message || 'Invalid PIN or action', 'error');
+      } finally {
+        setTimeout(() => {
+          pin = '';
+          updateDots();
+        }, 500);
+      }
+    }
+
+    function showFeedback(message, type) {
+      const el = $('feedback');
+      el.className = `kiosk-feedback feedback-${type}`;
+      el.textContent = message;
+      setTimeout(() => {
+        el.className = 'kiosk-feedback feedback-hidden';
+        el.textContent = '\u00A0';
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

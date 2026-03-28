@@ -1,0 +1,20 @@
+{
+  "name": "blokhr-ui",
+  "version": "1.0.0",
+  "private": true,
+  "description": "BlokHR frontend — shell + iframe architecture",
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint js/ __tests__/",
+    "lint:html": "echo 'HTML lint placeholder — no html-validate installed'",
+    "validate": "npm run lint && npm run test"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0",
+    "jsdom": "^25.0.0",
+    "eslint": "^9.0.0",
+    "@eslint/js": "^9.0.0"
+  }
+}

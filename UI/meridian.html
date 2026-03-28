@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meridian — RD Tracker</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <link rel="stylesheet" href="css/tracker-common.css">
+  <style>
+    .rd-phase { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.6875rem; }
+    .phase-research { background: rgba(139,92,246,0.15); color: #a78bfa; }
+    .phase-prototype { background: rgba(59,130,246,0.15); color: var(--status-in); }
+    .phase-testing { background: rgba(251,191,36,0.15); color: var(--status-break); }
+    .phase-review { background: rgba(249,115,22,0.15); color: var(--status-late); }
+    .phase-complete { background: rgba(5,150,105,0.15); color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="tracker">
+    <div class="tracker-header">
+      <span class="tracker-title">Research &amp; Development Tracker</span>
+      <div class="tracker-controls">
+        <input type="text" id="searchInput" class="tracker-search" placeholder="Search projects...">
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" data-view="kanban">Board</button>
+          <button class="view-toggle-btn" data-view="list">List</button>
+        </div>
+        <button class="btn btn-primary" id="addProjectBtn">New Project</button>
+      </div>
+    </div>
+    <div class="tracker-stats">
+      <div class="tracker-stat">Active: <span class="tracker-stat-value" id="activeCount">-</span></div>
+      <div class="tracker-stat">In Review: <span class="tracker-stat-value" id="reviewCount">-</span></div>
+      <div class="tracker-stat">Completed: <span class="tracker-stat-value" id="completedCount">-</span></div>
+    </div>
+    <div id="kanbanView" class="kanban-board"></div>
+    <div id="listView" class="tracker-list hidden">
+      <table class="tracker-table">
+        <thead><tr><th>Project</th><th>Phase</th><th>Lead</th><th>Team</th><th>Start</th><th>Deadline</th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="detailOverlay" class="detail-overlay hidden">
+    <div class="detail-modal">
+      <div class="detail-header"><h3 id="detailTitle"></h3><button class="detail-close" id="detailClose">&times;</button></div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module">
+    import { httpClient } from './js/httpClient.js';
+    import { applyPrefsToDOM } from './js/prefsClient.js';
+
+    let settingsCache = null, currentUser = null, isAdmin = false;
+    let projects = [];
+    const phases = ['Research', 'Prototype', 'Testing', 'Review', 'Complete'];
+    const phaseClasses = { Research: 'phase-research', Prototype: 'phase-prototype', Testing: 'phase-testing', Review: 'phase-review', Complete: 'phase-complete' };
+    const $ = id => document.getElementById(id);
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      try {
+        const ctx = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (ctx.v !== 1) return;
+        settingsCache = ctx.settings; currentUser = ctx.user; isAdmin = ctx.isAdmin;
+        if (ctx.prefs) applyPrefsToDOM(ctx.prefs);
+        init();
+      } catch (e) { console.error('Invalid CONTEXT', e); }
+    });
+    if (!window.frameElement) init();
+
+    async function init() {
+      await loadProjects(); renderKanban(); renderList(); updateStats();
+      initViewToggle(); initSearch(); initDetail();
+    }
+
+    async function loadProjects() {
+      try { const res = await httpClient.get('/api/rd/projects'); projects = res.projects || res || []; }
+      catch (_e) { projects = []; }
+    }
+
+    function renderKanban() {
+      const board = $('kanbanView');
+      board.innerHTML = phases.map(phase => {
+        const items = filter().filter(p => p.phase === phase);
+        return `<div class="kanban-column">
+          <div class="kanban-col-header"><span class="kanban-col-title">${esc(phase)}</span><span class="kanban-col-count">${items.length}</span></div>
+          <div class="kanban-col-body">${items.map(p => `
+            <div class="kanban-card" data-id="${esc(p.id)}">
+              <div class="kanban-card-title">${esc(p.name || '')}</div>
+              <div class="kanban-card-meta"><span>${esc(p.lead || '')}</span>${p.priority ? `<span class="kanban-card-tag priority-${p.priority}">${esc(p.priority)}</span>` : ''}</div>
+            </div>
+          `).join('')}</div>
+        </div>`;
+      }).join('');
+      board.querySelectorAll('.kanban-card').forEach(c => c.addEventListener('click', () => openDetail(c.dataset.id)));
+    }
+
+    function renderList() {
+      $('listBody').innerHTML = filter().map(p => `<tr data-id="${esc(p.id)}" style="cursor:pointer">
+        <td>${esc(p.name || '')}</td>
+        <td><span class="rd-phase ${phaseClasses[p.phase] || ''}">${esc(p.phase || '')}</span></td>
+        <td>${esc(p.lead || '')}</td><td>${esc((p.team || []).join(', '))}</td>
+        <td class="mf">${esc(p.startDate || '')}</td><td class="mf">${esc(p.deadline || '')}</td>
+      </tr>`).join('') || '<tr><td colspan="6" style="color:var(--tx3);text-align:center">No projects</td></tr>';
+      $('listBody').querySelectorAll('tr[data-id]').forEach(r => r.addEventListener('click', () => openDetail(r.dataset.id)));
+    }
+
+    function filter() {
+      const q = ($('searchInput').value || '').toLowerCase();
+      if (!q) return projects;
+      return projects.filter(p => (p.name || '').toLowerCase().includes(q) || (p.lead || '').toLowerCase().includes(q));
+    }
+
+    function updateStats() {
+      $('activeCount').textContent = projects.filter(p => p.phase !== 'Complete').length;
+      $('reviewCount').textContent = projects.filter(p => p.phase === 'Review').length;
+      $('completedCount').textContent = projects.filter(p => p.phase === 'Complete').length;
+    }
+
+    function initViewToggle() {
+      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          $('kanbanView').classList.toggle('hidden', btn.dataset.view !== 'kanban');
+          $('listView').classList.toggle('hidden', btn.dataset.view !== 'list');
+        });
+      });
+    }
+
+    function initSearch() { $('searchInput').addEventListener('input', () => { renderKanban(); renderList(); }); }
+
+    function initDetail() {
+      $('detailClose').addEventListener('click', () => $('detailOverlay').classList.add('hidden'));
+      $('detailOverlay').addEventListener('click', (e) => { if (e.target === $('detailOverlay')) $('detailOverlay').classList.add('hidden'); });
+    }
+
+    function openDetail(id) {
+      const p = projects.find(x => String(x.id) === String(id));
+      if (!p) return;
+      $('detailTitle').textContent = p.name || '';
+      $('detailBody').innerHTML = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Phase</strong><div><span class="rd-phase ${phaseClasses[p.phase] || ''}">${esc(p.phase || '-')}</span></div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Lead</strong><div>${esc(p.lead || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Team</strong><div>${esc((p.team || []).join(', ') || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Deadline</strong><div class="mf">${esc(p.deadline || '-')}</div></div>
+        </div>
+        ${p.description ? `<div style="margin-top:16px"><strong style="font-size:0.75rem;color:var(--tx3)">Description</strong><p style="margin-top:4px;font-size:0.875rem">${esc(p.description)}</p></div>` : ''}
+      `;
+      $('detailOverlay').classList.remove('hidden');
+    }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>

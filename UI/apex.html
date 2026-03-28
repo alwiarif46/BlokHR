@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apex — BD Tracker</title>
+  <link rel="stylesheet" href="css/design-system.css">
+  <link rel="stylesheet" href="css/tracker-common.css">
+  <style>
+    .pipeline-value { font-family: var(--font-mono); font-weight: 600; color: var(--accent); }
+    .deal-stage { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.6875rem; }
+    .stage-lead { background: rgba(59,130,246,0.15); color: var(--status-in); }
+    .stage-proposal { background: rgba(251,191,36,0.15); color: var(--status-break); }
+    .stage-negotiation { background: rgba(249,115,22,0.15); color: var(--status-late); }
+    .stage-won { background: rgba(5,150,105,0.15); color: var(--accent); }
+    .stage-lost { background: rgba(239,68,68,0.15); color: var(--status-absent); }
+  </style>
+</head>
+<body>
+  <div class="tracker">
+    <div class="tracker-header">
+      <span class="tracker-title">Business Development Tracker</span>
+      <div class="tracker-controls">
+        <input type="text" id="searchInput" class="tracker-search" placeholder="Search deals...">
+        <div class="view-toggle">
+          <button class="view-toggle-btn active" data-view="kanban">Board</button>
+          <button class="view-toggle-btn" data-view="list">List</button>
+        </div>
+        <button class="btn btn-primary" id="addDealBtn">New Deal</button>
+      </div>
+    </div>
+    <div class="tracker-stats">
+      <div class="tracker-stat">Pipeline: <span class="tracker-stat-value" id="totalPipeline">-</span></div>
+      <div class="tracker-stat">Won: <span class="tracker-stat-value" id="totalWon">-</span></div>
+      <div class="tracker-stat">Active: <span class="tracker-stat-value" id="activeCount">-</span></div>
+      <div class="tracker-stat">Win Rate: <span class="tracker-stat-value" id="winRate">-</span></div>
+    </div>
+    <div id="kanbanView" class="kanban-board"></div>
+    <div id="listView" class="tracker-list hidden">
+      <table class="tracker-table">
+        <thead><tr><th>Deal</th><th>Company</th><th>Value</th><th>Stage</th><th>Owner</th><th>Expected Close</th></tr></thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+  </div>
+  <div id="detailOverlay" class="detail-overlay hidden">
+    <div class="detail-modal">
+      <div class="detail-header"><h3 id="detailTitle"></h3><button class="detail-close" id="detailClose">&times;</button></div>
+      <div class="detail-body" id="detailBody"></div>
+    </div>
+  </div>
+  <div id="toastContainer" class="toast-container"></div>
+
+  <script type="module">
+    import { httpClient } from './js/httpClient.js';
+    import { applyPrefsToDOM } from './js/prefsClient.js';
+
+    let settingsCache = null, currentUser = null, isAdmin = false;
+    let deals = [];
+    const stages = ['Lead', 'Proposal', 'Negotiation', 'Won', 'Lost'];
+    const stageClasses = { Lead: 'stage-lead', Proposal: 'stage-proposal', Negotiation: 'stage-negotiation', Won: 'stage-won', Lost: 'stage-lost' };
+    const $ = id => document.getElementById(id);
+
+    window.addEventListener('message', (event) => {
+      if (event.origin !== window.location.origin) return;
+      try {
+        const ctx = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (ctx.v !== 1) return;
+        settingsCache = ctx.settings; currentUser = ctx.user; isAdmin = ctx.isAdmin;
+        if (ctx.prefs) applyPrefsToDOM(ctx.prefs);
+        init();
+      } catch (e) { console.error('Invalid CONTEXT', e); }
+    });
+    if (!window.frameElement) init();
+
+    async function init() {
+      await loadDeals();
+      renderKanban();
+      renderList();
+      updateStats();
+      initViewToggle();
+      initSearch();
+      initDetail();
+    }
+
+    async function loadDeals() {
+      try { const res = await httpClient.get('/api/bd/deals'); deals = res.deals || res || []; }
+      catch (_e) { deals = []; }
+    }
+
+    function renderKanban() {
+      const board = $('kanbanView');
+      board.innerHTML = stages.map(stage => {
+        const stageDeals = filterDeals().filter(d => d.stage === stage);
+        return `<div class="kanban-column">
+          <div class="kanban-col-header"><span class="kanban-col-title">${esc(stage)}</span><span class="kanban-col-count">${stageDeals.length}</span></div>
+          <div class="kanban-col-body">${stageDeals.map(d => `
+            <div class="kanban-card" data-id="${esc(d.id)}">
+              <div class="kanban-card-title">${esc(d.name || d.title || '')}</div>
+              <div style="font-size:0.75rem;color:var(--tx2);margin-bottom:4px">${esc(d.company || '')}</div>
+              <div class="kanban-card-meta">
+                <span class="pipeline-value">${esc(d.value || '')}</span>
+                ${d.priority ? `<span class="kanban-card-tag priority-${d.priority}">${esc(d.priority)}</span>` : ''}
+              </div>
+            </div>
+          `).join('')}</div>
+        </div>`;
+      }).join('');
+      board.querySelectorAll('.kanban-card').forEach(c => c.addEventListener('click', () => openDetail(c.dataset.id)));
+    }
+
+    function renderList() {
+      $('listBody').innerHTML = filterDeals().map(d => `<tr data-id="${esc(d.id)}" style="cursor:pointer">
+        <td>${esc(d.name || d.title || '')}</td><td>${esc(d.company || '')}</td>
+        <td class="mf pipeline-value">${esc(d.value || '')}</td>
+        <td><span class="deal-stage ${stageClasses[d.stage] || ''}">${esc(d.stage || '')}</span></td>
+        <td>${esc(d.owner || '')}</td><td class="mf">${esc(d.expectedClose || '')}</td>
+      </tr>`).join('') || '<tr><td colspan="6" style="color:var(--tx3);text-align:center">No deals</td></tr>';
+      $('listBody').querySelectorAll('tr[data-id]').forEach(r => r.addEventListener('click', () => openDetail(r.dataset.id)));
+    }
+
+    function filterDeals() {
+      const q = ($('searchInput').value || '').toLowerCase();
+      if (!q) return deals;
+      return deals.filter(d => (d.name || '').toLowerCase().includes(q) || (d.company || '').toLowerCase().includes(q));
+    }
+
+    function updateStats() {
+      const active = deals.filter(d => d.stage !== 'Won' && d.stage !== 'Lost');
+      const won = deals.filter(d => d.stage === 'Won');
+      const total = deals.filter(d => d.stage !== 'Lost');
+      $('totalPipeline').textContent = active.reduce((s, d) => s + (parseFloat(d.value) || 0), 0).toLocaleString();
+      $('totalWon').textContent = won.reduce((s, d) => s + (parseFloat(d.value) || 0), 0).toLocaleString();
+      $('activeCount').textContent = active.length;
+      $('winRate').textContent = total.length > 0 ? Math.round((won.length / total.length) * 100) + '%' : '-';
+    }
+
+    function initViewToggle() {
+      document.querySelectorAll('.view-toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.view-toggle-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          $('kanbanView').classList.toggle('hidden', btn.dataset.view !== 'kanban');
+          $('listView').classList.toggle('hidden', btn.dataset.view !== 'list');
+        });
+      });
+    }
+
+    function initSearch() { $('searchInput').addEventListener('input', () => { renderKanban(); renderList(); }); }
+
+    function initDetail() {
+      $('detailClose').addEventListener('click', () => $('detailOverlay').classList.add('hidden'));
+      $('detailOverlay').addEventListener('click', (e) => { if (e.target === $('detailOverlay')) $('detailOverlay').classList.add('hidden'); });
+    }
+
+    function openDetail(id) {
+      const deal = deals.find(d => String(d.id) === String(id));
+      if (!deal) return;
+      $('detailTitle').textContent = deal.name || deal.title || '';
+      $('detailBody').innerHTML = `
+        <div class="settings-grid" style="max-width:100%">
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Company</strong><div>${esc(deal.company || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Value</strong><div class="pipeline-value">${esc(deal.value || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Stage</strong><div><span class="deal-stage ${stageClasses[deal.stage] || ''}">${esc(deal.stage || '-')}</span></div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Owner</strong><div>${esc(deal.owner || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Expected Close</strong><div class="mf">${esc(deal.expectedClose || '-')}</div></div>
+          <div><strong style="font-size:0.75rem;color:var(--tx3)">Priority</strong><div>${esc(deal.priority || '-')}</div></div>
+        </div>
+        ${deal.notes ? `<div style="margin-top:16px"><strong style="font-size:0.75rem;color:var(--tx3)">Notes</strong><p style="margin-top:4px;font-size:0.875rem">${esc(deal.notes)}</p></div>` : ''}
+      `;
+      $('detailOverlay').classList.remove('hidden');
+    }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  </script>
+</body>
+</html>
