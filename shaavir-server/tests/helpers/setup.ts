@@ -176,7 +176,7 @@ export async function createTestApp(): Promise<{
     const bdRepo = new BdMeetingRepository(db);
     const bdService = new BdMeetingService(bdRepo, db, null, testLogger);
     const actionDispatcher = new ActionDispatcher(leaveService, regService, bdService, testLogger);
-    const interactionRouter = createInteractionRouter(actionDispatcher, config, testLogger);
+    const interactionRouter = createInteractionRouter(actionDispatcher, config, testLogger, db);
     a.use('/api', interactionRouter);
     const leavePolicyRouter = createLeavePolicyRouter(db, testLogger);
     a.use('/api', leavePolicyRouter);

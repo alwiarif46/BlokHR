@@ -39,12 +39,12 @@
   - [x] SSE `settings-update` broadcast on every POST /api/settings
   - [x] `tests/integration/tenant-settings.test.ts` — 20 tests written and passing
 
-- [ ] **Gap 4** — Migration 036: `discord_id`, `telegram_id` on members
-  - [ ] Columns added with indexes
-  - [ ] Discord resolver does real DB lookup
-  - [ ] Telegram resolver does real DB lookup
-  - [ ] WhatsApp resolver does phone lookup
-  - [ ] `tests/integration/interaction-identity.test.ts` — 7 tests written and passing
+- [x] **Gap 4** — Migration 036: `discord_id`, `telegram_id` on members
+  - [x] Columns added with indexes
+  - [x] Discord resolver does real DB lookup
+  - [x] Telegram resolver does real DB lookup
+  - [x] WhatsApp resolver does phone lookup
+  - [x] `tests/integration/interaction-identity.test.ts` — 7 tests written and passing
 
 - [ ] **Gap 7** — Migration 037: `admin_only` column on feature_flags
   - [ ] Column added, analytics/geo/face/iris marked admin_only=1

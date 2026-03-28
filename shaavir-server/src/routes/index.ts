@@ -114,7 +114,7 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   const bdRepo = new BdMeetingRepository(db);
   const bdService = new BdMeetingService(bdRepo, db, null, logger);
   const actionDispatcher = new ActionDispatcher(leaveService, regService, bdService, logger);
-  app.use('/api', createInteractionRouter(actionDispatcher, config, logger));
+  app.use('/api', createInteractionRouter(actionDispatcher, config, logger, db));
 
   app.use('/api', createLeavePolicyRouter(db, logger));
   app.use('/api', createHolidayRouter(db, logger));
