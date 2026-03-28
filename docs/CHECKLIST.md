@@ -14,10 +14,10 @@
   - [x] `tests/integration/notification-wiring.test.ts` written and passing
   - [x] All 971 existing tests still pass
 
-- [ ] **Gap 2** — `geo.ts` route registered (replaces `geo-fencing.ts`)
-  - [ ] Import swapped in `routes/index.ts`
-  - [ ] `tests/integration/geo-routes.test.ts` — 8 tests written and passing
-  - [ ] All existing tests still pass
+- [x] **Gap 2** — `geo.ts` route registered (replaces `geo-fencing.ts`)
+  - [x] Import swapped in `routes/index.ts`
+  - [x] `tests/integration/geo-routes.test.ts` — 8 tests written and passing
+  - [x] All existing tests still pass
 
 - [ ] **Gap 3** — Ollama Cloud auth header
   - [ ] `apiKey` parameter added to `OllamaLlmClient` constructor

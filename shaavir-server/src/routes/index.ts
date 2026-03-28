@@ -27,7 +27,7 @@ import { createOvertimeRouter } from './overtime';
 import { createTimesheetRouter } from './timesheets';
 import { createAnalyticsRouter } from './analytics';
 import { createFaceRecognitionRouter } from './face-recognition';
-import { createGeoFencingRouter } from './geo-fencing';
+import { createGeoRouter } from './geo';
 import { createChatbotRouter } from './chatbot';
 import { createLiveChatRouter } from './live-chat';
 import { createStorageRouter } from './storage';
@@ -123,7 +123,7 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   app.use('/api', createTimesheetRouter(db, logger));
   app.use('/api', createAnalyticsRouter(db, logger));
   app.use('/api', createFaceRecognitionRouter(db, config, logger));
-  app.use('/api', createGeoFencingRouter(db, logger));
+  app.use('/api', createGeoRouter(db, logger));
   app.use('/api', createChatbotRouter(db, config, logger));
   app.use('/api', createLiveChatRouter(db, broadcaster, logger));
   app.use('/api', createStorageRouter(db, logger));
