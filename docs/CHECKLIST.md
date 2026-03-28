@@ -9,10 +9,10 @@
 
 ### Phase 1: Bug Fixes (no schema changes)
 
-- [ ] **Gap 1** — NotificationDispatcher wired in `routes/index.ts`
-  - [ ] `createNotificationDispatcher()` called and passed to leave, regularization, BD meeting routers
-  - [ ] `tests/integration/notification-wiring.test.ts` written and passing
-  - [ ] All 971 existing tests still pass
+- [x] **Gap 1** — NotificationDispatcher wired in `routes/index.ts`
+  - [x] `createNotificationDispatcher()` called and passed to leave, regularization, BD meeting routers
+  - [x] `tests/integration/notification-wiring.test.ts` written and passing
+  - [x] All 971 existing tests still pass
 
 - [ ] **Gap 2** — `geo.ts` route registered (replaces `geo-fencing.ts`)
   - [ ] Import swapped in `routes/index.ts`
