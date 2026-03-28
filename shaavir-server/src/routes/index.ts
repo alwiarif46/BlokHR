@@ -98,7 +98,7 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   app.use('/api', createRegularizationRouter(db, logger, notificationDispatcher));
   app.use('/api', createBdMeetingRouter(db, logger, notificationDispatcher));
   app.use('/api', createMeetingRouter(db, logger, config));
-  app.use('/api', createSettingsRouter(db, logger));
+  app.use('/api', createSettingsRouter(db, logger, broadcaster));
   app.use('/api', createSseRouter(broadcaster));
   app.use('/api', createSetupRouter(db, logger));
   app.use('/api', createAuthRouter(logger));

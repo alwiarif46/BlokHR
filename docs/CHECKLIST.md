@@ -26,18 +26,18 @@
 
 ### Phase 2: Schema Additions
 
-- [ ] **Gap 8** — Migration 035: `tenant_settings` + `member_preferences` tables
-  - [ ] `tenant_settings` table created with `settings_json` TEXT column
-  - [ ] `member_preferences` table created with all columns from architecture doc §5.4
-  - [ ] Default `settings_json` seeded with all 36 sections (Indian defaults)
-  - [ ] Existing `branding` + `system_settings` tables NOT dropped (backward compatible)
-  - [ ] `src/repositories/tenant-settings-repository.ts` — get, update, getSettingsJson, mergeSettingsJson
-  - [ ] `src/services/tenant-settings-service.ts` — getFullBundle, updateSettings, getResolved, getCredential
-  - [ ] Two-tier credential resolution working: env var → settings_json → empty string
-  - [ ] Secret masking in GET responses (****XXXX for sensitive fields)
-  - [ ] Admin-only enforcement on POST /api/settings (403 for non-admins)
-  - [ ] SSE `settings-update` broadcast on every POST /api/settings
-  - [ ] `tests/integration/tenant-settings.test.ts` — 20 tests written and passing
+- [x] **Gap 8** — Migration 035: `tenant_settings` + `member_preferences` tables
+  - [x] `tenant_settings` table created with `settings_json` TEXT column
+  - [x] `member_preferences` table created with all columns from architecture doc §5.4
+  - [x] Default `settings_json` seeded with all 36 sections (Indian defaults)
+  - [x] Existing `branding` + `system_settings` tables NOT dropped (backward compatible)
+  - [x] `src/repositories/tenant-settings-repository.ts` — get, update, getSettingsJson, mergeSettingsJson
+  - [x] `src/services/tenant-settings-service.ts` — getFullBundle, updateSettings, getResolved, getCredential
+  - [x] Two-tier credential resolution working: env var → settings_json → empty string
+  - [x] Secret masking in GET responses (****XXXX for sensitive fields)
+  - [x] Admin-only enforcement on POST /api/settings (403 for non-admins)
+  - [x] SSE `settings-update` broadcast on every POST /api/settings
+  - [x] `tests/integration/tenant-settings.test.ts` — 20 tests written and passing
 
 - [ ] **Gap 4** — Migration 036: `discord_id`, `telegram_id` on members
   - [ ] Columns added with indexes

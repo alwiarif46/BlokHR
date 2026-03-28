@@ -156,7 +156,7 @@ export async function createTestApp(): Promise<{
     a.use('/api', bdMeetingRouter);
     const meetingRouter = createMeetingRouter(db, testLogger, config);
     a.use('/api', meetingRouter);
-    const settingsRouter = createSettingsRouter(db, testLogger);
+    const settingsRouter = createSettingsRouter(db, testLogger, broadcaster);
     a.use('/api', settingsRouter);
     const sseRouter = createSseRouter(broadcaster);
     a.use('/api', sseRouter);
