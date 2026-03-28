@@ -360,42 +360,106 @@ export function createInteractionRouter(
   //  CLICKUP — Task webhook
   // ═══════════════════════════════════════════════════════════════
 
-  router.post('/interactions/clickup', (req: Request, res: Response) => {
-    const body = req.body as {
-      event?: string;
-      task_id?: string;
-      history_items?: Array<{
-        field?: string;
-        after?: { status?: string };
-      }>;
-    };
+  router.post(
+    '/interactions/clickup',
+    asyncHandler(async (req: Request, res: Response) => {
+      const body = req.body as {
+        event?: string;
+        task_id?: string;
+        history_items?: Array<{
+          field?: string;
+          after?: { status?: string };
+        }>;
+      };
 
-    // ClickUp uses status changes to signal actions.
-    // Status "Approved" → approve, "Rejected" → reject
-    if (body.event !== 'taskStatusUpdated' || !body.task_id) {
+      // Only handle taskStatusUpdated events
+      if (body.event !== 'taskStatusUpdated' || !body.task_id) {
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      const statusChange = body.history_items?.find((h) => h.field === 'status');
+      const newStatus = statusChange?.after?.status?.toLowerCase() ?? '';
+
+      // Only process approved/rejected status changes
+      if (newStatus !== 'approved' && newStatus !== 'rejected') {
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Fetch task from ClickUp API to get entity reference from description
+      const apiToken = config.clickupApiToken;
+      if (!apiToken) {
+        logger.info('No CLICKUP_API_TOKEN configured — skipping dispatch');
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      let taskDescription = '';
+      try {
+        const taskResp = await fetch(`https://api.clickup.com/api/v2/task/${body.task_id}`, {
+          headers: { Authorization: apiToken },
+          signal: AbortSignal.timeout(5000),
+        });
+        if (!taskResp.ok) {
+          logger.warn({ taskId: body.task_id, status: taskResp.status }, 'ClickUp task fetch failed');
+          res.status(200).json({ ok: true });
+          return;
+        }
+        const taskData = (await taskResp.json()) as { description?: string };
+        taskDescription = taskData.description ?? '';
+      } catch (err) {
+        logger.error({ err, taskId: body.task_id }, 'ClickUp API call failed');
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Parse entity reference JSON from task description
+      let entityRef: { entityType?: string; entityId?: string; approverEmail?: string };
+      try {
+        // The adapter embeds JSON in the description
+        const jsonMatch = taskDescription.match(/\{[^}]*"entityType"[^}]*\}/);
+        if (!jsonMatch) {
+          logger.warn({ taskId: body.task_id }, 'No entity reference found in ClickUp task description');
+          res.status(200).json({ ok: true });
+          return;
+        }
+        entityRef = JSON.parse(jsonMatch[0]) as typeof entityRef;
+      } catch {
+        logger.warn({ taskId: body.task_id }, 'Failed to parse entity reference from ClickUp task');
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Map entity type + status to action ID
+      const actionMap: Record<string, Record<string, string>> = {
+        leave: { approved: 'leave.approve', rejected: 'leave.reject' },
+        regularization: { approved: 'reg.approve', rejected: 'reg.reject' },
+        bd_meeting: { approved: 'bd_meeting.approve', rejected: 'bd_meeting.reject' },
+      };
+      const actionId = actionMap[entityRef.entityType ?? '']?.[newStatus];
+      if (!actionId) {
+        logger.warn({ entityType: entityRef.entityType, newStatus }, 'Unknown entity type or status for ClickUp dispatch');
+        res.status(200).json({ ok: true });
+        return;
+      }
+
+      // Build payload
+      const entityPayload: Record<string, unknown> = {};
+      if (entityRef.entityType === 'leave') entityPayload.leaveId = entityRef.entityId;
+      else if (entityRef.entityType === 'regularization') entityPayload.regId = entityRef.entityId;
+      else if (entityRef.entityType === 'bd_meeting') entityPayload.meetingId = entityRef.entityId;
+
+      const action: ParsedAction = {
+        actionId,
+        payload: entityPayload,
+        callerEmail: (entityRef.approverEmail ?? '').toLowerCase(),
+      };
+
+      await dispatcher.dispatch(action);
       res.status(200).json({ ok: true });
-      return;
-    }
-
-    const statusChange = body.history_items?.find((h) => h.field === 'status');
-    const newStatus = statusChange?.after?.status?.toLowerCase() ?? '';
-
-    if (newStatus !== 'approved' && newStatus !== 'rejected') {
-      res.status(200).json({ ok: true });
-      return;
-    }
-
-    // ClickUp tasks store the action payload in the task description
-    // This is set when the task is created by clickup-adapter.ts
-    // For now, log the status change — full resolution requires a ClickUp API call
-    // to read the task description and extract the entity reference
-    logger.info(
-      { taskId: body.task_id, newStatus },
-      'ClickUp task status changed — action dispatch requires task lookup',
-    );
-
-    res.status(200).json({ ok: true });
-  });
+    }),
+  );
 
   // ═══════════════════════════════════════════════════════════════
   //  EMAIL — Signed action links

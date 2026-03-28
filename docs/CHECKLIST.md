@@ -76,10 +76,10 @@
   - [x] Registered in routes/index.ts
   - [x] `tests/integration/member-preferences.test.ts` — 15 tests written and passing
 
-- [ ] **Gap 5** — ClickUp action dispatch
-  - [ ] Full handler: fetch task from ClickUp API, parse entity ref, dispatch action
-  - [ ] All failure paths return 200 (webhook must never retry)
-  - [ ] `tests/integration/clickup-interaction.test.ts` — 7 tests written and passing
+- [x] **Gap 5** — ClickUp action dispatch
+  - [x] Full handler: fetch task from ClickUp API, parse entity ref, dispatch action
+  - [x] All failure paths return 200 (webhook must never retry)
+  - [x] `tests/integration/clickup-interaction.test.ts` — 7 tests written and passing
 
 - [ ] **Gap 6** — CSV export endpoints
   - [ ] `src/routes/export.ts` created with 3 endpoints
