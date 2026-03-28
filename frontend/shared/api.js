@@ -90,11 +90,29 @@ export async function api(path, opts) {
     const response = await fetch(_base + path, fetchOpts);
 
     if (response.status === 401) {
-      clearSession();
-      if (typeof document !== 'undefined') {
-        document.dispatchEvent(new CustomEvent('blokhr:auth:expired', { detail: { path: path } }));
+      /*
+       * For auth endpoints (/api/auth/*), a 401 means "wrong credentials" —
+       * NOT "session expired". Pass through the server's actual error message
+       * so the login form can show "Invalid email or password" instead of
+       * the generic "Session expired" message.
+       */
+      var isAuthEndpoint = path.indexOf('/api/auth/') === 0 || path === '/api/auth/local';
+      if (!isAuthEndpoint) {
+        clearSession();
+        if (typeof document !== 'undefined') {
+          document.dispatchEvent(new CustomEvent('blokhr:auth:expired', { detail: { path: path } }));
+        }
       }
-      return { _error: true, status: 401, message: 'Session expired' };
+
+      var authMessage = 'Session expired';
+      try {
+        var text401 = await response.text();
+        var parsed401 = JSON.parse(text401);
+        authMessage = parsed401.error || parsed401.message || authMessage;
+      } catch (_e) {
+        /* leave default */
+      }
+      return { _error: true, status: 401, message: authMessage };
     }
 
     if (!response.ok) {
