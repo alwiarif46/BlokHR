@@ -64,17 +64,17 @@
 
 ### Phase 3: Feature Additions
 
-- [ ] **Gap 9** — Member preferences routes
-  - [ ] `src/repositories/member-preferences-repository.ts` — getByMemberId, upsert
-  - [ ] `src/services/member-preferences-service.ts` — getPrefs, updatePrefs with validation
-  - [ ] `src/routes/member-preferences.ts` — GET/PUT /api/profiles/me/prefs
-  - [ ] Theme validation (chromium/neural/holodeck/clean only)
-  - [ ] Hex color validation on all color_* fields
-  - [ ] Range validation (bg_opacity 0-100, bg_blur 0-30, bg_darken 0-95)
-  - [ ] User isolation (user A prefs don't affect user B)
-  - [ ] 401 when no identity
-  - [ ] Registered in routes/index.ts
-  - [ ] `tests/integration/member-preferences.test.ts` — 15 tests written and passing
+- [x] **Gap 9** — Member preferences routes
+  - [x] `src/repositories/member-preferences-repository.ts` — getByMemberId, upsert
+  - [x] `src/services/member-preferences-service.ts` — getPrefs, updatePrefs with validation
+  - [x] `src/routes/member-preferences.ts` — GET/PUT /api/profiles/me/prefs
+  - [x] Theme validation (chromium/neural/holodeck/clean only)
+  - [x] Hex color validation on all color_* fields
+  - [x] Range validation (bg_opacity 0-100, bg_blur 0-30, bg_darken 0-95)
+  - [x] User isolation (user A prefs don't affect user B)
+  - [x] 401 when no identity
+  - [x] Registered in routes/index.ts
+  - [x] `tests/integration/member-preferences.test.ts` — 15 tests written and passing
 
 - [ ] **Gap 5** — ClickUp action dispatch
   - [ ] Full handler: fetch task from ClickUp API, parse entity ref, dispatch action

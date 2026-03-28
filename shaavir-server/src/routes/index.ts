@@ -46,6 +46,7 @@ import { createVisitorRouter } from './visitors';
 import { createIrisScanRouter } from './iris-scan';
 import { createMobileRouter } from './mobile';
 import { createMultiAuthRouter } from './multi-auth';
+import { createMemberPreferencesRouter } from './member-preferences';
 
 // ── Action dispatcher dependencies ──
 import { LeaveRepository } from '../repositories/leave-repository';
@@ -104,6 +105,7 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   app.use('/api', createAuthRouter(logger));
   app.use('/api', createMultiAuthRouter(db, logger));
   app.use('/api', createProfileRouter(db, logger));
+  app.use('/api', createMemberPreferencesRouter(db, logger));
 
   // Action dispatcher for interaction receivers
   const leaveRepo = new LeaveRepository(db);
