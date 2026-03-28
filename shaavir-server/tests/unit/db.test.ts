@@ -283,7 +283,7 @@ describe('MigrationRunner', () => {
     const realMigDir = path.resolve(__dirname, '../../migrations');
     const runner = new MigrationRunner(engine, realMigDir, logger);
     const count = await runner.run();
-    expect(count).toBe(37);
+    expect(count).toBe(38);
 
     // Verify infrastructure tables exist
     const tables = await engine.all<{ name: string }>(

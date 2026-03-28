@@ -53,14 +53,14 @@
   - [x] PUT /api/features/:key requires admin (403 otherwise)
   - [x] `tests/integration/feature-flags-admin-only.test.ts` — 15 tests written and passing
 
-- [ ] **Gap 10** — Migration 038: `lottie_animations` table
-  - [ ] Table created with 4 seeded actions (clock-in/out/break/back)
-  - [ ] GET /api/settings/lottie — returns all 4 actions (no file_data)
-  - [ ] GET /api/settings/lottie/:action — returns file_data for one action
-  - [ ] PUT /api/settings/lottie/:action — upload with 2 MB validation
-  - [ ] DELETE /api/settings/lottie/:action — clears data, sets enabled=0
-  - [ ] Admin-only on all lottie endpoints
-  - [ ] `tests/integration/lottie-animations.test.ts` — 10 tests written and passing
+- [x] **Gap 10** — Migration 038: `lottie_animations` table
+  - [x] Table created with 4 seeded actions (clock-in/out/break/back)
+  - [x] GET /api/settings/lottie — returns all 4 actions (no file_data)
+  - [x] GET /api/settings/lottie/:action — returns file_data for one action
+  - [x] PUT /api/settings/lottie/:action — upload with 2 MB validation
+  - [x] DELETE /api/settings/lottie/:action — clears data, sets enabled=0
+  - [x] Admin-only on all lottie endpoints
+  - [x] `tests/integration/lottie-animations.test.ts` — 10 tests written and passing
 
 ### Phase 3: Feature Additions
 
