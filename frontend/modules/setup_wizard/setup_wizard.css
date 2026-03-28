@@ -22,8 +22,8 @@
   --wz-bd-f: rgba(255, 255, 255, 0.18);
   --wz-tx: #e8ecf2;
   --wz-tx2: #9ba4b5;
-  --wz-tx3: #5a6477;
-  --wz-tx4: #3d4556;
+  --wz-tx3: #8891a5;
+  --wz-tx4: #606a7e;
   --wz-accent: #f5a623;
   --wz-accent2: #e8961a;
   --wz-accent-dim: rgba(245, 166, 35, 0.12);
@@ -50,8 +50,8 @@
   --wz-bd-f: rgba(0, 0, 0, 0.18);
   --wz-tx: #1a1d26;
   --wz-tx2: #5a6070;
-  --wz-tx3: #8891a0;
-  --wz-tx4: #b0b6c3;
+  --wz-tx3: #6b7588;
+  --wz-tx4: #8892a5;
   --wz-accent: #f5a623;
   --wz-accent2: #e8961a;
   --wz-accent-dim: rgba(245, 166, 35, 0.08);
@@ -110,7 +110,7 @@
 .wz-title { font-family: 'Sora', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 6px; background: linear-gradient(135deg, var(--wz-tx) 40%, var(--wz-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .wz-subtitle { font-size: 13px; color: var(--wz-tx3); font-weight: 400; font-family: 'Outfit', sans-serif; }
 .wz-steps { display: flex; align-items: center; justify-content: center; padding: 28px 40px 8px; }
-.wz-sn { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--wz-bd2); background: var(--wz-bg3); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: var(--wz-tx4); transition: all 0.5s var(--wz-ease); flex-shrink: 0; }
+.wz-sn { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--wz-bd2); background: var(--wz-bg3); display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 700; color: var(--wz-tx3); transition: all 0.5s var(--wz-ease); flex-shrink: 0; }
 .wz-sn.active { border-color: var(--wz-accent); background: var(--wz-accent); color: #fff; box-shadow: 0 0 0 4px var(--wz-accent-dim), 0 4px 16px var(--wz-accent-glow); animation: wzPulse 2s ease-in-out infinite; }
 .wz-sn.done { border-color: var(--wz-ok); background: var(--wz-ok); color: #fff; box-shadow: 0 0 0 4px var(--wz-ok-dim); }
 .wz-sn.done::after { content: '\2713'; font-family: 'Outfit'; font-size: 16px; }
@@ -121,7 +121,7 @@
 .wz-sl.filling::after { content: ''; position: absolute; left: 0; top: 0; height: 100%; width: 0; background: var(--wz-accent); border-radius: 1px; animation: wzLineFill 1.5s ease-in-out infinite; }
 @keyframes wzLineFill { 0% { width: 0%; opacity: 0.5; } 50% { width: 100%; opacity: 1; } 100% { width: 100%; opacity: 0.5; } }
 .wz-labels { display: flex; justify-content: center; gap: 48px; padding: 6px 40px 0; }
-.wz-lb { font-size: 10px; font-weight: 600; color: var(--wz-tx4); text-transform: uppercase; letter-spacing: 0.8px; text-align: center; width: 80px; transition: color 0.3s ease; font-family: 'Outfit', sans-serif; }
+.wz-lb { font-size: 10px; font-weight: 600; color: var(--wz-tx3); text-transform: uppercase; letter-spacing: 0.8px; text-align: center; width: 80px; transition: color 0.3s ease; font-family: 'Outfit', sans-serif; }
 .wz-lb.active { color: var(--wz-accent); }
 .wz-lb.done { color: var(--wz-ok); }
 .wz-form { padding: 24px 40px 32px; position: relative; overflow: hidden; min-height: 340px; font-family: 'Outfit', sans-serif; }
@@ -131,7 +131,7 @@
 @keyframes wzSlideOut { from { opacity: 1; transform: translateX(0); } to { opacity: 0; transform: translateX(-30px); } }
 .wz-fg { margin-bottom: 18px; }
 .wz-fr { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.wz-fl { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--wz-tx3); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; }
+.wz-fl { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--wz-tx2); text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 7px; }
 .wz-fl .req { color: var(--wz-err); font-weight: 800; }
 .wz-fi { width: 100%; background: var(--wz-input); border: 1.5px solid var(--wz-bd); border-radius: 10px; padding: 11px 14px; color: var(--wz-tx); font-family: 'Outfit', sans-serif; font-size: 13.5px; font-weight: 400; transition: all 0.25s ease; outline: none; }
 .wz-fi::placeholder { color: var(--wz-tx4); font-weight: 300; }
