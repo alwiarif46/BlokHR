@@ -65,12 +65,12 @@ body {
   --accent: #00e59a;
   --accent-dim: rgba(0, 229, 154, 0.06);
   --accent-glow: rgba(0, 229, 154, 0.25);
-  --tx: #d8dde5;
-  --tx2: #8a929e;
-  --tx3: #505862;
-  --tx4: #3a3f48;
-  --bd: rgba(255, 255, 255, 0.06);
-  --bd2: rgba(255, 255, 255, 0.1);
+  --tx: #edf0f5;
+  --tx2: #a8b0be;
+  --tx3: #738090;
+  --tx4: #556270;
+  --bd: rgba(255, 255, 255, 0.09);
+  --bd2: rgba(255, 255, 255, 0.14);
   --metal1: #3a3d42;
   --metal2: #52565c;
   --r: 6px;
@@ -112,12 +112,12 @@ body {
   --accent: #0aff6a;
   --accent-dim: rgba(10, 255, 106, 0.06);
   --accent-glow: rgba(10, 255, 106, 0.25);
-  --tx: #c8f5d8;
-  --tx2: #5cad72;
-  --tx3: #2a7040;
-  --tx4: #1a5030;
-  --bd: rgba(10, 255, 106, 0.08);
-  --bd2: rgba(10, 255, 106, 0.15);
+  --tx: #ddfbe8;
+  --tx2: #7cc892;
+  --tx3: #48925e;
+  --tx4: #2e7848;
+  --bd: rgba(10, 255, 106, 0.12);
+  --bd2: rgba(10, 255, 106, 0.20);
   --metal1: #1a5030;
   --metal2: #2a7040;
   --r: 0;
@@ -157,12 +157,12 @@ body {
   --accent: #00e59a;
   --accent-dim: rgba(0, 229, 154, 0.06);
   --accent-glow: rgba(0, 229, 154, 0.2);
-  --tx: #d0e8f0;
-  --tx2: #6a8ca0;
-  --tx3: #3a5468;
-  --tx4: #253848;
-  --bd: rgba(0, 229, 154, 0.06);
-  --bd2: rgba(0, 229, 154, 0.12);
+  --tx: #e2f0f8;
+  --tx2: #8caebe;
+  --tx3: #5c8098;
+  --tx4: #3e6478;
+  --bd: rgba(0, 229, 154, 0.10);
+  --bd2: rgba(0, 229, 154, 0.16);
   --metal1: #1a3a50;
   --metal2: #2a5a70;
   --r: 0;
@@ -214,10 +214,10 @@ body {
   --accent: #6366f1;
   --accent-dim: rgba(99, 102, 241, 0.06);
   --accent-glow: rgba(99, 102, 241, 0.15);
-  --tx: #111827;
-  --tx2: #6b7280;
-  --tx3: #9ca3af;
-  --tx4: #d1d5db;
+  --tx: #0f172a;
+  --tx2: #475569;
+  --tx3: #94a3b8;
+  --tx4: #cbd5e1;
   --bd: rgba(0, 0, 0, 0.06);
   --bd2: rgba(0, 0, 0, 0.1);
   --metal1: #e5e7eb;
@@ -377,13 +377,13 @@ body {
 }
 .login-tagline {
   font-size: 12px;
-  color: var(--tx3);
+  color: var(--tx2);
   margin-bottom: 6px;
   transition: color 0.4s ease !important;
 }
 .login-sub {
   font-size: 10px;
-  color: var(--tx4);
+  color: var(--tx3);
   letter-spacing: 2px;
   text-transform: uppercase;
   margin-bottom: 24px;
@@ -499,7 +499,7 @@ body {
 .lf-label {
   font-size: 10px;
   font-weight: 600;
-  color: var(--tx3);
+  color: var(--tx2);
   text-transform: uppercase;
   letter-spacing: 0.6px;
   margin-bottom: 5px;
@@ -639,7 +639,7 @@ body {
 .login-footer {
   margin-top: 20px;
   font-size: 10px;
-  color: var(--tx4);
+  color: var(--tx3);
   transition: color 0.4s ease !important;
 }
 .login-theme-bar {
@@ -843,7 +843,7 @@ body {
 }
 .hdr-sub {
   font-size: 9px;
-  color: var(--tx3);
+  color: var(--tx2);
   letter-spacing: 1px;
   text-transform: uppercase;
   transition: color 0.4s ease !important;
@@ -863,7 +863,7 @@ body {
 }
 .hdr-date {
   font-size: 9px;
-  color: var(--tx3);
+  color: var(--tx2);
   transition: color 0.4s ease !important;
 }
 .hdr-tz-label {
@@ -974,7 +974,7 @@ body {
   background: var(--status-absent);
 }
 .sync-label {
-  color: var(--tx3);
+  color: var(--tx2);
 }
 .sync-label.live {
   color: var(--accent);
@@ -1205,7 +1205,7 @@ body {
 }
 .sb-section-label {
   font-size: 9px;
-  color: var(--tx4);
+  color: var(--tx3);
   text-transform: uppercase;
   letter-spacing: 1px;
   padding: 12px 16px 4px;
