@@ -91,16 +91,16 @@
   - [x] Registered in routes/index.ts
   - [x] `tests/integration/export.test.ts` — 10 tests written and passing
 
-- [ ] **Gap 11** — Test helpers updated
-  - [ ] `seedTenantSettings()` added to tests/helpers/setup.ts
-  - [ ] `seedMemberPreferences()` added to tests/helpers/setup.ts
+- [x] **Gap 11** — Test helpers updated
+  - [x] `seedTenantSettings()` added to tests/helpers/setup.ts
+  - [x] `seedMemberPreferences()` added to tests/helpers/setup.ts
 
 ### Final Server Verification
 
-- [ ] `npx tsc --noEmit` — zero type errors
-- [ ] `npx vitest run` — all tests pass (971 original + ~100 new = ~1070+)
+- [x] `npx tsc --noEmit` — zero type errors
+- [x] `npx vitest run` — all tests pass (971 original + 100 new = 1071)
 - [ ] Server boots without errors: `PORT=3999 DB_PATH=./dev.db npx tsx src/index.ts`
-- [ ] All 4 migrations (035-038) apply cleanly on fresh DB
+- [x] All 4 migrations (035-038) apply cleanly on fresh DB
 
 ---
 

@@ -279,3 +279,59 @@ export async function seedMember(
     ],
   );
 }
+
+/** Seed tenant_settings row. */
+export async function seedTenantSettings(
+  db: DatabaseEngine,
+  overrides: Record<string, unknown> = {},
+): Promise<void> {
+  const defaults = {
+    id: 'default',
+    platform_name: 'TestHR',
+    primary_timezone: 'Asia/Kolkata',
+    settings_json: JSON.stringify({
+      attendance: { autoCutoffMinutes: 120, gracePeriodMinutes: 15 },
+      shifts: { default: { start: '09:00', end: '18:00', overnight: false }, workDays: [1, 2, 3, 4, 5] },
+      leaves: { types: [], accrualEngine: { enabled: false } },
+      ui: { gridColumns: { desktop: 3, tablet: 2, mobile: 1 }, toastDurationMs: 3500, boardRefreshMs: 30000 },
+      lottie: {
+        'clock-in': { enabled: false, duration: 3 },
+        'clock-out': { enabled: false, duration: 3 },
+        break: { enabled: false, duration: 3 },
+        back: { enabled: false, duration: 3 },
+      },
+      ai: { provider: 'mock', visibility: 'off' },
+      compliance: { country: 'IN' },
+      colourSchemes: [],
+    }),
+  };
+  const merged = { ...defaults, ...overrides };
+  await db.run(
+    `INSERT OR REPLACE INTO tenant_settings (id, platform_name, primary_timezone, settings_json)
+     VALUES (?, ?, ?, ?)`,
+    [merged.id, merged.platform_name, merged.primary_timezone, merged.settings_json],
+  );
+}
+
+/** Seed member_preferences row. */
+export async function seedMemberPreferences(
+  db: DatabaseEngine,
+  memberId: string,
+  overrides: Record<string, unknown> = {},
+): Promise<void> {
+  const defaults = {
+    tenant_id: 'default',
+    theme: 'chromium',
+    dark_mode: 'system',
+    bg_opacity: 30,
+    bg_blur: 0,
+    bg_darken: 70,
+  };
+  const merged = { ...defaults, ...overrides };
+  await db.run(
+    `INSERT OR REPLACE INTO member_preferences
+     (member_id, tenant_id, theme, dark_mode, bg_opacity, bg_blur, bg_darken)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [memberId, merged.tenant_id, merged.theme, merged.dark_mode, merged.bg_opacity, merged.bg_blur, merged.bg_darken],
+  );
+}
