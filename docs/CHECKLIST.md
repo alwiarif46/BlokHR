@@ -19,10 +19,10 @@
   - [x] `tests/integration/geo-routes.test.ts` — 8 tests written and passing
   - [x] All existing tests still pass
 
-- [ ] **Gap 3** — Ollama Cloud auth header
-  - [ ] `apiKey` parameter added to `OllamaLlmClient` constructor
-  - [ ] `Authorization: Bearer` header conditionally sent
-  - [ ] `tests/unit/ollama-auth.test.ts` — 4 tests written and passing
+- [x] **Gap 3** — Ollama Cloud auth header
+  - [x] `apiKey` parameter added to `OllamaLlmClient` constructor
+  - [x] `Authorization: Bearer` header conditionally sent
+  - [x] `tests/unit/ollama-auth.test.ts` — 4 tests written and passing
 
 ### Phase 2: Schema Additions
 
