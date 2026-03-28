@@ -81,15 +81,15 @@
   - [x] All failure paths return 200 (webhook must never retry)
   - [x] `tests/integration/clickup-interaction.test.ts` — 7 tests written and passing
 
-- [ ] **Gap 6** — CSV export endpoints
-  - [ ] `src/routes/export.ts` created with 3 endpoints
-  - [ ] GET /api/export/attendance — CSV with correct headers
-  - [ ] GET /api/export/leaves — CSV with status filter
-  - [ ] GET /api/export/lates — CSV with only is_late=1 rows
-  - [ ] Date validation (YYYY-MM-DD, start ≤ end)
-  - [ ] CSV escaping for commas, quotes, newlines
-  - [ ] Registered in routes/index.ts
-  - [ ] `tests/integration/export.test.ts` — 10 tests written and passing
+- [x] **Gap 6** — CSV export endpoints
+  - [x] `src/routes/export.ts` created with 3 endpoints
+  - [x] GET /api/export/attendance — CSV with correct headers
+  - [x] GET /api/export/leaves — CSV with status filter
+  - [x] GET /api/export/lates — CSV with only is_late=1 rows
+  - [x] Date validation (YYYY-MM-DD, start ≤ end)
+  - [x] CSV escaping for commas, quotes, newlines
+  - [x] Registered in routes/index.ts
+  - [x] `tests/integration/export.test.ts` — 10 tests written and passing
 
 - [ ] **Gap 11** — Test helpers updated
   - [ ] `seedTenantSettings()` added to tests/helpers/setup.ts

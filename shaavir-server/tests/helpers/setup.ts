@@ -39,6 +39,7 @@ import { createIrisScanRouter } from '../../src/routes/iris-scan';
 import { createMobileRouter } from '../../src/routes/mobile';
 import { createMultiAuthRouter } from '../../src/routes/multi-auth';
 import { createMemberPreferencesRouter } from '../../src/routes/member-preferences';
+import { createExportRouter } from '../../src/routes/export';
 import { FeatureFlagService } from '../../src/services/feature-flags';
 import { MockStorageProvider } from '../../src/services/storage';
 import { MockLlmClient } from '../../src/services/llm';
@@ -170,6 +171,8 @@ export async function createTestApp(): Promise<{
     a.use('/api', profileRouter);
     const memberPrefsRouter = createMemberPreferencesRouter(db, testLogger);
     a.use('/api', memberPrefsRouter);
+    const exportRouter = createExportRouter(db, testLogger);
+    a.use('/api', exportRouter);
 
     // Build action dispatcher for interaction receivers
     const leaveRepo = new LeaveRepository(db);
