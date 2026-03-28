@@ -140,6 +140,7 @@ export async function createTestApp(): Promise<{
 
   const app = createApp(config, testLogger, (a) => {
     // Feature flag guard — BEFORE all route handlers
+    // Uses basic guard() for backward compatibility with existing tests
     a.use(featureFlags.guard());
 
     // Wire notification dispatcher
@@ -204,7 +205,7 @@ export async function createTestApp(): Promise<{
     a.use('/api', auditRouter);
     const webhookReceiverRouter = createWebhookReceiverRouter(db, testLogger);
     a.use('/api', webhookReceiverRouter);
-    const ffRouter = createFeatureFlagsRouter(featureFlags, testLogger);
+    const ffRouter = createFeatureFlagsRouter(featureFlags, testLogger, db);
     a.use('/api', ffRouter);
     const orgChartRouter = createOrgChartRouter(db, testLogger);
     a.use('/api', orgChartRouter);

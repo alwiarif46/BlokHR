@@ -88,8 +88,8 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   const notificationDispatcher = createNotificationDispatcher(config, db, logger);
   const leaveNotifier = new LeaveNotificationService(notificationDispatcher, db, logger);
 
-  // ── Feature flag guard — BEFORE all route handlers ──
-  app.use(featureFlags.guard());
+  // ── Feature flag guard with admin-only enforcement — BEFORE all route handlers ──
+  app.use(featureFlags.guardWithAdmin(db));
 
   // ── Phase 1: Core HRMS ──
 
@@ -129,7 +129,7 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   app.use('/api', createStorageRouter(db, logger));
   app.use('/api', createAuditRouter(db, logger));
   app.use('/api', createWebhookReceiverRouter(db, logger));
-  app.use('/api', createFeatureFlagsRouter(featureFlags, logger));
+  app.use('/api', createFeatureFlagsRouter(featureFlags, logger, db));
 
   // ── Phase 2: Extended Modules ──
 

@@ -46,12 +46,12 @@
   - [x] WhatsApp resolver does phone lookup
   - [x] `tests/integration/interaction-identity.test.ts` — 7 tests written and passing
 
-- [ ] **Gap 7** — Migration 037: `admin_only` column on feature_flags
-  - [ ] Column added, analytics/geo/face/iris marked admin_only=1
-  - [ ] `getForUser()` method filters flags for non-admins
-  - [ ] `guardWithAdmin(db)` enforces 403 on admin-only route prefixes
-  - [ ] PUT /api/features/:key requires admin (403 otherwise)
-  - [ ] `tests/integration/feature-flags-admin-only.test.ts` — 15 tests written and passing
+- [x] **Gap 7** — Migration 037: `admin_only` column on feature_flags
+  - [x] Column added, analytics/geo/face/iris marked admin_only=1
+  - [x] `getForUser()` method filters flags for non-admins
+  - [x] `guardWithAdmin(db)` enforces 403 on admin-only route prefixes
+  - [x] PUT /api/features/:key requires admin (403 otherwise)
+  - [x] `tests/integration/feature-flags-admin-only.test.ts` — 15 tests written and passing
 
 - [ ] **Gap 10** — Migration 038: `lottie_animations` table
   - [ ] Table created with 4 seeded actions (clock-in/out/break/back)
