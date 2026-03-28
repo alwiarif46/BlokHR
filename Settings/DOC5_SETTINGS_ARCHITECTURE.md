@@ -222,6 +222,16 @@ interface SettingsJson {
     state?: string;
     labourLawTemplate?: string;
   };
+
+  colourSchemes: Array<{
+    name: string;
+    accent: string;       // hex
+    statusIn: string;     // hex
+    statusBreak: string;  // hex
+    statusAbsent: string; // hex
+    bg0: string;          // hex
+    tx: string;           // hex
+  }>;                     // 3 preset schemes (Feature #71); admin picks one to apply globally
 }
 ```
 
@@ -294,12 +304,15 @@ await httpClient.put('/api/profiles/me/prefs', { theme: 'neural' });
 | Attendance rules | tenant_settings.settings_json.attendance | POST /api/settings |
 | Leave types | tenant_settings.settings_json.leaves | POST /api/settings |
 | AI configuration | tenant_settings.settings_json.ai | POST /api/settings |
-| Admin list | admins table | POST /api/admins |
+| Colour schemes (3 presets) | tenant_settings.settings_json.colourSchemes | POST /api/settings |
+| Admin list | admins table | POST /api/settings/admins (or via setup wizard) |
 | Employee records | members table | GET/POST/PUT /api/members |
 | Departments | groups table | GET/POST/PUT /api/groups |
 | Named shifts | shifts table | GET/POST/PUT /api/shifts |
-| Individual shift | members.individual_shift_* | PUT /api/members/:email |
+| Individual shift (named) | members.shift_id | PUT /api/members/:email |
+| Individual shift (raw times) | members.individual_shift_start/end | PUT /api/members/:email |
 | Per-dept shift | groups.shift_start/end | PUT /api/groups/:id |
+| Individual manager override | members.individual_manager_email | PUT /api/members/:email |
 | User theme | member_preferences.theme | PUT /api/profiles/me/prefs |
 | User dark mode | member_preferences.dark_mode | PUT /api/profiles/me/prefs |
 | User colour overrides | member_preferences.color_* | PUT /api/profiles/me/prefs |
@@ -309,8 +322,8 @@ await httpClient.put('/api/profiles/me/prefs', { theme: 'neural' });
 | User notification prefs | member_preferences.notification_prefs | PUT /api/profiles/me/prefs |
 | Clock entries (all) | clock_entries | POST /api/clock |
 | Leave requests | leave_requests | POST /api/leaves |
-| Notification channels | notification_channels | POST /api/settings/channels |
-| Notification matrix | notification_matrix | POST /api/settings/matrix |
+| Notification channels | notification_channels | GET/POST/PUT /api/notifications/channels |
+| Notification matrix | notification_matrix | GET/POST /api/notifications/matrix |
 | Feature flags | feature_flags | PUT /api/features/:key |
 | Geo zones | geo_zones | POST /api/geo/zones |
 | Audit trail | audit_trail | GET /api/analytics/audit |

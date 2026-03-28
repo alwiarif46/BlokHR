@@ -141,6 +141,7 @@ CREATE TABLE members (
   employee_id               TEXT,
   join_date                 DATE,
   active                    INTEGER NOT NULL DEFAULT 1,
+  google_email              TEXT,   -- linked Google account email
   phone                     TEXT,
   emergency_contact         TEXT,
   parentage                 TEXT,
@@ -150,9 +151,12 @@ CREATE TABLE members (
   bank_account              TEXT,   -- encrypted
   ifsc                      TEXT,
   bank_name                 TEXT,
-  individual_shift_start    TEXT,   -- "HH:MM" or NULL (inherit from group)
+  shift_id                  TEXT,   -- FK → shifts (named shift, takes priority over start/end if set)
+  individual_shift_start    TEXT,   -- "HH:MM" or NULL (inherit from group; ignored if shift_id set)
   individual_shift_end      TEXT,
-  individual_cutoff_minutes INTEGER, -- NULL = inherit
+  individual_cutoff_minutes INTEGER, -- NULL = inherit from group → global
+  individual_manager_email  TEXT,   -- NULL = inherit manager from group
+  individual_hr_email       TEXT,   -- NULL = inherit HR from group
   profile_locked            INTEGER NOT NULL DEFAULT 0,
   discord_id                TEXT NOT NULL DEFAULT '',
   telegram_id               TEXT NOT NULL DEFAULT '',
@@ -386,6 +390,17 @@ Example: auto-cutoff minutes for alice@co.com
   → check members WHERE email='alice' → individual_cutoff_minutes = 90  → USE 90
   → if NULL: check groups WHERE id=alice.group_id → auto_cutoff_minutes = 120  → USE 120
   → if NULL: read settings.attendance.autoCutoffMinutes = 60  → USE 60
+
+Example: shift for alice@co.com
+  → check members WHERE email='alice' → shift_id = 'sh_morning' → load that shift row → USE it
+  → if shift_id NULL: check individual_shift_start/end → USE if set
+  → if NULL: check groups WHERE id=alice.group_id → shift_start/end → USE if set
+  → if NULL: read settings.shifts.default.start/end → USE
+
+Example: manager for alice@co.com
+  → check members WHERE email='alice' → individual_manager_email = 'mgr@co.com' → USE
+  → if NULL: check groups WHERE id=alice.group_id → manager_email → USE if set
+  → if NULL: check tenant_settings.settings_json → managerAssignment.global → USE
 ```
 
 ---
@@ -414,8 +429,11 @@ Example: auto-cutoff minutes for alice@co.com
 | Employee records | members table | GET/POST/PUT /api/members |
 | Department records | groups table | GET/POST/PUT /api/groups |
 | Named shift definitions | shifts table | GET/POST/PUT /api/shifts |
-| Individual shift override | members.individual_shift_* | PUT /api/members/:email |
+| Individual shift (named) | members.shift_id | PUT /api/members/:email |
+| Individual shift (raw times) | members.individual_shift_start/end | PUT /api/members/:email |
 | Per-dept shift | groups.shift_start/end | PUT /api/groups/:id |
+| Individual manager override | members.individual_manager_email | PUT /api/members/:email |
+| Individual HR override | members.individual_hr_email | PUT /api/members/:email |
 | Clock in | clock_entries (action='in') | POST /api/clock |
 | Break start | clock_entries (action='break') | POST /api/clock |
 | Break end | clock_entries (action='back') | POST /api/clock |
@@ -426,8 +444,8 @@ Example: auto-cutoff minutes for alice@co.com
 | Regularization requests | regularization_requests | POST /api/regularizations |
 | Comp-off balance | comp_off_balances | GET /api/leaves/comp-off |
 | Approval state | approval_instances + approval_steps | POST /api/approvals |
-| Notification channels | notification_channels | POST /api/settings/channels |
-| Notification routing | notification_matrix | POST /api/settings/matrix |
+| Notification channels | notification_channels | GET/POST/PUT /api/notifications/channels |
+| Notification routing | notification_matrix | GET/POST /api/notifications/matrix |
 | Notification log | notification_log | GET /api/notifications/log |
 | Feature flags | feature_flags | PUT /api/features/:key |
 | Module enabled/disabled | tenant_settings.settings_json → tabs[].enabled | POST /api/settings |

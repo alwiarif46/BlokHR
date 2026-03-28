@@ -493,6 +493,17 @@ async function saveFeatureToggle(key, enabled) {
   }
 }
 
+// Save AI visibility toggle (maps boolean to the appropriate visibility string)
+async function saveAIVisibility(enabled) {
+  // When toggled on: restore last non-off value or default to 'all'
+  // When toggled off: set to 'off'
+  const currentVis = settingsCache?.ai?.visibility;
+  const newVis = enabled
+    ? (currentVis && currentVis !== 'off' ? currentVis : 'all')
+    : 'off';
+  await saveSetting('ai.visibility', newVis);
+}
+
 // Handle background image upload → save to member_preferences
 async function handleBgUpload(input) {
   if (!input.files[0]) return;

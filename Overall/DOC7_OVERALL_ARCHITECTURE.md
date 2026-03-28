@@ -289,8 +289,10 @@ Hybrid (Postgres primary + Azure Tables mirror)
 | Employee records | members | GET/POST/PUT /api/members |
 | Departments | groups | GET/POST/PUT /api/groups |
 | Named shifts | shifts | GET/POST/PUT /api/shifts |
-| Individual shift override | members.individual_shift_* | PUT /api/members/:email |
+| Individual shift (named) | members.shift_id | PUT /api/members/:email |
+| Individual shift (raw times) | members.individual_shift_start/end | PUT /api/members/:email |
 | Per-dept shift | groups.shift_start/end | PUT /api/groups/:id |
+| Individual manager override | members.individual_manager_email | PUT /api/members/:email |
 | Clock in/out/break/back | clock_entries | POST /api/clock |
 | Auto-cutoff events | clock_entries (status_source='auto-cutoff') | cron |
 | Daily attendance | attendance_daily | GET /api/attendance |
@@ -298,8 +300,8 @@ Hybrid (Postgres primary + Azure Tables mirror)
 | Regularization | regularization_requests | POST /api/regularizations |
 | Comp-off balance | comp_off_balances | GET /api/leaves/comp-off |
 | Approval flow state | approval_instances + approval_steps | POST /api/approvals |
-| Notification channels | notification_channels | POST /api/settings/channels |
-| Notification routing | notification_matrix | POST /api/settings/matrix |
+| Notification channels | notification_channels | GET/POST/PUT /api/notifications/channels |
+| Notification routing | notification_matrix | GET/POST /api/notifications/matrix |
 | Notification log | notification_log | GET /api/notifications/log |
 | Feature flags | feature_flags | PUT /api/features/:key |
 | Module on/off | tenant_settings.settings_json → tabs[].enabled | POST /api/settings |
