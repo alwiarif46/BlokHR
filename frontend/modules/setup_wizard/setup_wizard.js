@@ -451,11 +451,32 @@ function _bindEvents() {
   /* Go to login after success */
   const goLogin = document.getElementById('wzGoLogin');
   if (goLogin) {
-    goLogin.addEventListener('click', () => {
-      if (window.BlokHR && window.BlokHR.showScreen) {
-        window.BlokHR.showScreen('screenLogin');
-        toast('Setup complete — sign in to continue', 'success');
+    goLogin.addEventListener('click', async () => {
+      if (!window.BlokHR) return;
+
+      // Fetch auth providers from server (now that setup is complete, they exist)
+      let providers = [];
+      try {
+        const authData = await window.BlokHR.api('/api/auth/providers', { method: 'GET' });
+        if (authData && authData.providers) {
+          providers = authData.providers;
+        }
+      } catch (_e) { /* ignore */ }
+
+      // Fallback: at minimum show the local login form
+      if (!providers.length) {
+        providers = [
+          { id: 'local', name: 'Email & Password', enabled: true, type: 'local' }
+        ];
       }
+
+      // Render providers, THEN show the login screen
+      if (window.BlokHR.renderLoginProviders) {
+        window.BlokHR.renderLoginProviders(providers);
+      }
+
+      window.BlokHR.showScreen('screenLogin');
+      window.BlokHR.toast('Setup complete — sign in to continue', 'success');
     });
   }
 }

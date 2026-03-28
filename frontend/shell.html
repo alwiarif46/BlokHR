@@ -469,7 +469,10 @@ window.BlokHR.renderLoginProviders = renderLoginProviders;
    ══════════════════════════════════════════════════════════════ */
 async function boot() {
   initApi();
-  const _bootTimeout = setTimeout(() => showScreen('screenLogin'), 6000);
+  const _bootTimeout = setTimeout(() => {
+    renderLoginProviders([{ id: 'local', name: 'Email & Password', enabled: true, type: 'local' }]);
+    showScreen('screenLogin');
+  }, 6000);
   try {
     const status = await api.get('/api/setup/status');
     clearTimeout(_bootTimeout);
