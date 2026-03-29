@@ -182,11 +182,16 @@ export class SetupService {
     const adminEmail = data.adminEmail.toLowerCase().trim();
     const adminName = adminEmail.split('@')[0].replace(/[._-]/g, ' ');
     try {
+      // Read the configured primary timezone — never hardcode
+      const tzRow = await this.db.get<{ primary_timezone: string }>(
+        'SELECT primary_timezone FROM tenant_settings LIMIT 1',
+      );
+      const tz = tzRow?.primary_timezone || 'UTC';
       await this.db.run(
         `INSERT OR IGNORE INTO members (
           id, email, name, role, active, timezone
-        ) VALUES (?, ?, ?, 'admin', 1, 'Asia/Kolkata')`,
-        [adminEmail, adminEmail, adminName],
+        ) VALUES (?, ?, ?, 'admin', 1, ?)`,
+        [adminEmail, adminEmail, adminName, tz],
       );
       this.logger.info({ adminEmail }, 'Admin seeded into members table');
     } catch (err) {
