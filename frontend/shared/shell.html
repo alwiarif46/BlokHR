@@ -75,8 +75,7 @@
           <div class="wz-fg"><div class="wz-fl"><span class="req">*</span> License Key</div><input class="wz-fi" id="wzLicenseKey" placeholder="XXXX-XXXX-XXXX-XXXX" style="font-family:'JetBrains Mono',monospace;letter-spacing:1.5px;font-size:14px"><div class="wz-fe" id="wzErrLicense">License key must be at least 8 characters</div></div>
           <div class="wz-sec" style="margin-top:4px">First Administrator</div>
           <div class="wz-fg"><div class="wz-fl"><span class="req">*</span> Admin Email</div><input class="wz-fi" id="wzAdminEmail" type="email" placeholder="admin@company.com"><div class="wz-fe" id="wzErrAdmin">Valid admin email is required</div></div>
-          <div style="background:var(--wz-accent-dim);border:1px solid var(--wz-accent-glow);border-radius:10px;padding:12px 14px;margin-top:10px"><div style="font-size:11px;font-weight:700;color:var(--wz-accent);margin-bottom:4px;font-family:'JetBrains Mono',monospace">&#128274; Default Credentials</div><div style="font-size:12px;color:var(--wz-tx2);line-height:1.6;font-family:'Outfit',sans-serif">Password: <strong style="color:var(--wz-tx);font-family:'JetBrains Mono',monospace;letter-spacing:1px">admin</strong><br>You'll be prompted to change it on first login.</div></div>
-          <p style="font-size:11px;color:var(--wz-tx3);line-height:1.6;margin-top:6px;font-family:'Outfit',sans-serif">This person becomes the first platform admin with full access.</p>
+          <p style="font-size:11px;color:var(--wz-tx4);line-height:1.6;margin-top:6px;font-family:'Outfit',sans-serif">This person becomes the first platform admin with full access.</p>
           <div class="wz-br" style="margin-top:20px"><button class="wz-btn wz-btn-g" id="wzBack3">&#8592; Back</button><button class="wz-btn wz-btn-ok" id="wzBtn3" disabled><span class="btn-text">&#128640; Complete Setup</span><span class="wz-spin"></span></button></div>
         </div>
         <!-- Success -->
@@ -185,6 +184,7 @@
         <div class="sb-item" data-module="leaves"><span class="sb-icon">&#127796;</span><span class="sb-label">Leaves</span></div>
         <div class="sb-item" data-module="regularizations"><span class="sb-icon">&#128221;</span><span class="sb-label">Regularizations</span></div>
         <div class="sb-item" data-module="timesheets"><span class="sb-icon">&#128203;</span><span class="sb-label">Timesheets</span></div>
+        <div class="sb-item" data-module="profile"><span class="sb-icon">&#128100;</span><span class="sb-label">My Profile</span></div>
         <div class="sb-divider"></div>
         <div class="sb-section-label">Organization</div>
         <div class="sb-item" data-module="org_chart" data-flag="org_chart"><span class="sb-icon">&#127963;</span><span class="sb-label">Org Chart</span></div>
@@ -385,8 +385,6 @@ function enterApp() {
   connectSSE();
   loadSettings();
   initClock();
-  /* Render the default module (attendance team view) */
-  navigateToModule('attendance');
   document.dispatchEvent(new CustomEvent('blokhr:appReady', { detail: { session: s, branding: _branding } }));
 }
 
@@ -398,6 +396,15 @@ async function loadSettings() {
     window.BlokHR.settingsCache = _settingsCache;
     if (data.settings_json && data.settings_json.ui) {
       setToastDuration(data.settings_json.ui.toastDurationMs || 3500);
+    }
+    /* ── Resolve admin status from admins list ── */
+    const s = getSession();
+    if (s && Array.isArray(data.admins)) {
+      const isAdmin = data.admins.some(function (a) { return a.toLowerCase() === s.email.toLowerCase(); });
+      if (isAdmin !== s.is_admin) {
+        updateSession('is_admin', isAdmin);
+        updateSession('role', isAdmin ? 'admin' : (s.role || 'employee'));
+      }
     }
   }
 }
@@ -472,7 +479,10 @@ window.BlokHR.renderLoginProviders = renderLoginProviders;
    ══════════════════════════════════════════════════════════════ */
 async function boot() {
   initApi();
-  const _bootTimeout = setTimeout(() => showScreen('screenLogin'), 6000);
+  const _bootTimeout = setTimeout(() => {
+    renderLoginProviders([{ id: 'local', name: 'Email & Password', enabled: true, type: 'local' }]);
+    showScreen('screenLogin');
+  }, 6000);
   try {
     const status = await api.get('/api/setup/status');
     clearTimeout(_bootTimeout);
