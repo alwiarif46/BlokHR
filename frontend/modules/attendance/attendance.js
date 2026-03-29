@@ -119,23 +119,28 @@ export async function attLoadData() {
   }
 
   const today = _todayStr();
-  const data = await api.get('/api/clock/today?date=' + today);
+  const data = await api.get('/api/attendance?date=' + today);
 
   if (!data || data._error) {
     if (!_allPeople.length) _loadMockPeople();
     return;
   }
 
-  const records = data.records || data.attendance || data;
+  const records = data.people || data.records || data.attendance || data;
   if (Array.isArray(records)) {
     _allPeople = records.map(function (r) {
       return {
-        email: r.email || r.userEmail || '',
-        name: r.name || r.userName || r.email || '',
-        dept: r.department || r.group || '',
+        email: r.email || '',
+        name: r.name || r.email || '',
+        dept: r.group || r.department || '',
         status: (r.status || 'off').toLowerCase(),
-        clockIn: r.clockIn || r.firstClockIn || null,
-        events: r.events || [],
+        clockIn: r.firstIn || r.clockIn || r.first_in || null,
+        clockOut: r.lastOut || r.last_out || null,
+        totalWorked: r.totalWorked || 0,
+        totalBreak: r.totalBreak || 0,
+        isLate: r.isLate || false,
+        lateMinutes: r.lateMinutes || 0,
+        events: r.timeline || r.events || [],
       };
     });
   }
