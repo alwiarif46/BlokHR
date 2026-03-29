@@ -178,6 +178,21 @@ export class SetupService {
       data.adminEmail.toLowerCase().trim(),
     ]);
 
+    // Also insert into members table so the admin can clock in and appear on the board
+    const adminEmail = data.adminEmail.toLowerCase().trim();
+    const adminName = adminEmail.split('@')[0].replace(/[._-]/g, ' ');
+    try {
+      await this.db.run(
+        `INSERT OR IGNORE INTO members (
+          id, email, name, role, active, timezone
+        ) VALUES (?, ?, ?, 'admin', 1, 'Asia/Kolkata')`,
+        [adminEmail, adminEmail, adminName],
+      );
+      this.logger.info({ adminEmail }, 'Admin seeded into members table');
+    } catch (err) {
+      this.logger.warn({ err }, 'Could not seed admin into members table');
+    }
+
     // Seed default local credentials (password: 'admin', must change on first login)
     try {
       const hash = await bcrypt.hash('admin', 10);
