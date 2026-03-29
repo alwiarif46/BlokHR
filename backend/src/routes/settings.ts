@@ -14,7 +14,9 @@ import type { SseBroadcaster } from '../sse/broadcaster';
 /**
  * Settings & Roles routes:
  *   GET  /api/settings                — master settings bundle
+ *   POST /api/members                 — create a new member (admin-only)
  *   PUT  /api/members/:id             — update member profile
+ *   DELETE /api/members/:id           — deactivate a member (admin-only)
  *   GET  /api/user-roles?email=       — resolve user's roles
  *   GET  /api/pending-actions         — pending action counts
  *   GET  /api/pending-actions-detail  — pending action detail
@@ -62,7 +64,14 @@ export function createSettingsRouter(
 
       const body = req.body as Record<string, unknown>;
       const columns: Record<string, unknown> = {};
-      const columnKeys = ['platform_name', 'company_legal_name', 'logo_data_url', 'login_tagline', 'primary_timezone', 'version'];
+      const columnKeys = [
+        'platform_name',
+        'company_legal_name',
+        'logo_data_url',
+        'login_tagline',
+        'primary_timezone',
+        'version',
+      ];
       for (const key of columnKeys) {
         if (key in body) columns[key] = body[key];
       }
@@ -100,6 +109,69 @@ export function createSettingsRouter(
       }
 
       res.json(result);
+    }),
+  );
+
+  /** POST /api/members — create a new member (admin-only). */
+  router.post(
+    '/members',
+    asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = req.identity?.email ?? '';
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+      const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+        callerEmail,
+      ]);
+      if (!admin) throw new AppError('Admin access required', 403);
+
+      const body = req.body as Record<string, unknown>;
+      const result = await service.createMember({
+        email: (body.email as string) ?? '',
+        name: (body.name as string) ?? '',
+        groupId: body.groupId as string | undefined,
+        memberTypeId: body.memberTypeId as string | undefined,
+        role: body.role as string | undefined,
+        designation: body.designation as string | undefined,
+        phone: body.phone as string | undefined,
+        joiningDate: body.joiningDate as string | undefined,
+        location: body.location as string | undefined,
+        timezone: body.timezone as string | undefined,
+        individualShiftStart: body.individualShiftStart as string | undefined,
+        individualShiftEnd: body.individualShiftEnd as string | undefined,
+      });
+
+      if (!result.success) {
+        throw new AppError(result.error ?? 'Failed to create member', 400);
+      }
+
+      if (broadcaster) {
+        broadcaster.broadcast('settings-update', { source: 'member_created' });
+      }
+
+      res.status(201).json({ success: true, member: result.member });
+    }),
+  );
+
+  /** DELETE /api/members/:id — deactivate a member (admin-only, soft delete). */
+  router.delete(
+    '/members/:id',
+    asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = req.identity?.email ?? '';
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+      const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+        callerEmail,
+      ]);
+      if (!admin) throw new AppError('Admin access required', 403);
+
+      const { id } = req.params;
+      await db.run("UPDATE members SET active = 0, updated_at = datetime('now') WHERE id = ?", [
+        id,
+      ]);
+
+      if (broadcaster) {
+        broadcaster.broadcast('settings-update', { source: 'member_deactivated' });
+      }
+
+      res.json({ success: true });
     }),
   );
 
@@ -152,18 +224,23 @@ export function createSettingsRouter(
     '/settings/lottie',
     asyncHandler(async (_req: Request, res: Response) => {
       const rows = await db.all<{
-        action: string; enabled: number; duration_sec: number;
-        file_name: string | null; file_size_bytes: number;
+        action: string;
+        enabled: number;
+        duration_sec: number;
+        file_name: string | null;
+        file_size_bytes: number;
       }>(
         'SELECT action, enabled, duration_sec, file_name, file_size_bytes FROM lottie_animations ORDER BY action',
       );
-      res.json({ animations: rows.map(r => ({
-        action: r.action,
-        enabled: r.enabled === 1,
-        duration_sec: r.duration_sec,
-        file_name: r.file_name,
-        file_size_bytes: r.file_size_bytes,
-      })) });
+      res.json({
+        animations: rows.map((r) => ({
+          action: r.action,
+          enabled: r.enabled === 1,
+          duration_sec: r.duration_sec,
+          file_name: r.file_name,
+          file_size_bytes: r.file_size_bytes,
+        })),
+      });
     }),
   );
 
@@ -175,12 +252,13 @@ export function createSettingsRouter(
       if (!VALID_LOTTIE_ACTIONS.has(action)) throw new AppError('Invalid action', 400);
 
       const row = await db.get<{
-        action: string; file_data: string | null; file_name: string | null;
-        file_size_bytes: number; duration_sec: number; enabled: number;
-      }>(
-        'SELECT * FROM lottie_animations WHERE action = ?',
-        [action],
-      );
+        action: string;
+        file_data: string | null;
+        file_name: string | null;
+        file_size_bytes: number;
+        duration_sec: number;
+        enabled: number;
+      }>('SELECT * FROM lottie_animations WHERE action = ?', [action]);
       if (!row) throw new AppError('Animation not found', 404);
       res.json({
         action: row.action,
@@ -215,7 +293,8 @@ export function createSettingsRouter(
       // Validate file_data if provided
       if (fileData !== undefined) {
         if (typeof fileData !== 'string') throw new AppError('file_data must be a string', 400);
-        if (fileData.length > MAX_LOTTIE_SIZE) throw new AppError('file_data exceeds 2 MB limit', 400);
+        if (fileData.length > MAX_LOTTIE_SIZE)
+          throw new AppError('file_data exceeds 2 MB limit', 400);
         try {
           JSON.parse(fileData);
         } catch {
@@ -230,19 +309,32 @@ export function createSettingsRouter(
 
       const sets: string[] = [];
       const params: unknown[] = [];
-      if (fileData !== undefined) { sets.push('file_data = ?'); params.push(fileData); }
-      if (fileName !== undefined) { sets.push('file_name = ?'); params.push(fileName); }
-      if (fileSizeBytes !== undefined) { sets.push('file_size_bytes = ?'); params.push(fileSizeBytes); }
-      if (durationSec !== undefined) { sets.push('duration_sec = ?'); params.push(durationSec); }
-      if (enabled !== undefined) { sets.push('enabled = ?'); params.push(enabled ? 1 : 0); }
-      sets.push('uploaded_by = ?'); params.push(callerEmail);
+      if (fileData !== undefined) {
+        sets.push('file_data = ?');
+        params.push(fileData);
+      }
+      if (fileName !== undefined) {
+        sets.push('file_name = ?');
+        params.push(fileName);
+      }
+      if (fileSizeBytes !== undefined) {
+        sets.push('file_size_bytes = ?');
+        params.push(fileSizeBytes);
+      }
+      if (durationSec !== undefined) {
+        sets.push('duration_sec = ?');
+        params.push(durationSec);
+      }
+      if (enabled !== undefined) {
+        sets.push('enabled = ?');
+        params.push(enabled ? 1 : 0);
+      }
+      sets.push('uploaded_by = ?');
+      params.push(callerEmail);
       sets.push("updated_at = datetime('now')");
       params.push(action);
 
-      await db.run(
-        `UPDATE lottie_animations SET ${sets.join(', ')} WHERE action = ?`,
-        params,
-      );
+      await db.run(`UPDATE lottie_animations SET ${sets.join(', ')} WHERE action = ?`, params);
 
       res.json({ success: true });
     }),
