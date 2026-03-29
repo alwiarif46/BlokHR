@@ -4,3 +4,4 @@ dist
 .env
 *.zip
 *.tar.gz
+backend/public
