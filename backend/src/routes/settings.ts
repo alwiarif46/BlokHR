@@ -360,5 +360,87 @@ export function createSettingsRouter(
     }),
   );
 
+  // ── Admin promote / demote endpoints ──
+
+  /** POST /api/admins — promote a member to admin (admin-only). */
+  router.post(
+    '/admins',
+    asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = req.identity?.email ?? '';
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+      const caller = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+        callerEmail,
+      ]);
+      if (!caller) throw new AppError('Admin access required', 403);
+
+      const { email } = req.body as { email?: string };
+      if (!email || typeof email !== 'string' || !email.includes('@')) {
+        throw new AppError('Valid email is required', 400);
+      }
+      const target = email.toLowerCase().trim();
+
+      // Member must exist and be active
+      const member = await db.get<{ email: string; active: number }>(
+        'SELECT email, active FROM members WHERE email = ?',
+        [target],
+      );
+      if (!member) throw new AppError('Member not found', 404);
+      if (member.active === 0) throw new AppError('Cannot promote an inactive member', 400);
+
+      // Idempotent — already an admin is a no-op
+      const alreadyAdmin = await db.get<{ email: string }>(
+        'SELECT email FROM admins WHERE email = ?',
+        [target],
+      );
+      if (alreadyAdmin) {
+        res.json({ success: true, message: 'Already an admin', email: target });
+        return;
+      }
+
+      await db.run('INSERT INTO admins (email) VALUES (?)', [target]);
+
+      if (broadcaster) {
+        broadcaster.broadcast('settings-update', { source: 'admin_promoted', email: target });
+      }
+
+      logger.info({ promotedBy: callerEmail, target }, 'Member promoted to admin');
+      res.status(201).json({ success: true, email: target });
+    }),
+  );
+
+  /** DELETE /api/admins/:email — demote an admin back to member (admin-only, no self-demotion). */
+  router.delete(
+    '/admins/:email',
+    asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = req.identity?.email ?? '';
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+      const caller = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+        callerEmail,
+      ]);
+      if (!caller) throw new AppError('Admin access required', 403);
+
+      const target = req.params.email.toLowerCase().trim();
+
+      // Prevent self-demotion
+      if (target === callerEmail.toLowerCase().trim()) {
+        throw new AppError('Cannot demote yourself', 400);
+      }
+
+      const existing = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+        target,
+      ]);
+      if (!existing) throw new AppError('Admin not found', 404);
+
+      await db.run('DELETE FROM admins WHERE email = ?', [target]);
+
+      if (broadcaster) {
+        broadcaster.broadcast('settings-update', { source: 'admin_demoted', email: target });
+      }
+
+      logger.info({ demotedBy: callerEmail, target }, 'Admin demoted to member');
+      res.json({ success: true, email: target });
+    }),
+  );
+
   return router;
 }
