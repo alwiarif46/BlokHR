@@ -92,11 +92,11 @@ export async function api(path, opts) {
     if (response.status === 401) {
       /*
        * For auth endpoints (/api/auth/*), a 401 means "wrong credentials" —
-       * NOT "session expired". Pass through the server's actual error message
-       * so the login form can show "Invalid email or password" instead of
-       * the generic "Session expired" message.
+       * NOT "session expired". Skip session clear, and use a sensible default
+       * message in case the response body can't be parsed (nginx proxy may
+       * replace the JSON body with its own HTML error page).
        */
-      var isAuthEndpoint = path.indexOf('/api/auth/') === 0 || path === '/api/auth/local';
+      var isAuthEndpoint = path.indexOf('/api/auth/') === 0;
       if (!isAuthEndpoint) {
         clearSession();
         if (typeof document !== 'undefined') {
@@ -104,13 +104,15 @@ export async function api(path, opts) {
         }
       }
 
-      var authMessage = 'Session expired';
+      var authMessage = isAuthEndpoint ? 'Invalid email or password' : 'Session expired';
       try {
         var text401 = await response.text();
-        var parsed401 = JSON.parse(text401);
-        authMessage = parsed401.error || parsed401.message || authMessage;
+        if (text401 && text401.charAt(0) === '{') {
+          var parsed401 = JSON.parse(text401);
+          authMessage = parsed401.error || parsed401.message || authMessage;
+        }
       } catch (_e) {
-        /* leave default */
+        /* leave default — nginx may have replaced body with HTML */
       }
       return { _error: true, status: 401, message: authMessage };
     }
