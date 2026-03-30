@@ -49,6 +49,15 @@ import { createMultiAuthRouter } from './multi-auth';
 import { createMemberPreferencesRouter } from './member-preferences';
 import { createExportRouter } from './export';
 
+// ── Phase S3 route factories ──
+import { createApprovalFlowsRouter } from './approval-flows';
+import { createColourSchemesRouter } from './colour-schemes';
+import { createCustomTabsRouter } from './custom-tabs';
+
+// ── Phase S4 route factories ──
+import { createNotificationChannelsRouter } from './notification-channels';
+import { createMeetingPlatformsRouter } from './meeting-platforms';
+
 // ── Action dispatcher dependencies ──
 import { LeaveRepository } from '../repositories/leave-repository';
 import { LeaveService } from '../services/leave-service';
@@ -83,11 +92,11 @@ export interface RouteDependencies {
  * Feature flag guard returns 404 for disabled features before
  * the route handler runs — disabled modules are invisible, not forbidden.
  */
-export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
+export async function registerAllRoutes(app: Express, deps: RouteDependencies): Promise<void> {
   const { db, config, logger, broadcaster, featureFlags, eventBus } = deps;
 
-  // ── Notification dispatcher wiring ──
-  const notificationDispatcher = createNotificationDispatcher(config, db, logger);
+  // ── Notification dispatcher wiring (Phase S4: async, reads DB fallback) ──
+  const notificationDispatcher = await createNotificationDispatcher(config, db, logger);
   const leaveNotifier = new LeaveNotificationService(notificationDispatcher, db, logger);
 
   // ── Feature flag guard with admin-only enforcement — BEFORE all route handlers ──
@@ -108,6 +117,15 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   app.use('/api', createProfileRouter(db, logger));
   app.use('/api', createMemberPreferencesRouter(db, logger));
   app.use('/api', createExportRouter(db, logger));
+
+  // ── Phase S3 ──
+  app.use('/api', createApprovalFlowsRouter(db, logger, broadcaster));
+  app.use('/api', createColourSchemesRouter(db, logger, broadcaster));
+  app.use('/api', createCustomTabsRouter(db, logger, broadcaster));
+
+  // ── Phase S4 ──
+  app.use('/api', createNotificationChannelsRouter(db, logger, broadcaster));
+  app.use('/api', createMeetingPlatformsRouter(db, logger, broadcaster));
 
   // Action dispatcher for interaction receivers
   const leaveRepo = new LeaveRepository(db);
