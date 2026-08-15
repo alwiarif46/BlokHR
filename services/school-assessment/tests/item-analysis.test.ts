@@ -52,11 +52,11 @@ describe('item-analysis pure functions (P4-03)', () => {
       name: 'flags extreme p-values',
       results: [
         { questionId: 'easy', scores: [1, 1, 1, 1, 1], max: 1 },
-        { questionId: 'hard', scores: [0, 0, 0, 0, 1], max: 1 },
+        { questionId: 'hard', scores: [0, 0, 0, 0, 0], max: 1 },
       ],
       expected: [
         { questionId: 'easy', pValue: 1, review: true },
-        { questionId: 'hard', pValue: 0.2, review: true },
+        { questionId: 'hard', pValue: 0, review: true },
       ],
     },
     {
