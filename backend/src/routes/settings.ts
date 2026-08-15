@@ -8,7 +8,7 @@ import { RegularizationRepository } from '../repositories/regularization-reposit
 import { BdMeetingRepository } from '../repositories/bd-meeting-repository';
 import { MeetingRepository } from '../repositories/meeting-repository';
 import { SettingsService } from '../services/settings-service';
-import { TenantSettingsService } from '../services/tenant-settings-service';
+import { TenantSettingsService, SettingsValidationError } from '../services/tenant-settings-service';
 import type { SseBroadcaster } from '../sse/broadcaster';
 import type { DirectoryService } from '@blokhr/directory';
 
@@ -79,10 +79,17 @@ export function createSettingsRouter(
       }
 
       const settingsJson = body.settings_json as Record<string, unknown> | undefined;
-      await tenantService.updateSettings({
-        columns: Object.keys(columns).length > 0 ? columns : undefined,
-        settingsJson: settingsJson ?? undefined,
-      });
+      try {
+        await tenantService.updateSettings({
+          columns: Object.keys(columns).length > 0 ? columns : undefined,
+          settingsJson: settingsJson ?? undefined,
+        });
+      } catch (err) {
+        if (err instanceof SettingsValidationError) {
+          throw new AppError(err.message, err.statusCode);
+        }
+        throw err;
+      }
 
       if (broadcaster) {
         broadcaster.broadcast('settings-update', { source: 'tenant_settings' });

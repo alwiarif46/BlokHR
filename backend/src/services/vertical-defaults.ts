@@ -23,6 +23,50 @@ export const SCHOOL_TERMINOLOGY_DEFAULTS = {
   supervisor: 'Class Teacher',
 } as const;
 
+/** Ordered keys for settings section #37 (terminology). */
+export const TERMINOLOGY_KEYS = [
+  'person',
+  'person_plural',
+  'group',
+  'subgroup',
+  'interval',
+  'supervisor',
+] as const;
+
+export type TerminologyKey = (typeof TERMINOLOGY_KEYS)[number];
+
+export type TerminologySection = Record<TerminologyKey, string>;
+
+const TERMINOLOGY_MAX_LEN = 30;
+
+/**
+ * Validate a terminology section object (all six keys required, non-empty, ≤ 30 chars).
+ */
+export function validateTerminologySection(
+  value: unknown,
+): { ok: true; value: TerminologySection } | { ok: false; error: string } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return { ok: false, error: 'terminology must be an object' };
+  }
+  const raw = value as Record<string, unknown>;
+  const result = {} as TerminologySection;
+  for (const key of TERMINOLOGY_KEYS) {
+    const v = raw[key];
+    if (typeof v !== 'string' || !v.trim()) {
+      return { ok: false, error: `terminology.${key} is required` };
+    }
+    const trimmed = v.trim();
+    if (trimmed.length > TERMINOLOGY_MAX_LEN) {
+      return {
+        ok: false,
+        error: `terminology.${key} must be at most ${TERMINOLOGY_MAX_LEN} characters`,
+      };
+    }
+    result[key] = trimmed;
+  }
+  return { ok: true, value: result };
+}
+
 /** HR dataRetention defaults (mirrors docs / migration seed). */
 export const HR_DATA_RETENTION_DEFAULTS = {
   auditLogDays: 365,

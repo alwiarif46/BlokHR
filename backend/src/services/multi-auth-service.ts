@@ -405,18 +405,18 @@ export class MultiAuthService {
     );
 
     this.logger.info({ email: row.email }, 'Magic link verified');
-    return {
+    return this.withVertical({
       success: true,
       email: row.email,
       name: member?.name ?? row.email,
       sessionToken: uuidv4(),
-    };
+    });
   }
 
   // ── 3. Microsoft MSAL (existing, delegated to auth-service.ts) ──
 
   /** Decode a Teams SSO token — same as existing auth-service.ts logic. */
-  authenticateMsal(ssoToken: string): AuthResult {
+  async authenticateMsal(ssoToken: string): Promise<AuthResult> {
     try {
       const parts = ssoToken.split('.');
       if (parts.length !== 3) {
@@ -438,7 +438,7 @@ export class MultiAuthService {
         return { success: false, error: 'No email claim in SSO token' };
       }
       const name = (payload.name as string) ?? email;
-      return { success: true, email, name, sessionToken: uuidv4() };
+      return this.withVertical({ success: true, email, name, sessionToken: uuidv4() });
     } catch {
       return { success: false, error: 'Failed to decode SSO token' };
     }
@@ -447,7 +447,7 @@ export class MultiAuthService {
   // ── 4. Google OAuth ──
 
   /** Verify a Google ID token (client sends it after Google Sign-In). */
-  authenticateGoogle(idToken: string): AuthResult {
+  async authenticateGoogle(idToken: string): Promise<AuthResult> {
     try {
       const parts = idToken.split('.');
       if (parts.length !== 3) {
@@ -462,7 +462,7 @@ export class MultiAuthService {
         return { success: false, error: 'No email claim in Google token' };
       }
       const name = (payload.name as string) ?? email;
-      return { success: true, email, name, sessionToken: uuidv4() };
+      return this.withVertical({ success: true, email, name, sessionToken: uuidv4() });
     } catch {
       return { success: false, error: 'Failed to decode Google token' };
     }
@@ -501,11 +501,11 @@ export class MultiAuthService {
    * ID token from the response — the token exchange should be done
    * by the frontend or a server-side callback handler.
    */
-  authenticateOidcToken(idToken: string): AuthResult {
+  authenticateOidcToken(idToken: string): Promise<AuthResult> {
     try {
       const parts = idToken.split('.');
       if (parts.length !== 3) {
-        return { success: false, error: 'Invalid OIDC token format' };
+        return Promise.resolve({ success: false, error: 'Invalid OIDC token format' });
       }
       const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<
         string,
@@ -520,12 +520,12 @@ export class MultiAuthService {
         .toLowerCase()
         .trim();
       if (!email) {
-        return { success: false, error: 'No email claim in OIDC token' };
+        return Promise.resolve({ success: false, error: 'No email claim in OIDC token' });
       }
       const name = (payload.name as string) ?? email;
-      return { success: true, email, name, sessionToken: uuidv4() };
+      return this.withVertical({ success: true, email, name, sessionToken: uuidv4() });
     } catch {
-      return { success: false, error: 'Failed to decode OIDC token' };
+      return Promise.resolve({ success: false, error: 'Failed to decode OIDC token' });
     }
   }
 
@@ -563,16 +563,16 @@ export class MultiAuthService {
    * In production, parse and validate the XML assertion, verify signature.
    * Here we accept a pre-parsed assertion with email and name attributes.
    */
-  authenticateSaml(assertion: { email: string; name?: string }): AuthResult {
+  async authenticateSaml(assertion: { email: string; name?: string }): Promise<AuthResult> {
     if (!assertion.email) {
       return { success: false, error: 'No email in SAML assertion' };
     }
-    return {
+    return this.withVertical({
       success: true,
       email: assertion.email.toLowerCase().trim(),
       name: assertion.name ?? assertion.email,
       sessionToken: uuidv4(),
-    };
+    });
   }
 
   // ── 7. LDAP/Active Directory ──
@@ -619,12 +619,12 @@ export class MultiAuthService {
     }
 
     this.logger.info({ email, provider: 'ldap' }, 'LDAP authentication');
-    return {
+    return this.withVertical({
       success: true,
       email: member.email,
       name: member.name,
       sessionToken: uuidv4(),
-    };
+    });
   }
 
   // ── Setup helper: seed default admin ──

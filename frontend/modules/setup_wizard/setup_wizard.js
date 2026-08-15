@@ -2,19 +2,32 @@
  * modules/setup_wizard/setup_wizard.js
  *
  * Extracted from monolith Block 14 — Setup Wizard JS.
- * 3-step flow: Branding → Auth → License
+ * 4-step flow: Type → Branding → Auth → License/Plan
+ * Panels keep stable ids wzP0..wzP3; wizard steps are 1..4.
  * Writes to tenant_settings via POST /api/setup/step1,step2,step3
  *
  * Pattern: initWizard(statusData) called from shell.html boot sequence.
  */
 
-import { api, isMockMode } from '../../shared/api.js';
+import { isMockMode } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
+
+/** HR / company default accent (matches colour picker default). */
+const WZ_ACCENT_HR = '#F5A623';
+/** BlokSchool preview accent until brand preset ships (W-03). */
+const WZ_ACCENT_SCHOOL = '#0EA5E9';
 
 let _step = 1;
 let _mock = false;
-let _mockData = { setupComplete: false, currentStep: 1, branding: {} };
+let _mockData = { setupComplete: false, currentStep: 1, branding: {}, lastStep3Body: null };
 let _deploymentMode = 'cloud';
+/** @type {'hr'|'school'|null} */
+let _vertical = null;
+/** @type {'hr'|'school'|null} */
+let _pendingVertical = null;
+let _verticalLocked = false;
+let _eventsBound = false;
 
 /**
  * Initialise the setup wizard. Called when setup is not complete.
@@ -28,6 +41,25 @@ export function initWizard(statusData) {
   _deploymentMode =
     (statusData && statusData.deploymentMode) || 'cloud';
   wzApplyDeploymentMode(_deploymentMode);
+
+  const existingVertical =
+    statusData && (statusData.vertical === 'hr' || statusData.vertical === 'school')
+      ? statusData.vertical
+      : null;
+
+  if (existingVertical) {
+    _vertical = existingVertical;
+    _pendingVertical = existingVertical;
+    _verticalLocked = true;
+    wzSyncVerticalCards(existingVertical);
+    if (existingVertical === 'school') wzApplyAccent(WZ_ACCENT_SCHOOL);
+    else wzApplyAccent(WZ_ACCENT_HR);
+  } else {
+    _vertical = null;
+    _pendingVertical = null;
+    _verticalLocked = false;
+    wzSyncVerticalCards(null);
+  }
 
   if (statusData && statusData.currentStep > 1) {
     const b = statusData.branding || {};
@@ -54,14 +86,31 @@ export function initWizard(statusData) {
     if (b.msalClientId || b.googleOAuthClientId) {
       wzExpandSso(true);
     }
+  }
 
-    wzGoTo(statusData.currentStep);
+  // Resume: skip Type when vertical already set; map API currentStep (1–3) → wizard step (2–4).
+  if (existingVertical) {
+    const apiStep = Math.min(3, Math.max(1, (statusData && statusData.currentStep) || 1));
+    wzGoTo(apiStep + 1, true);
+  } else {
+    wzGoTo(1, true);
   }
 
   _bindEvents();
+  wzValidate0();
   wzValidate1();
   wzValidate2();
   wzValidate3();
+}
+
+/** @returns {'hr'|'school'|null} */
+export function getWizardVertical() {
+  return _vertical;
+}
+
+/** Test helper — last mock step3 payload. */
+export function getMockStep3Body() {
+  return _mockData.lastStep3Body;
 }
 
 function wzApplyDeploymentMode(mode) {
@@ -71,7 +120,7 @@ function wzApplyDeploymentMode(mode) {
   const sub = document.getElementById('wzStep3Sub');
   const title = document.getElementById('wzStep3Title');
   const btnText = document.getElementById('wzBtn3Text');
-  const label = document.getElementById('wzLb3');
+  const label = document.getElementById('wzLb4');
   if (cloud) cloud.hidden = _deploymentMode !== 'cloud';
   if (selfHost) selfHost.hidden = _deploymentMode !== 'self_hosted';
   if (label) label.textContent = _deploymentMode === 'self_hosted' ? 'License' : 'Plan';
@@ -112,6 +161,27 @@ function wzApplyAccent(hex) {
   scr.style.setProperty('--wz-accent2', d2);
   scr.style.setProperty('--wz-accent-dim', hex + '18');
   scr.style.setProperty('--wz-accent-glow', hex + '40');
+}
+
+function wzPanelId(wizardStep) {
+  return wizardStep === 1 ? 'wzP0' : 'wzP' + (wizardStep - 1);
+}
+
+function wzSyncVerticalCards(vertical) {
+  ['wzCardHr', 'wzCardSchool'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const selected = vertical && el.getAttribute('data-vertical') === vertical;
+    el.classList.toggle('selected', !!selected);
+    el.setAttribute('aria-selected', selected ? 'true' : 'false');
+    if (_verticalLocked) el.classList.add('locked');
+    else el.classList.remove('locked');
+  });
+}
+
+function wzValidate0() {
+  const btn = document.getElementById('wzBtn0');
+  if (btn) btn.disabled = !(_pendingVertical || _vertical);
 }
 
 /* ── Step validation ── */
@@ -168,35 +238,42 @@ function wzValidate3() {
 }
 
 /* ── Step navigation ── */
-function wzGoTo(step) {
-  if (step === _step) return;
-  const old = document.getElementById('wzP' + _step);
-  if (old) {
+function wzGoTo(step, instant) {
+  if (step === _step && !instant) return;
+  const apply = () => {
+    document.querySelectorAll('.wz-panel').forEach((p) => {
+      p.classList.remove('active');
+      p.style.animation = '';
+    });
+    _step = step;
+    const next = document.getElementById(wzPanelId(step));
+    if (next) {
+      next.classList.add('active');
+      if (!instant) next.style.animation = 'wzSlideIn .5s var(--wz-ease) both';
+    }
+    wzUpdateIndicator();
+  };
+
+  if (instant) {
+    apply();
+    return;
+  }
+
+  const old = document.getElementById(wzPanelId(_step));
+  if (old && old.classList.contains('active')) {
     old.style.animation = 'wzSlideOut .3s var(--wz-ease) forwards';
     setTimeout(() => {
       old.classList.remove('active');
       old.style.animation = '';
-      _step = step;
-      const next = document.getElementById('wzP' + step);
-      if (next) {
-        next.classList.add('active');
-        next.style.animation = 'wzSlideIn .5s var(--wz-ease) both';
-      }
-      wzUpdateIndicator();
+      apply();
     }, 280);
   } else {
-    _step = step;
-    const next = document.getElementById('wzP' + step);
-    if (next) {
-      next.classList.add('active');
-      next.style.animation = 'wzSlideIn .5s var(--wz-ease) both';
-    }
-    wzUpdateIndicator();
+    apply();
   }
 }
 
 function wzUpdateIndicator() {
-  for (let i = 1; i <= 3; i++) {
+  for (let i = 1; i <= 4; i++) {
     const n = document.getElementById('wzSn' + i);
     const l = document.getElementById('wzLb' + i);
     if (n) {
@@ -212,10 +289,14 @@ function wzUpdateIndicator() {
   }
   const sl1 = document.getElementById('wzSl1');
   const sl2 = document.getElementById('wzSl2');
+  const sl3 = document.getElementById('wzSl3');
   if (sl1) sl1.className = 'wz-sl' + (_step >= 2 ? ' filled' : '');
   if (sl2)
     sl2.className =
       'wz-sl' + (_step >= 3 ? ' filled' : _step === 2 ? ' filling' : '');
+  if (sl3)
+    sl3.className =
+      'wz-sl' + (_step >= 4 ? ' filled' : _step === 3 ? ' filling' : '');
 }
 
 /* ── UI helpers ── */
@@ -270,11 +351,13 @@ function wzMockApi(path, opts) {
         return resolve({ success: true });
       }
       if (path === '/api/setup/step3') {
+        const body = JSON.parse(opts.body);
+        _mockData.lastStep3Body = body;
         _mockData.setupComplete = true;
         return resolve({ success: true });
       }
       resolve({});
-    }, 600);
+    }, 20);
   });
 }
 
@@ -324,8 +407,43 @@ function wzConfetti() {
   }, 6000);
 }
 
+function wzSelectVertical(vertical) {
+  if (_verticalLocked) return;
+  if (vertical !== 'hr' && vertical !== 'school') return;
+  _pendingVertical = vertical;
+  wzSyncVerticalCards(vertical);
+  if (vertical === 'school') wzApplyAccent(WZ_ACCENT_SCHOOL);
+  else wzApplyAccent(WZ_ACCENT_HR);
+  wzValidate0();
+}
+
+async function wzConfirmVerticalAndAdvance() {
+  const chosen = _pendingVertical || _vertical;
+  if (!chosen) return;
+
+  if (_verticalLocked || _vertical === chosen) {
+    wzGoTo(2);
+    return;
+  }
+
+  const label = chosen === 'school' ? 'School' : 'Company';
+  const ok = await confirmDialog({
+    title: 'Confirm workspace type',
+    message:
+      'You chose ' + label + '. This cannot be changed later. Continue?',
+    confirmLabel: 'Continue',
+    cancelLabel: 'Go back',
+  });
+  if (!ok) return;
+  _vertical = chosen;
+  wzGoTo(2);
+}
+
 /* ── Event binding ── */
 function _bindEvents() {
+  if (_eventsBound) return;
+  _eventsBound = true;
+
   /* Theme toggle */
   const themeBtn = document.getElementById('wzThemeBtn');
   if (themeBtn) {
@@ -335,6 +453,22 @@ function _bindEvents() {
       const next =
         scr.getAttribute('data-wz-theme') === 'dark' ? 'light' : 'dark';
       scr.setAttribute('data-wz-theme', next);
+    });
+  }
+
+  /* Vertical cards */
+  ['wzCardHr', 'wzCardSchool'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener('click', () => {
+      wzSelectVertical(el.getAttribute('data-vertical'));
+    });
+  });
+
+  const btn0 = document.getElementById('wzBtn0');
+  if (btn0) {
+    btn0.addEventListener('click', () => {
+      wzConfirmVerticalAndAdvance();
     });
   }
 
@@ -391,9 +525,9 @@ function _bindEvents() {
   if (nameInput) {
     nameInput.addEventListener('input', function () {
       const v = this.value.trim();
-      const logoUrl = document.getElementById('wzLogoUrl');
+      const logoUrlEl = document.getElementById('wzLogoUrl');
       const letter = document.getElementById('wzLogoLetter');
-      if (v && letter && (!logoUrl || !logoUrl.value.trim())) {
+      if (v && letter && (!logoUrlEl || !logoUrlEl.value.trim())) {
         letter.textContent = v[0].toUpperCase();
       }
       wzValidate1();
@@ -424,7 +558,7 @@ function _bindEvents() {
     if (el) el.addEventListener('input', wzValidate3);
   });
 
-  /* Step 1 submit */
+  /* Step 1 submit (branding) → wizard step 3 */
   const btn1 = document.getElementById('wzBtn1');
   if (btn1) {
     btn1.addEventListener('click', () => {
@@ -449,7 +583,7 @@ function _bindEvents() {
       })
         .then(() => {
           toast('Branding saved', 'success');
-          wzGoTo(2);
+          wzGoTo(3);
         })
         .catch((e) => toast(e.message || 'Failed', 'error'))
         .finally(() => {
@@ -459,7 +593,7 @@ function _bindEvents() {
     });
   }
 
-  /* Step 2 submit */
+  /* Step 2 submit (auth) → wizard step 4 */
   const btn2 = document.getElementById('wzBtn2');
   if (btn2) {
     btn2.addEventListener('click', () => {
@@ -486,7 +620,7 @@ function _bindEvents() {
       })
         .then(() => {
           toast('Auth configured', 'success');
-          wzGoTo(3);
+          wzGoTo(4);
         })
         .catch((e) => toast(e.message || 'Failed', 'error'))
         .finally(() => {
@@ -496,7 +630,7 @@ function _bindEvents() {
     });
   }
 
-  /* Step 3 submit */
+  /* Step 3 submit (plan) — includes vertical */
   const btn3 = document.getElementById('wzBtn3');
   if (btn3) {
     btn3.addEventListener('click', () => {
@@ -517,7 +651,10 @@ function _bindEvents() {
       }
       if (hasErr) return;
       wzSetLoading('wzBtn3', true);
-      const body = { adminEmail: email };
+      const body = {
+        adminEmail: email,
+        vertical: _vertical || 'hr',
+      };
       if (_deploymentMode === 'self_hosted') body.licenseToken = token;
       wzApi('/api/setup/step3', {
         method: 'POST',
@@ -533,11 +670,11 @@ function _bindEvents() {
     });
   }
 
-  /* Back buttons */
+  /* Back buttons — wizard steps 3↔2, 4↔3 */
   const back2 = document.getElementById('wzBack2');
-  if (back2) back2.addEventListener('click', () => wzGoTo(1));
+  if (back2) back2.addEventListener('click', () => wzGoTo(2));
   const back3 = document.getElementById('wzBack3');
-  if (back3) back3.addEventListener('click', () => wzGoTo(2));
+  if (back3) back3.addEventListener('click', () => wzGoTo(3));
 
   /* Go to login after success */
   const goLogin = document.getElementById('wzGoLogin');
@@ -545,7 +682,6 @@ function _bindEvents() {
     goLogin.addEventListener('click', async () => {
       if (!window.BlokHR) return;
 
-      // Fetch auth providers from server (now that setup is complete, they exist)
       let providers = [];
       try {
         const authData = await window.BlokHR.api('/api/auth/providers', { method: 'GET' });
@@ -554,14 +690,12 @@ function _bindEvents() {
         }
       } catch (_e) { /* ignore */ }
 
-      // Fallback: at minimum show the local login form
       if (!providers.length) {
         providers = [
           { id: 'local', name: 'Email & Password', enabled: true, type: 'local' }
         ];
       }
 
-      // Render providers, THEN show the login screen
       if (window.BlokHR.renderLoginProviders) {
         window.BlokHR.renderLoginProviders(providers);
       }
@@ -571,3 +705,4 @@ function _bindEvents() {
     });
   }
 }
+

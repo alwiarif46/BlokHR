@@ -68,7 +68,7 @@ export interface EntitlementsPort {
   hasModule(tenantId: string, moduleId: string): Promise<boolean>;
 }
 
-export interface SchoolAttendancePort {
+export interface CaptureRollcallPort {
   markFromCapture(input: {
     tenantId: string;
     subjectRef: string;
@@ -79,6 +79,9 @@ export interface SchoolAttendancePort {
     idempotencyKey: string;
   }): Promise<void>;
 }
+
+/** @deprecated Use CaptureRollcallPort */
+export type SchoolAttendancePort = CaptureRollcallPort;
 
 export interface ClockPort {
   clock(action: string, email: string, name: string, source: string): Promise<{ success: boolean; error?: string }>;

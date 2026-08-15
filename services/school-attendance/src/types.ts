@@ -324,3 +324,73 @@ export interface NudgeReport {
   treatment: { mean_absence_pct: number; message_count: number; student_count: number };
   holdout: { mean_absence_pct: number; message_count: number; student_count: number };
 }
+
+export type LeaveRequestState = 'pending' | 'approved' | 'rejected' | 'cancelled';
+
+export interface LeaveType {
+  id: string;
+  tenantId: string;
+  code: string;
+  label: string;
+  annualQuota: number;
+  carryForward: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LeaveBalance {
+  tenantId: string;
+  memberId: string;
+  leaveTypeId: string;
+  year: number;
+  opening: number;
+  used: number;
+}
+
+export interface LeaveRequest {
+  id: string;
+  tenantId: string;
+  memberId: string;
+  leaveTypeId: string;
+  fromDate: string;
+  toDate: string;
+  isHalfDay: boolean;
+  days: number;
+  reason: string | null;
+  state: LeaveRequestState;
+  decidedBy: string | null;
+  decidedAt: string | null;
+  decisionNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateLeaveTypeInput {
+  code: string;
+  label: string;
+  annualQuota: number;
+  carryForward?: boolean;
+}
+
+export interface PatchLeaveTypeInput {
+  label?: string;
+  annualQuota?: number;
+  carryForward?: boolean;
+  isActive?: boolean;
+}
+
+export interface CreateLeaveRequestInput {
+  memberId: string;
+  leaveTypeId: string;
+  fromDate: string;
+  toDate: string;
+  isHalfDay?: boolean;
+  reason?: string | null;
+}
+
+export interface DecideLeaveInput {
+  decision: 'approved' | 'rejected';
+  decidedBy: string;
+  decisionNote?: string | null;
+}

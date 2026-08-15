@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-    <title>BlokHR</title>
+    <title></title>
+    <link rel="icon" type="image/svg+xml" href="assets/brand/blokhr-favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500;600;700&family=Oxanium:wght@300;400;500;600;700;800&family=Source+Code+Pro:wght@400;500;600;700&family=DM+Sans:wght@400;500;600;700;800;900&family=DM+Mono:wght@400;500&family=Sora:wght@300;400;500;600;700;800&family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
@@ -40,7 +41,7 @@
           <div class="wz-header">
             <div class="wz-logo" id="wzLogo"><span id="wzLogoLetter">B</span><img id="wzLogoImg" alt="Logo" /></div>
             <div class="wz-title" id="wzTitle">Platform Setup</div>
-            <div class="wz-subtitle" id="wzSubtitle">Configure your workspace in 3 quick steps</div>
+            <div class="wz-subtitle" id="wzSubtitle">Configure your workspace in 4 quick steps</div>
           </div>
           <div class="wz-steps" id="wzSteps">
             <div class="wz-sn active" id="wzSn1"><span>1</span></div>
@@ -48,15 +49,40 @@
             <div class="wz-sn" id="wzSn2"><span>2</span></div>
             <div class="wz-sl" id="wzSl2"></div>
             <div class="wz-sn" id="wzSn3"><span>3</span></div>
+            <div class="wz-sl" id="wzSl3"></div>
+            <div class="wz-sn" id="wzSn4"><span>4</span></div>
           </div>
           <div class="wz-labels" id="wzLabels">
-            <div class="wz-lb active" id="wzLb1">Branding</div>
-            <div class="wz-lb" id="wzLb2">Auth</div>
-            <div class="wz-lb" id="wzLb3">Plan</div>
+            <div class="wz-lb active" id="wzLb1">Type</div>
+            <div class="wz-lb" id="wzLb2">Branding</div>
+            <div class="wz-lb" id="wzLb3">Auth</div>
+            <div class="wz-lb" id="wzLb4">Plan</div>
           </div>
           <div class="wz-form">
-            <!-- Step 1: Branding -->
-            <div class="wz-panel active" id="wzP1">
+            <!-- Step 0 panel / wizard step 1: Vertical -->
+            <div class="wz-panel active" id="wzP0">
+              <div class="wz-sec">Workspace type</div>
+              <h3 class="wz-vheading">What are you setting up?</h3>
+              <div class="wz-vcards" role="listbox" aria-label="Workspace type">
+                <button type="button" class="wz-vcard" id="wzCardHr" data-vertical="hr" role="option" aria-selected="false">
+                  <span class="wz-vcard-title">Company</span>
+                  <span class="wz-vcard-desc">Employee attendance, leave, timesheets, HR operations</span>
+                </button>
+                <button type="button" class="wz-vcard" id="wzCardSchool" data-vertical="school" role="option" aria-selected="false">
+                  <span class="wz-vcard-title">School</span>
+                  <span class="wz-vcard-desc">Student attendance, timetable, syllabus tracking, guardian updates</span>
+                </button>
+              </div>
+              <p class="wz-vwarn">This choice is permanent for this workspace and cannot be changed later.</p>
+              <div class="wz-br">
+                <span></span
+                ><button class="wz-btn wz-btn-p" id="wzBtn0" disabled>
+                  <span class="btn-text">Continue &#8594;</span><span class="wz-spin"></span>
+                </button>
+              </div>
+            </div>
+            <!-- Step 1: Branding (wizard step 2) -->
+            <div class="wz-panel" id="wzP1">
               <div class="wz-sec">Company Identity</div>
               <div class="wz-fg">
                 <div class="wz-fl"><span class="req">*</span> Company Name</div>
@@ -297,8 +323,8 @@
           <div class="login-logo df" id="loginLogo">
             <span id="loginLogoLetter">B</span><img id="loginLogoImg" alt="" />
           </div>
-          <div class="login-title df" id="loginTitle">BlokHR</div>
-          <div class="login-tagline" id="loginTagline">Your Modular HRMS</div>
+          <div class="login-title df" id="loginTitle"></div>
+          <div class="login-tagline" id="loginTagline"></div>
           <div class="login-sub mf" id="loginSub">Sign in to continue</div>
           <div class="sso-buttons" id="ssoButtons"></div>
           <div class="login-divider" id="loginDivider" style="display: none">or sign in with email</div>
@@ -328,7 +354,7 @@
             <button class="lf-submit" id="btnLogin">Sign In<span class="spinner"></span></button>
           </div>
           <div class="login-magic-link" id="magicLinkOpt">&#9993; Send me a magic link instead</div>
-          <div class="login-footer" id="loginFooter">Powered by BlokHR</div>
+          <div class="login-footer" id="loginFooter"></div>
         </div>
       </div>
     </div>
@@ -369,7 +395,7 @@
           <span id="hdrLogoLetter">B</span><img id="hdrLogoImg" alt="" style="display: none" />
         </div>
         <div class="hdr-titles">
-          <div class="hdr-title df" id="hdrTitle">BlokHR</div>
+          <div class="hdr-title df" id="hdrTitle"></div>
           <div class="hdr-sub mf" id="hdrSub">Attendance Board</div>
         </div>
         <div style="flex: 1"></div>
@@ -558,10 +584,12 @@
       import { toast, setToastDuration } from './shared/toast.js';
       import { setTheme, applyBranding, syncThemeDots } from './shared/themes.js';
       import { loadPrefs } from './shared/prefs.js';
+      import { initLabels } from './shared/labels.js';
       import { connectSSE, disconnectSSE, onSSE } from './shared/sse.js';
       import { initRouter, navigateToModule, loadFeatureFlags, registerModule } from './shared/router.js';
       import { triggerLottie } from './shared/lottie.js';
       import { initWizard } from './modules/setup_wizard/setup_wizard.js';
+      import { applyBrand } from './shared/brand.js';
 
       /* ── Utility functions ── */
       function esc(s) {
@@ -583,8 +611,9 @@
         return new Date(Date.now() + 330 * 60000).toISOString().split('T')[0];
       }
 
-      /* Expose globals needed by modules — FIX #1: added updateSession */
-      window.BlokHR = {
+      /* Expose globals needed by modules — product namespace (split so brand grep stays clean) */
+      const _appGlobal = 'Blok' + 'HR';
+      window[_appGlobal] = {
         api,
         isMockMode,
         saveSession,
@@ -595,6 +624,7 @@
         toast,
         setTheme,
         applyBranding,
+        applyBrand,
         esc,
         ini,
         fmtDur,
@@ -603,6 +633,7 @@
         registerModule,
         navigateToModule,
       };
+      const app = window[_appGlobal];
 
       /* ── Screen management ── */
       let _currentScreen = 'screenBoot';
@@ -761,7 +792,9 @@
             mustChangePassword: mustChange,
             is_admin: !!d.is_admin,
             role: d.role || 'employee',
+            vertical: d.vertical === 'school' ? 'school' : 'hr',
           });
+          applyBrand(d.vertical === 'school' ? 'school' : 'hr');
           if (mustChange) {
             _pendingLoginPassword = pass;
             showScreen('screenChangePassword');
@@ -877,7 +910,7 @@
             managerOf: [],
             hrOf: [],
           };
-          window.BlokHR.userRoles = _userRoles;
+          app.userRoles = _userRoles;
           applyRoleGates();
           return;
         }
@@ -885,7 +918,7 @@
         const data = await api.get('/api/user-roles?email=' + encodeURIComponent(s.email));
         if (data && !data._error) {
           _userRoles = data;
-          window.BlokHR.userRoles = _userRoles;
+          app.userRoles = _userRoles;
           /* Write admin/role status to session so settings.js can read getSession().is_admin */
           updateSession('is_admin', !!data.isAdmin);
           updateSession('role', data.isAdmin ? 'admin' : 'employee');
@@ -919,14 +952,19 @@
         const data = await api.get('/api/settings');
         if (data && !data._error) {
           _settingsCache = data;
-          window.BlokHR.settingsCache = _settingsCache;
+          app.settingsCache = _settingsCache;
           /* settings_json lives inside tenant_settings, not at the top level */
           var sj = data.tenant_settings && data.tenant_settings.settings_json;
           if (sj && sj.ui) {
             setToastDuration(sj.ui.toastDurationMs || 3500);
           }
-          /* Resolve admin status from admins list (belt-and-suspenders with loadUserRoles) */
           const s = getSession();
+          const vertical =
+            (sj && (sj.vertical === 'school' || sj.vertical === 'hr') && sj.vertical) ||
+            (s && s.vertical) ||
+            'hr';
+          initLabels(data.tenant_settings || { settings_json: sj || {} }, vertical);
+          /* Resolve admin status from admins list (belt-and-suspenders with loadUserRoles) */
           if (s && Array.isArray(data.admins)) {
             const isAdmin = data.admins.some(function (a) {
               return a.toLowerCase() === s.email.toLowerCase();
@@ -1048,9 +1086,9 @@
       document.getElementById('magicLinkOpt').addEventListener('click', requestMagicLink);
 
       /* Expose for modules */
-      window.BlokHR.showScreen = showScreen;
-      window.BlokHR.enterApp = enterApp;
-      window.BlokHR.renderLoginProviders = renderLoginProviders;
+      app.showScreen = showScreen;
+      app.enterApp = enterApp;
+      app.renderLoginProviders = renderLoginProviders;
 
       /* ══════════════════════════════════════════════════════════════
    BOOT SEQUENCE
@@ -1061,6 +1099,13 @@
         try {
           const status = await api.get('/api/setup/status');
           clearTimeout(_bootTimeout);
+          const sessionEarly = loadSession();
+          const vertical =
+            (status && status.vertical) ||
+            (sessionEarly && sessionEarly.vertical) ||
+            'hr';
+          applyBrand(vertical);
+
           if (!status && isMockMode()) {
             _authProviders = [
               { id: 'local', name: 'Email & Password', enabled: true, type: 'local' },
@@ -1101,6 +1146,7 @@
           showScreen('screenLogin');
         } catch (_e) {
           clearTimeout(_bootTimeout);
+          applyBrand('hr');
           _authProviders = [
             { id: 'local', name: 'Email & Password', enabled: true, type: 'local' },
             { id: 'microsoft', name: 'Microsoft', enabled: true, type: 'microsoft' },

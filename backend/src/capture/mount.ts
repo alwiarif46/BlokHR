@@ -21,9 +21,9 @@ import {
 import {
   SchoolSqlite,
   runSchoolMigrations,
-  SchoolAttendanceService,
-  createSchoolAttendanceRouter,
-} from '@blokhr/school-attendance-lite';
+  CaptureRollcallService,
+  createCaptureRollcallRouter,
+} from '@blokhr/capture-rollcall';
 import {
   TransportSqlite,
   runTransportMigrations,
@@ -37,7 +37,7 @@ import type { EntitlementsService } from '@blokhr/entitlements';
 export interface CapturePlatformBundle {
   consent: ConsentService;
   capture: CaptureService;
-  school: SchoolAttendanceService;
+  school: CaptureRollcallService;
   transport: TransportService;
   close: () => Promise<void>;
 }
@@ -57,12 +57,12 @@ export async function createCapturePlatformBundle(
   );
   const consentService = new ConsentService(new ConsentRepository(consentDb));
 
-  const schoolDb = await SchoolSqlite.create(config.schoolAttendanceDbPath);
+  const schoolDb = await SchoolSqlite.create(config.captureRollcallDbPath);
   await runSchoolMigrations(
     schoolDb,
-    path.resolve(__dirname, '..', '..', '..', 'services', 'school-attendance', 'migrations'),
+    path.resolve(__dirname, '..', '..', '..', 'services', 'capture-rollcall', 'migrations'),
   );
-  const schoolService = new SchoolAttendanceService(schoolDb, config.defaultTenantId);
+  const schoolService = new CaptureRollcallService(schoolDb, config.defaultTenantId);
 
   const captureDb = await CaptureSqlite.create(config.captureDbPath);
   await runCaptureMigrations(
@@ -146,7 +146,7 @@ export async function createCapturePlatformBundle(
     {
       consentDbPath: config.consentDbPath,
       captureDbPath: config.captureDbPath,
-      schoolAttendanceDbPath: config.schoolAttendanceDbPath,
+      captureRollcallDbPath: config.captureRollcallDbPath,
       transportDbPath: config.transportDbPath,
     },
     'Capture platform ready',
@@ -194,6 +194,6 @@ export function mountCapturePlatform(
       isAdmin,
     }),
   );
-  app.use('/api/school-attendance', createSchoolAttendanceRouter(bundle.school));
+  app.use('/api/school-attendance', createCaptureRollcallRouter(bundle.school));
   app.use('/api/transport', createTransportRouter(bundle.transport));
 }

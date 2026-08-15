@@ -129,7 +129,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     kioskDbPath: ':memory:',
     consentDbPath: ':memory:',
     captureDbPath: ':memory:',
-    schoolAttendanceDbPath: ':memory:',
+    captureRollcallDbPath: ':memory:',
     transportDbPath: ':memory:',
     defaultTenantId: 'default',
     trialSeatLimit: 25,

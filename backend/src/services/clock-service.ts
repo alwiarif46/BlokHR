@@ -23,6 +23,7 @@ export interface ClockActionResult {
   lateMinutes?: number;
   monthlyLateCount?: number;
   status?: string;
+  [key: string]: unknown;
 }
 
 interface ShiftTimes {

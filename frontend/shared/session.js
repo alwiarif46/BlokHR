@@ -7,7 +7,7 @@
  * Storage key: session_{tenantId}  (default: session_default)
  *
  * Session shape:
- *   { name, email, source, sessionToken, mustChangePassword }
+ *   { name, email, source, sessionToken, mustChangePassword, vertical? }
  */
 
 let _storageKey = 'session_default';
@@ -37,7 +37,8 @@ export function setTenantId(tenantId) {
 /**
  * Save session to memory + localStorage.
  * @param {{ name?: string, email: string, source?: string,
- *           sessionToken?: string, mustChangePassword?: boolean }} user
+ *           sessionToken?: string, mustChangePassword?: boolean,
+ *           vertical?: string, is_admin?: boolean, role?: string }} user
  */
 export function saveSession(user) {
   _session = {
@@ -48,6 +49,7 @@ export function saveSession(user) {
     mustChangePassword: user.mustChangePassword === true || user.mustChangePassword === 1,
     is_admin: user.is_admin || false,
     role: user.role || 'employee',
+    vertical: user.vertical === 'school' ? 'school' : user.vertical === 'hr' ? 'hr' : undefined,
   };
   try {
     localStorage.setItem(_storageKey, JSON.stringify(_session));

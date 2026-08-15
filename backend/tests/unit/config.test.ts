@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import path from 'path';
 import { loadConfig } from '../../src/config';
 
 describe('loadConfig', () => {
@@ -219,9 +220,9 @@ describe('loadConfig', () => {
 
   it('sets publicDir and migrationsDir as absolute paths', () => {
     const config = loadConfig();
-    expect(config.publicDir).toMatch(/public$/);
+    expect(path.isAbsolute(config.publicDir)).toBe(true);
+    expect(path.isAbsolute(config.migrationsDir)).toBe(true);
+    expect(config.publicDir).toMatch(/frontend$/);
     expect(config.migrationsDir).toMatch(/migrations$/);
-    expect(config.publicDir.startsWith('/')).toBe(true);
-    expect(config.migrationsDir.startsWith('/')).toBe(true);
   });
 });

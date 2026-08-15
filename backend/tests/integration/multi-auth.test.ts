@@ -63,6 +63,19 @@ describe('Multi-Provider Auth Module', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.email).toBe('alice@shaavir.com');
       expect(res.body.sessionToken).toBeTruthy();
+      expect(res.body.vertical).toBe('hr');
+    });
+
+    it('exposes school vertical on login after school setup', async () => {
+      await request(app).post('/api/setup/step3').send({
+        adminEmail: 'admin@shaavir.com',
+        vertical: 'school',
+      });
+      const res = await request(app)
+        .post('/api/auth/local')
+        .send({ email: 'alice@shaavir.com', password: 'securepass123' });
+      expect(res.status).toBe(200);
+      expect(res.body.vertical).toBe('school');
     });
 
     it('rejects wrong password', async () => {

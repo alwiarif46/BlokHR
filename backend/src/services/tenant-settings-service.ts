@@ -3,9 +3,11 @@ import type { DatabaseEngine } from '../db/engine';
 import { TenantSettingsRepository, SettingsJson, TenantSettingsRow } from '../repositories/tenant-settings-repository';
 import {
   HR_DATA_RETENTION_DEFAULTS,
+  HR_TERMINOLOGY_DEFAULTS,
   SCHOOL_TERMINOLOGY_DEFAULTS,
   isTenantVertical,
   schoolDataRetentionFromHr,
+  validateTerminologySection,
   type TenantVertical,
 } from './vertical-defaults';
 
@@ -20,6 +22,14 @@ export interface TenantSettingsBundle {
   settings_json: SettingsJson;
   created_at: string;
   updated_at: string;
+}
+
+export class SettingsValidationError extends Error {
+  readonly statusCode = 400;
+  constructor(message: string) {
+    super(message);
+    this.name = 'SettingsValidationError';
+  }
 }
 
 /** Fields that should be masked in GET responses. */
@@ -60,11 +70,13 @@ export class TenantSettingsService {
   }
 
   async load(): Promise<void> {
+    await this.ensureTerminologySeeded();
     this.cachedSettingsJson = await this.repo.getSettingsJson();
     this.logger.info('Tenant settings loaded');
   }
 
   async getFullBundle(masked = true): Promise<TenantSettingsBundle> {
+    await this.ensureTerminologySeeded();
     const row = await this.repo.get();
     let settingsJson: SettingsJson;
     try {
@@ -86,12 +98,41 @@ export class TenantSettingsService {
     };
   }
 
+  /**
+   * Persist column and/or settings_json updates.
+   * When `terminology` is present: validate all keys (tenant-level only — three-tier
+   * resolution does not apply to terminology; member/group prefs never override it).
+   */
   async updateSettings(
     partial: {
       columns?: Partial<TenantSettingsRow>;
       settingsJson?: Partial<SettingsJson>;
     },
   ): Promise<void> {
+    if (partial.settingsJson && 'terminology' in partial.settingsJson) {
+      const existing = await this.repo.getSettingsJson();
+      const base =
+        existing.terminology && typeof existing.terminology === 'object'
+          ? (existing.terminology as Record<string, unknown>)
+          : { ...HR_TERMINOLOGY_DEFAULTS };
+      const incoming = partial.settingsJson.terminology;
+      const mergedTerminology =
+        incoming !== null && typeof incoming === 'object' && !Array.isArray(incoming)
+          ? { ...base, ...(incoming as Record<string, unknown>) }
+          : incoming;
+      const validated = validateTerminologySection(mergedTerminology);
+      if (!validated.ok) {
+        throw new SettingsValidationError(validated.error);
+      }
+      partial = {
+        ...partial,
+        settingsJson: {
+          ...partial.settingsJson,
+          terminology: validated.value,
+        },
+      };
+    }
+
     if (partial.columns) {
       await this.repo.update('default', partial.columns);
     }
@@ -183,11 +224,30 @@ export class TenantSettingsService {
         hrBase.attendanceGeoDays = HR_DATA_RETENTION_DEFAULTS.attendanceGeoDays;
       }
       patch.dataRetention = schoolDataRetentionFromHr(hrBase);
+    } else {
+      // Section #37 base seed — HR terminology (tenant-level only).
+      patch.terminology = { ...HR_TERMINOLOGY_DEFAULTS };
     }
 
     await this.repo.mergeSettingsJson('default', patch);
     this.cachedSettingsJson = await this.repo.getSettingsJson();
     return { ok: true };
+  }
+
+  /**
+   * Ensure settings_json includes section #37 terminology with HR defaults when absent.
+   * Terminology is tenant-level only — three-tier (member → group → tenant) does not apply.
+   */
+  private async ensureTerminologySeeded(): Promise<void> {
+    const json = await this.repo.getSettingsJson();
+    const existing = json.terminology;
+    if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
+      const keys = Object.keys(existing as object);
+      if (keys.length > 0) return;
+    }
+    await this.repo.mergeSettingsJson('default', {
+      terminology: { ...HR_TERMINOLOGY_DEFAULTS },
+    });
   }
 
   private getNestedJsonValue(path: string): string | undefined {

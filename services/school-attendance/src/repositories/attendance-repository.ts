@@ -27,6 +27,10 @@ import type {
   StaffAttendanceSource,
   StaffAttendanceStatus,
   AttendanceMonthlyRollup,
+  LeaveBalance,
+  LeaveRequest,
+  LeaveRequestState,
+  LeaveType,
 } from '../types';
 
 interface ReasonCodeRow extends Record<string, unknown> {
@@ -951,6 +955,238 @@ export class AttendanceRepository {
     );
     return Number(row?.c ?? 0);
   }
+
+  async deleteStaffAttendance(tenantId: string, id: string): Promise<void> {
+    await this.db.run('DELETE FROM staff_attendance WHERE tenant_id = ? AND id = ?', [
+      tenantId,
+      id,
+    ]);
+  }
+
+  async countLeaveTypes(tenantId: string): Promise<number> {
+    const row = await this.db.get<{ c: number }>(
+      'SELECT COUNT(*) as c FROM leave_types WHERE tenant_id = ?',
+      [tenantId],
+    );
+    return Number(row?.c ?? 0);
+  }
+
+  async listLeaveTypes(tenantId: string): Promise<LeaveType[]> {
+    const rows = await this.db.all<LeaveTypeRow>(
+      `SELECT * FROM leave_types WHERE tenant_id = ? ORDER BY code ASC`,
+      [tenantId],
+    );
+    return rows.map(mapLeaveType);
+  }
+
+  async getLeaveType(tenantId: string, id: string): Promise<LeaveType | null> {
+    const row = await this.db.get<LeaveTypeRow>(
+      'SELECT * FROM leave_types WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
+    return row ? mapLeaveType(row) : null;
+  }
+
+  async findLeaveTypeByCode(tenantId: string, code: string): Promise<LeaveType | null> {
+    const row = await this.db.get<LeaveTypeRow>(
+      'SELECT * FROM leave_types WHERE tenant_id = ? AND code = ?',
+      [tenantId, code],
+    );
+    return row ? mapLeaveType(row) : null;
+  }
+
+  async insertLeaveType(t: LeaveType): Promise<LeaveType> {
+    await this.db.run(
+      `INSERT INTO leave_types (
+         id, tenant_id, code, label, annual_quota, carry_forward, is_active
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        t.id,
+        t.tenantId,
+        t.code,
+        t.label,
+        t.annualQuota,
+        t.carryForward ? 1 : 0,
+        t.isActive ? 1 : 0,
+      ],
+    );
+    const created = await this.getLeaveType(t.tenantId, t.id);
+    if (!created) throw new Error('Failed to read inserted leave type');
+    return created;
+  }
+
+  async updateLeaveType(tenantId: string, id: string, next: LeaveType): Promise<LeaveType | null> {
+    await this.db.run(
+      `UPDATE leave_types SET
+         label = ?, annual_quota = ?, carry_forward = ?, is_active = ?,
+         updated_at = datetime('now')
+       WHERE tenant_id = ? AND id = ?`,
+      [
+        next.label,
+        next.annualQuota,
+        next.carryForward ? 1 : 0,
+        next.isActive ? 1 : 0,
+        tenantId,
+        id,
+      ],
+    );
+    return this.getLeaveType(tenantId, id);
+  }
+
+  async getLeaveBalance(
+    tenantId: string,
+    memberId: string,
+    leaveTypeId: string,
+    year: number,
+  ): Promise<LeaveBalance | null> {
+    const row = await this.db.get<LeaveBalanceRow>(
+      `SELECT * FROM leave_balances
+       WHERE tenant_id = ? AND member_id = ? AND leave_type_id = ? AND year = ?`,
+      [tenantId, memberId, leaveTypeId, year],
+    );
+    return row ? mapLeaveBalance(row) : null;
+  }
+
+  async insertLeaveBalance(b: LeaveBalance): Promise<LeaveBalance> {
+    await this.db.run(
+      `INSERT INTO leave_balances (
+         tenant_id, member_id, leave_type_id, year, opening, used
+       ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [b.tenantId, b.memberId, b.leaveTypeId, b.year, b.opening, b.used],
+    );
+    const created = await this.getLeaveBalance(
+      b.tenantId,
+      b.memberId,
+      b.leaveTypeId,
+      b.year,
+    );
+    if (!created) throw new Error('Failed to read inserted leave balance');
+    return created;
+  }
+
+  async updateLeaveBalanceUsed(
+    tenantId: string,
+    memberId: string,
+    leaveTypeId: string,
+    year: number,
+    used: number,
+  ): Promise<LeaveBalance | null> {
+    await this.db.run(
+      `UPDATE leave_balances SET used = ?
+       WHERE tenant_id = ? AND member_id = ? AND leave_type_id = ? AND year = ?`,
+      [used, tenantId, memberId, leaveTypeId, year],
+    );
+    return this.getLeaveBalance(tenantId, memberId, leaveTypeId, year);
+  }
+
+  async listLeaveBalances(
+    tenantId: string,
+    memberId: string,
+    year: number,
+  ): Promise<LeaveBalance[]> {
+    const rows = await this.db.all<LeaveBalanceRow>(
+      `SELECT * FROM leave_balances
+       WHERE tenant_id = ? AND member_id = ? AND year = ?
+       ORDER BY leave_type_id ASC`,
+      [tenantId, memberId, year],
+    );
+    return rows.map(mapLeaveBalance);
+  }
+
+  async getLeaveRequest(tenantId: string, id: string): Promise<LeaveRequest | null> {
+    const row = await this.db.get<LeaveRequestRow>(
+      'SELECT * FROM leave_requests WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
+    return row ? mapLeaveRequest(row) : null;
+  }
+
+  async insertLeaveRequest(r: LeaveRequest): Promise<LeaveRequest> {
+    await this.db.run(
+      `INSERT INTO leave_requests (
+         id, tenant_id, member_id, leave_type_id, from_date, to_date, is_half_day,
+         days, reason, state, decided_by, decided_at, decision_note
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        r.id,
+        r.tenantId,
+        r.memberId,
+        r.leaveTypeId,
+        r.fromDate,
+        r.toDate,
+        r.isHalfDay ? 1 : 0,
+        r.days,
+        r.reason,
+        r.state,
+        r.decidedBy,
+        r.decidedAt,
+        r.decisionNote,
+      ],
+    );
+    const created = await this.getLeaveRequest(r.tenantId, r.id);
+    if (!created) throw new Error('Failed to read inserted leave request');
+    return created;
+  }
+
+  async updateLeaveRequest(
+    tenantId: string,
+    id: string,
+    next: LeaveRequest,
+  ): Promise<LeaveRequest | null> {
+    await this.db.run(
+      `UPDATE leave_requests SET
+         state = ?, decided_by = ?, decided_at = ?, decision_note = ?,
+         updated_at = datetime('now')
+       WHERE tenant_id = ? AND id = ?`,
+      [next.state, next.decidedBy, next.decidedAt, next.decisionNote, tenantId, id],
+    );
+    return this.getLeaveRequest(tenantId, id);
+  }
+
+  async listLeaveRequests(
+    tenantId: string,
+    filters: { memberId?: string; state?: LeaveRequestState; year?: number },
+  ): Promise<LeaveRequest[]> {
+    const clauses = ['tenant_id = ?'];
+    const params: unknown[] = [tenantId];
+    if (filters.memberId) {
+      clauses.push('member_id = ?');
+      params.push(filters.memberId);
+    }
+    if (filters.state) {
+      clauses.push('state = ?');
+      params.push(filters.state);
+    }
+    if (filters.year != null) {
+      clauses.push(`substr(from_date, 1, 4) = ?`);
+      params.push(String(filters.year));
+    }
+    const rows = await this.db.all<LeaveRequestRow>(
+      `SELECT * FROM leave_requests
+       WHERE ${clauses.join(' AND ')}
+       ORDER BY from_date ASC, created_at ASC`,
+      params,
+    );
+    return rows.map(mapLeaveRequest);
+  }
+
+  async listOverlappingLeaveRequests(
+    tenantId: string,
+    memberId: string,
+    fromDate: string,
+    toDate: string,
+  ): Promise<LeaveRequest[]> {
+    const rows = await this.db.all<LeaveRequestRow>(
+      `SELECT * FROM leave_requests
+       WHERE tenant_id = ?
+         AND member_id = ?
+         AND state IN ('pending', 'approved')
+         AND from_date <= ?
+         AND to_date >= ?`,
+      [tenantId, memberId, toDate, fromDate],
+    );
+    return rows.map(mapLeaveRequest);
+  }
 }
 
 interface SettingsRow extends Record<string, unknown> {
@@ -1256,5 +1492,89 @@ function mapNudgeMessage(row: NudgeMessageRow): NudgeMessage {
     classPercentile: row.class_percentile,
     renderedVars,
     createdAt: row.created_at,
+  };
+}
+
+interface LeaveTypeRow extends Record<string, unknown> {
+  id: string;
+  tenant_id: string;
+  code: string;
+  label: string;
+  annual_quota: number;
+  carry_forward: number;
+  is_active: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapLeaveType(row: LeaveTypeRow): LeaveType {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    code: row.code,
+    label: row.label,
+    annualQuota: row.annual_quota,
+    carryForward: row.carry_forward === 1,
+    isActive: row.is_active === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+interface LeaveBalanceRow extends Record<string, unknown> {
+  tenant_id: string;
+  member_id: string;
+  leave_type_id: string;
+  year: number;
+  opening: number;
+  used: number;
+}
+
+function mapLeaveBalance(row: LeaveBalanceRow): LeaveBalance {
+  return {
+    tenantId: row.tenant_id,
+    memberId: row.member_id,
+    leaveTypeId: row.leave_type_id,
+    year: row.year,
+    opening: row.opening,
+    used: row.used,
+  };
+}
+
+interface LeaveRequestRow extends Record<string, unknown> {
+  id: string;
+  tenant_id: string;
+  member_id: string;
+  leave_type_id: string;
+  from_date: string;
+  to_date: string;
+  is_half_day: number;
+  days: number;
+  reason: string | null;
+  state: string;
+  decided_by: string | null;
+  decided_at: string | null;
+  decision_note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+function mapLeaveRequest(row: LeaveRequestRow): LeaveRequest {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    memberId: row.member_id,
+    leaveTypeId: row.leave_type_id,
+    fromDate: row.from_date,
+    toDate: row.to_date,
+    isHalfDay: row.is_half_day === 1,
+    days: row.days,
+    reason: row.reason,
+    state: row.state as LeaveRequestState,
+    decidedBy: row.decided_by,
+    decidedAt: row.decided_at,
+    decisionNote: row.decision_note,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }

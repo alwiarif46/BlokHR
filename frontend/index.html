@@ -40,7 +40,7 @@
           <div class="wz-header">
             <div class="wz-logo" id="wzLogo"><span id="wzLogoLetter">B</span><img id="wzLogoImg" alt="Logo" /></div>
             <div class="wz-title" id="wzTitle">Platform Setup</div>
-            <div class="wz-subtitle" id="wzSubtitle">Configure your workspace in 3 quick steps</div>
+            <div class="wz-subtitle" id="wzSubtitle">Configure your workspace in 4 quick steps</div>
           </div>
           <div class="wz-steps" id="wzSteps">
             <div class="wz-sn active" id="wzSn1"><span>1</span></div>
@@ -48,15 +48,40 @@
             <div class="wz-sn" id="wzSn2"><span>2</span></div>
             <div class="wz-sl" id="wzSl2"></div>
             <div class="wz-sn" id="wzSn3"><span>3</span></div>
+            <div class="wz-sl" id="wzSl3"></div>
+            <div class="wz-sn" id="wzSn4"><span>4</span></div>
           </div>
           <div class="wz-labels" id="wzLabels">
-            <div class="wz-lb active" id="wzLb1">Branding</div>
-            <div class="wz-lb" id="wzLb2">Auth</div>
-            <div class="wz-lb" id="wzLb3">Plan</div>
+            <div class="wz-lb active" id="wzLb1">Type</div>
+            <div class="wz-lb" id="wzLb2">Branding</div>
+            <div class="wz-lb" id="wzLb3">Auth</div>
+            <div class="wz-lb" id="wzLb4">Plan</div>
           </div>
           <div class="wz-form">
-            <!-- Step 1: Branding -->
-            <div class="wz-panel active" id="wzP1">
+            <!-- Step 0 panel / wizard step 1: Vertical -->
+            <div class="wz-panel active" id="wzP0">
+              <div class="wz-sec">Workspace type</div>
+              <h3 class="wz-vheading">What are you setting up?</h3>
+              <div class="wz-vcards" role="listbox" aria-label="Workspace type">
+                <button type="button" class="wz-vcard" id="wzCardHr" data-vertical="hr" role="option" aria-selected="false">
+                  <span class="wz-vcard-title">Company</span>
+                  <span class="wz-vcard-desc">Employee attendance, leave, timesheets, HR operations</span>
+                </button>
+                <button type="button" class="wz-vcard" id="wzCardSchool" data-vertical="school" role="option" aria-selected="false">
+                  <span class="wz-vcard-title">School</span>
+                  <span class="wz-vcard-desc">Student attendance, timetable, syllabus tracking, guardian updates</span>
+                </button>
+              </div>
+              <p class="wz-vwarn">This choice is permanent for this workspace and cannot be changed later.</p>
+              <div class="wz-br">
+                <span></span
+                ><button class="wz-btn wz-btn-p" id="wzBtn0" disabled>
+                  <span class="btn-text">Continue &#8594;</span><span class="wz-spin"></span>
+                </button>
+              </div>
+            </div>
+            <!-- Step 1: Branding (wizard step 2) -->
+            <div class="wz-panel" id="wzP1">
               <div class="wz-sec">Company Identity</div>
               <div class="wz-fg">
                 <div class="wz-fl"><span class="req">*</span> Company Name</div>

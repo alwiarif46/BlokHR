@@ -141,36 +141,30 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
   );
 
   /** POST /api/auth/teams-sso — Microsoft MSAL SSO. */
-  router.post('/auth/teams-sso', (req: Request, res: Response) => {
-    const { ssoToken } = req.body as { ssoToken?: string };
-    if (!ssoToken) {
-      res.status(400).json({ error: 'ssoToken is required' });
-      return;
-    }
+  router.post(
+    '/auth/teams-sso',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { ssoToken } = req.body as { ssoToken?: string };
+      if (!ssoToken) throw new AppError('ssoToken is required', 400);
 
-    const result = authService.authenticateMsal(ssoToken);
-    if (!result.success) {
-      res.status(401).json({ error: result.error ?? 'SSO failed' });
-      return;
-    }
-    res.json(result);
-  });
+      const result = await authService.authenticateMsal(ssoToken);
+      if (!result.success) throw new AppError(result.error ?? 'SSO failed', 401);
+      res.json(result);
+    }),
+  );
 
   /** POST /api/auth/google — Google OAuth ID token. */
-  router.post('/auth/google', (req: Request, res: Response) => {
-    const { idToken } = req.body as { idToken?: string };
-    if (!idToken) {
-      res.status(400).json({ error: 'idToken is required' });
-      return;
-    }
+  router.post(
+    '/auth/google',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { idToken } = req.body as { idToken?: string };
+      if (!idToken) throw new AppError('idToken is required', 400);
 
-    const result = authService.authenticateGoogle(idToken);
-    if (!result.success) {
-      res.status(401).json({ error: result.error ?? 'Google auth failed' });
-      return;
-    }
-    res.json(result);
-  });
+      const result = await authService.authenticateGoogle(idToken);
+      if (!result.success) throw new AppError(result.error ?? 'Google auth failed', 401);
+      res.json(result);
+    }),
+  );
 
   /** GET /api/auth/oidc/authorize — get OIDC authorization URL. */
   router.get(
@@ -184,20 +178,17 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
   );
 
   /** POST /api/auth/oidc/callback — verify OIDC token after redirect. */
-  router.post('/auth/oidc/callback', (req: Request, res: Response) => {
-    const { idToken } = req.body as { idToken?: string };
-    if (!idToken) {
-      res.status(400).json({ error: 'idToken is required' });
-      return;
-    }
+  router.post(
+    '/auth/oidc/callback',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { idToken } = req.body as { idToken?: string };
+      if (!idToken) throw new AppError('idToken is required', 400);
 
-    const result = authService.authenticateOidcToken(idToken);
-    if (!result.success) {
-      res.status(401).json({ error: result.error ?? 'OIDC auth failed' });
-      return;
-    }
-    res.json(result);
-  });
+      const result = await authService.authenticateOidcToken(idToken);
+      if (!result.success) throw new AppError(result.error ?? 'OIDC auth failed', 401);
+      res.json(result);
+    }),
+  );
 
   /** GET /api/auth/saml/login — get SAML login redirect URL. */
   router.get(
@@ -210,20 +201,17 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
   );
 
   /** POST /api/auth/saml/callback — process SAML assertion. */
-  router.post('/auth/saml/callback', (req: Request, res: Response) => {
-    const { email, name } = req.body as { email?: string; name?: string };
-    if (!email) {
-      res.status(400).json({ error: 'email is required in SAML assertion' });
-      return;
-    }
+  router.post(
+    '/auth/saml/callback',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { email, name } = req.body as { email?: string; name?: string };
+      if (!email) throw new AppError('email is required in SAML assertion', 400);
 
-    const result = authService.authenticateSaml({ email, name });
-    if (!result.success) {
-      res.status(401).json({ error: result.error ?? 'SAML auth failed' });
-      return;
-    }
-    res.json(result);
-  });
+      const result = await authService.authenticateSaml({ email, name });
+      if (!result.success) throw new AppError(result.error ?? 'SAML auth failed', 401);
+      res.json(result);
+    }),
+  );
 
   /** POST /api/auth/ldap — LDAP/AD authentication. */
   router.post(

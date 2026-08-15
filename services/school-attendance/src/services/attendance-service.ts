@@ -16,16 +16,24 @@ import type {
   CaptureModality,
   CaptureSubjectType,
   CreateCaptureBindingInput,
+  CreateLeaveRequestInput,
+  CreateLeaveTypeInput,
   CreateReasonCodeInput,
   CreateReportedAbsenceInput,
   DayDerivation,
+  DecideLeaveInput,
   EligibilityResult,
+  LeaveBalance,
+  LeaveRequest,
+  LeaveRequestState,
+  LeaveType,
   MarkBatchInput,
   AttendanceMonthlyRollup,
   NudgeConfig,
   NudgeMessage,
   NudgeReport,
   NudgeRunInput,
+  PatchLeaveTypeInput,
   PatchReasonCodeInput,
   PatchRecordInput,
   ReasonBucket,
@@ -63,6 +71,7 @@ type ServiceError = {
   error: string;
   status: number;
   regularization_required?: boolean;
+  remaining?: number;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -125,6 +134,35 @@ const DEFAULT_SEEDS: Array<{ code: string; label: string; bucket: ReasonBucket; 
   { code: 'SCHOOL_EVENT', label: 'School event', bucket: 'school_activity', sort: 40 },
   { code: 'UNEXPLAINED', label: 'Unexplained', bucket: 'unauthorised', sort: 50 },
 ];
+
+const DEFAULT_LEAVE_TYPE_SEEDS: Array<{
+  code: string;
+  label: string;
+  annualQuota: number;
+}> = [
+  { code: 'CL', label: 'Casual Leave', annualQuota: 12 },
+  { code: 'EL', label: 'Earned Leave', annualQuota: 15 },
+  { code: 'ML', label: 'Medical Leave', annualQuota: 10 },
+];
+
+const LEAVE_STATES = new Set<LeaveRequestState>([
+  'pending',
+  'approved',
+  'rejected',
+  'cancelled',
+]);
+
+/** Inclusive ISO calendar dates from `from` through `to` (UTC date arithmetic). */
+function eachIsoDateInclusive(from: string, to: string): string[] {
+  const out: string[] = [];
+  const cursor = new Date(`${from}T00:00:00.000Z`);
+  const end = new Date(`${to}T00:00:00.000Z`);
+  while (cursor.getTime() <= end.getTime()) {
+    out.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return out;
+}
 
 function recordSnapshot(r: AttendanceRecord): string {
   return JSON.stringify({
@@ -1843,6 +1881,432 @@ export class AttendanceService {
         updatedAt: '',
       });
     }
+  }
+
+  private async ensureLeaveTypesSeeded(tenantId: string): Promise<void> {
+    const count = await this.repo.countLeaveTypes(tenantId);
+    if (count > 0) return;
+    for (const seed of DEFAULT_LEAVE_TYPE_SEEDS) {
+      await this.repo.insertLeaveType({
+        id: uuidv4(),
+        tenantId,
+        code: seed.code,
+        label: seed.label,
+        annualQuota: seed.annualQuota,
+        carryForward: false,
+        isActive: true,
+        createdAt: '',
+        updatedAt: '',
+      });
+    }
+  }
+
+  async listLeaveTypes(
+    tenantId: string,
+  ): Promise<{ types?: LeaveType[]; error?: ServiceError }> {
+    await this.ensureLeaveTypesSeeded(tenantId);
+    return { types: await this.repo.listLeaveTypes(tenantId) };
+  }
+
+  async createLeaveType(
+    tenantId: string,
+    input: CreateLeaveTypeInput,
+  ): Promise<{ type?: LeaveType; error?: ServiceError }> {
+    await this.ensureLeaveTypesSeeded(tenantId);
+    const code = (input.code || '').trim().toUpperCase();
+    const label = (input.label || '').trim();
+    const annualQuota = Number(input.annualQuota);
+    if (!code) return { error: { error: 'code is required', status: 400 } };
+    if (!label) return { error: { error: 'label is required', status: 400 } };
+    if (!Number.isFinite(annualQuota) || annualQuota < 0) {
+      return { error: { error: 'annual_quota must be a non-negative number', status: 400 } };
+    }
+    const existing = await this.repo.findLeaveTypeByCode(tenantId, code);
+    if (existing) return { error: { error: 'code already exists', status: 409 } };
+    const type = await this.repo.insertLeaveType({
+      id: uuidv4(),
+      tenantId,
+      code,
+      label,
+      annualQuota,
+      carryForward: input.carryForward === true,
+      isActive: true,
+      createdAt: '',
+      updatedAt: '',
+    });
+    return { type };
+  }
+
+  async patchLeaveType(
+    tenantId: string,
+    id: string,
+    input: PatchLeaveTypeInput,
+  ): Promise<{ type?: LeaveType; error?: ServiceError }> {
+    await this.ensureLeaveTypesSeeded(tenantId);
+    const current = await this.repo.getLeaveType(tenantId, id);
+    if (!current) return { error: { error: 'leave type not found', status: 404 } };
+    let label = current.label;
+    let annualQuota = current.annualQuota;
+    let carryForward = current.carryForward;
+    let isActive = current.isActive;
+    if (input.label !== undefined) {
+      label = String(input.label).trim();
+      if (!label) return { error: { error: 'label is required', status: 400 } };
+    }
+    if (input.annualQuota !== undefined) {
+      annualQuota = Number(input.annualQuota);
+      if (!Number.isFinite(annualQuota) || annualQuota < 0) {
+        return { error: { error: 'annual_quota must be a non-negative number', status: 400 } };
+      }
+    }
+    if (input.carryForward !== undefined) carryForward = input.carryForward === true;
+    if (input.isActive !== undefined) isActive = input.isActive === true;
+    const type = await this.repo.updateLeaveType(tenantId, id, {
+      ...current,
+      label,
+      annualQuota,
+      carryForward,
+      isActive,
+    });
+    return { type: type! };
+  }
+
+  async createLeaveRequest(
+    tenantId: string,
+    input: CreateLeaveRequestInput,
+  ): Promise<{ request?: LeaveRequest; error?: ServiceError }> {
+    await this.ensureLeaveTypesSeeded(tenantId);
+    const memberId = (input.memberId || '').trim();
+    const leaveTypeId = (input.leaveTypeId || '').trim();
+    const fromDate = (input.fromDate || '').trim();
+    const toDate = (input.toDate || '').trim();
+    const isHalfDay = input.isHalfDay === true;
+    if (!memberId) return { error: { error: 'member_id is required', status: 400 } };
+    if (!leaveTypeId) return { error: { error: 'leave_type_id is required', status: 400 } };
+    if (!ISO_DATE.test(fromDate) || !ISO_DATE.test(toDate)) {
+      return { error: { error: 'from_date and to_date must be ISO dates', status: 400 } };
+    }
+    if (toDate < fromDate) {
+      return { error: { error: 'to_date must be on or after from_date', status: 400 } };
+    }
+    if (isHalfDay && fromDate !== toDate) {
+      return { error: { error: 'is_half_day requires from_date === to_date', status: 400 } };
+    }
+    const dates = eachIsoDateInclusive(fromDate, toDate);
+    if (dates.length > 30) {
+      return { error: { error: 'span must be at most 30 days', status: 400 } };
+    }
+    const leaveType = await this.repo.getLeaveType(tenantId, leaveTypeId);
+    if (!leaveType || !leaveType.isActive) {
+      return { error: { error: 'leave type not found or inactive', status: 400 } };
+    }
+    const overlaps = await this.repo.listOverlappingLeaveRequests(
+      tenantId,
+      memberId,
+      fromDate,
+      toDate,
+    );
+    if (overlaps.length > 0) {
+      return { error: { error: 'overlapping_request', status: 409 } };
+    }
+    const days = isHalfDay ? 0.5 : dates.length;
+    const year = Number(fromDate.slice(0, 4));
+    await this.ensureLeaveBalance(tenantId, memberId, leaveTypeId, year, leaveType);
+    const request = await this.repo.insertLeaveRequest({
+      id: uuidv4(),
+      tenantId,
+      memberId,
+      leaveTypeId,
+      fromDate,
+      toDate,
+      isHalfDay,
+      days,
+      reason: input.reason != null ? String(input.reason) : null,
+      state: 'pending',
+      decidedBy: null,
+      decidedAt: null,
+      decisionNote: null,
+      createdAt: '',
+      updatedAt: '',
+    });
+    return { request };
+  }
+
+  async decideLeaveRequest(
+    tenantId: string,
+    id: string,
+    input: DecideLeaveInput,
+  ): Promise<{
+    request?: LeaveRequest;
+    skipped_locked?: string[];
+    error?: ServiceError;
+  }> {
+    await this.ensureLeaveTypesSeeded(tenantId);
+    const current = await this.repo.getLeaveRequest(tenantId, id);
+    if (!current) return { error: { error: 'leave request not found', status: 404 } };
+    if (current.state !== 'pending') {
+      return { error: { error: 'request is not pending', status: 409 } };
+    }
+    const decision = input.decision;
+    if (decision !== 'approved' && decision !== 'rejected') {
+      return { error: { error: 'decision must be approved or rejected', status: 400 } };
+    }
+    const decidedBy = (input.decidedBy || '').trim();
+    if (!decidedBy) return { error: { error: 'decided_by is required', status: 400 } };
+    const decisionNote =
+      input.decisionNote != null ? String(input.decisionNote).trim() : '';
+
+    if (decision === 'rejected') {
+      if (!decisionNote) {
+        return { error: { error: 'decision_note is required for rejection', status: 400 } };
+      }
+      const rejected = await this.repo.updateLeaveRequest(tenantId, id, {
+        ...current,
+        state: 'rejected',
+        decidedBy,
+        decidedAt: new Date().toISOString(),
+        decisionNote,
+      });
+      return { request: rejected!, skipped_locked: [] };
+    }
+
+    const leaveType = await this.repo.getLeaveType(tenantId, current.leaveTypeId);
+    if (!leaveType) return { error: { error: 'leave type not found', status: 400 } };
+    const year = Number(current.fromDate.slice(0, 4));
+    const balance = await this.ensureLeaveBalance(
+      tenantId,
+      current.memberId,
+      current.leaveTypeId,
+      year,
+      leaveType,
+    );
+    const remaining = balance.opening - balance.used;
+    if (remaining < current.days) {
+      return {
+        error: {
+          error: 'insufficient_balance',
+          status: 400,
+          remaining,
+        },
+      };
+    }
+
+    const dates = eachIsoDateInclusive(current.fromDate, current.toDate);
+    const skipped_locked: string[] = [];
+    for (const date of dates) {
+      const month = date.slice(0, 7);
+      if (await this.repo.isStaffMonthLocked(tenantId, month)) {
+        skipped_locked.push(date);
+        continue;
+      }
+      const existing = await this.repo.findStaffByDay(tenantId, current.memberId, date);
+      const payload: StaffAttendance = {
+        id: existing?.id ?? uuidv4(),
+        tenantId,
+        memberId: current.memberId,
+        date,
+        checkInAt: existing?.checkInAt ?? null,
+        checkOutAt: existing?.checkOutAt ?? null,
+        status: 'on_leave',
+        source: 'manual',
+        minutesOnPremises: existing?.minutesOnPremises ?? null,
+        markedBy: decidedBy,
+        createdAt: '',
+        updatedAt: '',
+      };
+      if (existing) {
+        await this.repo.updateStaffAttendance(tenantId, existing.id, payload);
+      } else {
+        await this.repo.insertStaffAttendance(payload);
+      }
+    }
+
+    await this.repo.updateLeaveBalanceUsed(
+      tenantId,
+      current.memberId,
+      current.leaveTypeId,
+      year,
+      balance.used + current.days,
+    );
+
+    const approved = await this.repo.updateLeaveRequest(tenantId, id, {
+      ...current,
+      state: 'approved',
+      decidedBy,
+      decidedAt: new Date().toISOString(),
+      decisionNote: decisionNote || null,
+    });
+
+    await this.events.publish({
+      type: 'school.staff.leave_approved',
+      tenantId,
+      occurredAt: new Date().toISOString(),
+      data: {
+        request_id: id,
+        member_id: current.memberId,
+        from_date: current.fromDate,
+        to_date: current.toDate,
+        days: current.days,
+        skipped_locked,
+        decided_by: decidedBy,
+      },
+    });
+
+    return { request: approved!, skipped_locked };
+  }
+
+  async cancelLeaveRequest(
+    tenantId: string,
+    id: string,
+    actor: string,
+  ): Promise<{ request?: LeaveRequest; kept?: string[]; error?: ServiceError }> {
+    const current = await this.repo.getLeaveRequest(tenantId, id);
+    if (!current) return { error: { error: 'leave request not found', status: 404 } };
+    if (current.state !== 'pending' && current.state !== 'approved') {
+      return { error: { error: 'request cannot be cancelled', status: 409 } };
+    }
+    const actorId = (actor || '').trim();
+    if (!actorId) return { error: { error: 'actor is required', status: 400 } };
+
+    const dates = eachIsoDateInclusive(current.fromDate, current.toDate);
+    for (const date of dates) {
+      const month = date.slice(0, 7);
+      if (await this.repo.isStaffMonthLocked(tenantId, month)) {
+        return { error: { error: 'month is finalized', status: 409 } };
+      }
+    }
+
+    const kept: string[] = [];
+    if (current.state === 'approved') {
+      const year = Number(current.fromDate.slice(0, 4));
+      const balance = await this.repo.getLeaveBalance(
+        tenantId,
+        current.memberId,
+        current.leaveTypeId,
+        year,
+      );
+      if (balance) {
+        await this.repo.updateLeaveBalanceUsed(
+          tenantId,
+          current.memberId,
+          current.leaveTypeId,
+          year,
+          Math.max(0, balance.used - current.days),
+        );
+      }
+
+      for (const date of dates) {
+        const row = await this.repo.findStaffByDay(tenantId, current.memberId, date);
+        if (!row) continue;
+        if (row.status === 'on_leave') {
+          await this.repo.deleteStaffAttendance(tenantId, row.id);
+        } else {
+          kept.push(date);
+        }
+      }
+    }
+
+    const cancelled = await this.repo.updateLeaveRequest(tenantId, id, {
+      ...current,
+      state: 'cancelled',
+      decidedBy: current.decidedBy ?? actorId,
+      decidedAt: current.decidedAt ?? new Date().toISOString(),
+      decisionNote: current.decisionNote,
+    });
+
+    await this.events.publish({
+      type: 'school.staff.leave_cancelled',
+      tenantId,
+      occurredAt: new Date().toISOString(),
+      data: {
+        request_id: id,
+        member_id: current.memberId,
+        actor: actorId,
+        previous_state: current.state,
+        kept,
+      },
+    });
+
+    return { request: cancelled!, kept };
+  }
+
+  async listLeaveRequests(
+    tenantId: string,
+    filters: { memberId?: string; state?: string; year?: number },
+  ): Promise<{ requests?: LeaveRequest[]; error?: ServiceError }> {
+    await this.ensureLeaveTypesSeeded(tenantId);
+    let state: LeaveRequestState | undefined;
+    if (filters.state) {
+      if (!LEAVE_STATES.has(filters.state as LeaveRequestState)) {
+        return { error: { error: 'invalid state', status: 400 } };
+      }
+      state = filters.state as LeaveRequestState;
+    }
+    const requests = await this.repo.listLeaveRequests(tenantId, {
+      memberId: filters.memberId,
+      state,
+      year: filters.year,
+    });
+    return { requests };
+  }
+
+  async listLeaveBalances(
+    tenantId: string,
+    memberId: string,
+    year: number,
+  ): Promise<{
+    balances?: Array<LeaveBalance & { remaining: number; leaveType?: LeaveType }>;
+    error?: ServiceError;
+  }> {
+    await this.ensureLeaveTypesSeeded(tenantId);
+    const mid = (memberId || '').trim();
+    if (!mid) return { error: { error: 'member_id is required', status: 400 } };
+    if (!Number.isInteger(year) || year < 2000) {
+      return { error: { error: 'year is required', status: 400 } };
+    }
+    const types = await this.repo.listLeaveTypes(tenantId);
+    const balances: Array<LeaveBalance & { remaining: number; leaveType?: LeaveType }> = [];
+    for (const t of types.filter((x) => x.isActive)) {
+      const bal = await this.ensureLeaveBalance(tenantId, mid, t.id, year, t);
+      balances.push({ ...bal, remaining: bal.opening - bal.used, leaveType: t });
+    }
+    return { balances };
+  }
+
+  private async ensureLeaveBalance(
+    tenantId: string,
+    memberId: string,
+    leaveTypeId: string,
+    year: number,
+    leaveType: LeaveType,
+  ): Promise<LeaveBalance> {
+    const existing = await this.repo.getLeaveBalance(
+      tenantId,
+      memberId,
+      leaveTypeId,
+      year,
+    );
+    if (existing) return existing;
+    let opening = leaveType.annualQuota;
+    if (leaveType.carryForward) {
+      const prev = await this.repo.getLeaveBalance(
+        tenantId,
+        memberId,
+        leaveTypeId,
+        year - 1,
+      );
+      if (prev) {
+        opening += Math.max(0, prev.opening - prev.used);
+      }
+    }
+    return this.repo.insertLeaveBalance({
+      tenantId,
+      memberId,
+      leaveTypeId,
+      year,
+      opening,
+      used: 0,
+    });
   }
 
   private validateCreate(

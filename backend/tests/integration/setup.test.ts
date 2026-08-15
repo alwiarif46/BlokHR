@@ -1,8 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
+import { DEFAULT_SCHOOL_MODULES } from '@blokhr/entitlements';
 import type { DatabaseEngine } from '../../src/db/engine';
 import { createTestApp } from '../helpers/setup';
+import { SCHOOL_TERMINOLOGY_DEFAULTS } from '../../src/services/vertical-defaults';
 
 describe('Setup Wizard Module', () => {
   let app: Express;
@@ -29,6 +31,7 @@ describe('Setup Wizard Module', () => {
       expect(res.status).toBe(200);
       expect(res.body.setupComplete).toBe(false);
       expect(res.body.currentStep).toBe(1);
+      expect(res.body.vertical).toBeNull();
     });
 
     it('returns branding state in response', async () => {
@@ -229,10 +232,12 @@ describe('Setup Wizard Module', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.entitlement.plan).toBe('trial');
       expect(res.body.entitlement.status).toBe('trialing');
+      expect(res.body.entitlement.vertical).toBe('hr');
 
       const status = await request(app).get('/api/setup/status');
       expect(status.body.setupComplete).toBe(true);
       expect(status.body.deploymentMode).toBe('cloud');
+      expect(status.body.vertical).toBe('hr');
       expect(status.body.branding.licenseValid).toBe(true);
       expect(status.body.branding.entitlement.plan).toBe('trial');
 
@@ -241,6 +246,56 @@ describe('Setup Wizard Module', () => {
       ]);
       expect(row).toBeTruthy();
       expect(row!.email).toBe('boss@acme.com');
+    });
+
+    it('starts school vertical trial with school modules and terminology seed', async () => {
+      const res = await request(app).post('/api/setup/step3').send({
+        adminEmail: 'principal@school.edu',
+        vertical: 'school',
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.entitlement.vertical).toBe('school');
+      expect(res.body.entitlement.modules).toEqual([...DEFAULT_SCHOOL_MODULES]);
+
+      const status = await request(app).get('/api/setup/status');
+      expect(status.body.vertical).toBe('school');
+
+      const settingsRow = await db.get<{ settings_json: string }>(
+        "SELECT settings_json FROM tenant_settings WHERE id = 'default'",
+      );
+      expect(settingsRow).toBeTruthy();
+      const settings = JSON.parse(settingsRow!.settings_json) as {
+        vertical?: string;
+        terminology?: Record<string, string>;
+        dataRetention?: { attendancePhotoDays?: number; attendanceGeoDays?: number };
+      };
+      expect(settings.vertical).toBe('school');
+      expect(settings.terminology).toMatchObject({ ...SCHOOL_TERMINOLOGY_DEFAULTS });
+      expect(settings.dataRetention?.attendancePhotoDays).toBe(45);
+      expect(settings.dataRetention?.attendanceGeoDays).toBe(45);
+    });
+
+    it('rejects invalid vertical on step3', async () => {
+      const res = await request(app).post('/api/setup/step3').send({
+        adminEmail: 'boss@acme.com',
+        vertical: 'clinic',
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/vertical/i);
+    });
+
+    it('returns 409 when vertical is changed after it was set', async () => {
+      await request(app).post('/api/setup/step3').send({
+        adminEmail: 'boss@acme.com',
+        vertical: 'hr',
+      });
+      const res = await request(app).post('/api/setup/step3').send({
+        adminEmail: 'boss@acme.com',
+        vertical: 'school',
+      });
+      expect(res.status).toBe(409);
+      expect(res.body.error).toBe('vertical_immutable');
     });
 
     it('rejects missing admin email', async () => {

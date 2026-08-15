@@ -8,12 +8,16 @@ import type {
   CaptureModality,
   CaptureSubjectType,
   CreateCaptureBindingInput,
+  CreateLeaveRequestInput,
+  CreateLeaveTypeInput,
   CreateReasonCodeInput,
   CreateReportedAbsenceInput,
   DayDerivation,
+  DecideLeaveInput,
   MarkBatchInput,
   MarkItem,
   NudgeRunInput,
+  PatchLeaveTypeInput,
   PatchReasonCodeInput,
   PatchRecordInput,
   ReasonBucket,
@@ -359,6 +363,215 @@ export function createAttendanceRouter(service: AttendanceService): Router {
         return;
       }
       res.json({ events: result.events });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/staff/leave/types',
+    asyncHandler(async (req, res) => {
+      const result = await service.listLeaveTypes(req.params.tenantId);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ types: result.types });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/staff/leave/types',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const input: CreateLeaveTypeInput = {
+        code: String(body.code ?? ''),
+        label: String(body.label ?? ''),
+        annualQuota: Number(body.annual_quota ?? body.annualQuota),
+        carryForward:
+          body.carry_forward === true ||
+          body.carryForward === true ||
+          body.carry_forward === 1,
+      };
+      const result = await service.createLeaveType(req.params.tenantId, input);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.type);
+    }),
+  );
+
+  router.patch(
+    '/:tenantId/staff/leave/types/:id',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const input: PatchLeaveTypeInput = {};
+      if (body.label !== undefined) input.label = String(body.label);
+      if (body.annual_quota !== undefined || body.annualQuota !== undefined) {
+        input.annualQuota = Number(body.annual_quota ?? body.annualQuota);
+      }
+      if (body.carry_forward !== undefined || body.carryForward !== undefined) {
+        input.carryForward =
+          body.carry_forward === true ||
+          body.carryForward === true ||
+          body.carry_forward === 1;
+      }
+      if (body.is_active !== undefined || body.isActive !== undefined) {
+        input.isActive =
+          body.is_active === true ||
+          body.isActive === true ||
+          body.is_active === 1;
+      }
+      const result = await service.patchLeaveType(
+        req.params.tenantId,
+        req.params.id,
+        input,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.type);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/staff/leave/balances',
+    asyncHandler(async (req, res) => {
+      const memberId =
+        typeof req.query.member_id === 'string'
+          ? req.query.member_id
+          : typeof req.query.memberId === 'string'
+            ? req.query.memberId
+            : '';
+      const yearRaw =
+        typeof req.query.year === 'string' ? req.query.year : String(req.query.year ?? '');
+      const year = Number.parseInt(yearRaw, 10);
+      const result = await service.listLeaveBalances(req.params.tenantId, memberId, year);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        balances: (result.balances ?? []).map((b) => ({
+          leave_type_id: b.leaveTypeId,
+          member_id: b.memberId,
+          year: b.year,
+          opening: b.opening,
+          used: b.used,
+          remaining: b.remaining,
+          leave_type: b.leaveType
+            ? {
+                id: b.leaveType.id,
+                code: b.leaveType.code,
+                label: b.leaveType.label,
+              }
+            : undefined,
+        })),
+      });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/staff/leave/requests',
+    asyncHandler(async (req, res) => {
+      const memberId =
+        typeof req.query.member_id === 'string'
+          ? req.query.member_id
+          : typeof req.query.memberId === 'string'
+            ? req.query.memberId
+            : undefined;
+      const state =
+        typeof req.query.state === 'string' ? req.query.state : undefined;
+      const yearRaw =
+        typeof req.query.year === 'string' ? req.query.year : undefined;
+      const year = yearRaw != null ? Number.parseInt(yearRaw, 10) : undefined;
+      const result = await service.listLeaveRequests(req.params.tenantId, {
+        memberId,
+        state,
+        year: year != null && Number.isFinite(year) ? year : undefined,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ requests: result.requests });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/staff/leave/requests',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const input: CreateLeaveRequestInput = {
+        memberId: String(body.member_id ?? body.memberId ?? ''),
+        leaveTypeId: String(body.leave_type_id ?? body.leaveTypeId ?? ''),
+        fromDate: String(body.from_date ?? body.fromDate ?? ''),
+        toDate: String(body.to_date ?? body.toDate ?? ''),
+        isHalfDay:
+          body.is_half_day === true ||
+          body.isHalfDay === true ||
+          body.is_half_day === 1,
+        reason: body.reason != null ? String(body.reason) : null,
+      };
+      const result = await service.createLeaveRequest(req.params.tenantId, input);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.request);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/staff/leave/requests/:id/decide',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const input: DecideLeaveInput = {
+        decision: String(body.decision ?? '') as 'approved' | 'rejected',
+        decidedBy: String(body.decided_by ?? body.decidedBy ?? ''),
+        decisionNote:
+          body.decision_note != null || body.decisionNote != null
+            ? String(body.decision_note ?? body.decisionNote)
+            : null,
+      };
+      const result = await service.decideLeaveRequest(
+        req.params.tenantId,
+        req.params.id,
+        input,
+      );
+      if (result.error) {
+        const payload: Record<string, unknown> = { error: result.error.error };
+        if (result.error.remaining !== undefined) {
+          payload.remaining = result.error.remaining;
+        }
+        res.status(result.error.status).json(payload);
+        return;
+      }
+      res.json({
+        ...result.request,
+        skipped_locked: result.skipped_locked ?? [],
+      });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/staff/leave/requests/:id/cancel',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const actor = String(body.actor ?? '');
+      const result = await service.cancelLeaveRequest(
+        req.params.tenantId,
+        req.params.id,
+        actor,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        ...result.request,
+        kept: result.kept ?? [],
+      });
     }),
   );
 

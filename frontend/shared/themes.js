@@ -10,6 +10,9 @@
  * Four themes: chromium, neural, holodeck, clean
  * All CSS custom properties are defined in shared.css; this module switches
  * between them by changing document.body.className.
+ *
+ * Colour-scheme presets (including BlokSchool / csp-blokschool from migration 045)
+ * are loaded from the server — not hardcoded here.
  */
 
 const VALID_THEMES = ['chromium', 'neural', 'holodeck', 'clean'];

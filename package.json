@@ -1,0 +1,12 @@
+{
+  "name": "blokhr",
+  "private": true,
+  "description": "BlokHR monorepo — school vertical local orchestration",
+  "scripts": {
+    "dev:school": "concurrently -n monolith,identity,timetable,gateway -c blue,green,yellow,magenta \"npm run dev --prefix backend\" \"npm run dev --prefix services/school-identity\" \"npm run dev --prefix services/school-timetable\" \"cross-env INTERNAL_SECRET=dev-internal-secret PORT=8080 npm run dev --prefix services/gateway\""
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.4",
+    "cross-env": "^7.0.3"
+  }
+}

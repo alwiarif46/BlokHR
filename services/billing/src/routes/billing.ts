@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { BillingService } from './billing-service';
-import type { BillingPlanId } from './providers/billing-provider';
+import { BillingService } from '../billing-service';
+import type { BillingPlanId } from '../providers/billing-provider';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,

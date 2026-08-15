@@ -1,7 +1,7 @@
 /**
  * modules/settings/settings.js
  *
- * Admin settings panel with 36 collapsible sections.
+ * Admin settings panel with 37 collapsible sections.
  * Data-driven: each section defined as config, generic renderer builds UI.
  * Every save → POST /api/settings → SSE broadcast.
  *
@@ -24,7 +24,7 @@ let _settings = {};
 let _settingsJson = {};
 
 /* ══════════════════════════════════════════════════════════════
-   SECTION DEFINITIONS — all 36 sections
+   SECTION DEFINITIONS — all 37 sections
    Each: { key, title, icon, fields: [...] }
    Field types: text, number, toggle, select, textarea, time, color,
                 checkbox_group, secret, file
@@ -266,6 +266,14 @@ const SECTIONS = [
     { id: 'payPeriodType', label: 'Pay period type', type: 'select', options: ['monthly','biweekly','weekly'], path: 'calendar.payPeriodType' },
     { id: 'payDayOfMonth', label: 'Pay day of month', type: 'number', min: 1, max: 28, path: 'calendar.payDayOfMonth' },
     { id: 'holidayImportUrl', label: 'Holiday import source URL', type: 'text', path: 'calendar.holidayImportSourceUrl' },
+  ]},
+  /* §6.37 */ { key: 'terminology', title: 'Terminology', icon: '\uD83D\uDCDD', fields: [
+    { id: 'termPerson', label: 'Person (singular)', type: 'text', max: 30, path: 'terminology.person' },
+    { id: 'termPersonPlural', label: 'Person (plural)', type: 'text', max: 30, path: 'terminology.person_plural' },
+    { id: 'termGroup', label: 'Group', type: 'text', max: 30, path: 'terminology.group' },
+    { id: 'termSubgroup', label: 'Subgroup', type: 'text', max: 30, path: 'terminology.subgroup' },
+    { id: 'termInterval', label: 'Interval', type: 'text', max: 30, path: 'terminology.interval' },
+    { id: 'termSupervisor', label: 'Supervisor', type: 'text', max: 30, path: 'terminology.supervisor' },
   ]},
 ];
 
@@ -531,6 +539,14 @@ async function _saveSection(secKey) {
   const sec = SECTIONS.find(function (s) { return s.key === secKey; });
   if (!sec) return;
 
+  if (secKey === 'terminology') {
+    const termErr = _validateTerminologyFields();
+    if (termErr) {
+      toast(termErr, 'error');
+      return;
+    }
+  }
+
   const body = { settings_json: {} };
 
   sec.fields.forEach(function (f) {
@@ -587,6 +603,29 @@ async function _saveSection(secKey) {
     });
   }
   toast(sec.title + ' saved', 'success');
+}
+
+function _validateTerminologyFields() {
+  if (!_container) return 'Settings form not ready';
+  const keys = [
+    'terminology.person',
+    'terminology.person_plural',
+    'terminology.group',
+    'terminology.subgroup',
+    'terminology.interval',
+    'terminology.supervisor',
+  ];
+  for (let i = 0; i < keys.length; i++) {
+    const path = keys[i];
+    const el = _container.querySelector('[data-path="' + path + '"]');
+    if (!el) return 'terminology.' + path.split('.')[1] + ' is required';
+    const v = (el.value || '').trim();
+    if (!v) return 'terminology.' + path.split('.')[1] + ' is required';
+    if (v.length > 30) {
+      return 'terminology.' + path.split('.')[1] + ' must be at most 30 characters';
+    }
+  }
+  return null;
 }
 
 /* ══════════════════════════════════════════════════════════════

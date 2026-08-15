@@ -116,7 +116,8 @@ export interface AppConfig {
   kioskDbPath: string;
   consentDbPath: string;
   captureDbPath: string;
-  schoolAttendanceDbPath: string;
+  /** Thin capture roll-call accelerator DB (`@blokhr/capture-rollcall`). */
+  captureRollcallDbPath: string;
   transportDbPath: string;
   defaultTenantId: string;
   trialSeatLimit: number;
@@ -224,7 +225,19 @@ export function loadConfig(): AppConfig {
     kioskDbPath: envDefault('KIOSK_DB_PATH', './kiosk.db'),
     consentDbPath: envDefault('CONSENT_DB_PATH', './consent.db'),
     captureDbPath: envDefault('CAPTURE_DB_PATH', './capture.db'),
-    schoolAttendanceDbPath: envDefault('SCHOOL_ATTENDANCE_DB_PATH', './school-attendance.db'),
+    captureRollcallDbPath: (() => {
+      const neu = process.env.CAPTURE_ROLLCALL_DB_PATH?.trim();
+      if (neu) return neu;
+      const legacy = process.env.SCHOOL_ATTENDANCE_DB_PATH?.trim();
+      if (legacy) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          '[deprecation] SCHOOL_ATTENDANCE_DB_PATH is deprecated; use CAPTURE_ROLLCALL_DB_PATH',
+        );
+        return legacy;
+      }
+      return './school-attendance.db';
+    })(),
     transportDbPath: envDefault('TRANSPORT_DB_PATH', './transport.db'),
     defaultTenantId: envDefault('DEFAULT_TENANT_ID', 'default'),
     trialSeatLimit: envInt('TRIAL_SEAT_LIMIT', 25),

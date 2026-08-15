@@ -29,7 +29,7 @@
     "@blokhr/directory": "file:../services/directory",
     "@blokhr/entitlements": "file:../services/entitlements",
     "@blokhr/kiosk": "file:../services/kiosk",
-    "@blokhr/school-attendance-lite": "file:../services/school-attendance-lite",
+    "@blokhr/capture-rollcall": "file:../services/capture-rollcall",
     "@blokhr/transport": "file:../services/transport",
     "bcryptjs": "^3.0.3",
     "botbuilder": "^4.23.1",

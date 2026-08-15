@@ -174,6 +174,52 @@ export function closeModal() {
 }
 
 /**
+ * Promise-based confirm dialog (CRUD overlay).
+ * @param {{ title?: string, message: string, confirmLabel?: string, cancelLabel?: string }} opts
+ * @returns {Promise<boolean>}
+ */
+export function confirmDialog(opts) {
+  const message = (opts && opts.message) || '';
+  const confirmLabel = (opts && opts.confirmLabel) || 'Continue';
+  const cancelLabel = (opts && opts.cancelLabel) || 'Cancel';
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+      closeModal();
+    };
+
+    const html =
+      '<p class="crud-confirm-msg">' +
+      _esc(message) +
+      '</p><div class="crud-confirm-actions">' +
+      '<button type="button" class="crud-confirm-cancel" data-confirm="no">' +
+      _esc(cancelLabel) +
+      '</button>' +
+      '<button type="button" class="crud-confirm-ok" data-confirm="yes">' +
+      _esc(confirmLabel) +
+      '</button></div>';
+
+    openModal(html, {
+      title: (opts && opts.title) || 'Confirm',
+      onClose: () => finish(false),
+    });
+
+    const box = document.getElementById('crudModalBox');
+    if (!box) {
+      finish(false);
+      return;
+    }
+    const yes = box.querySelector('[data-confirm="yes"]');
+    const no = box.querySelector('[data-confirm="no"]');
+    if (yes) yes.addEventListener('click', () => finish(true));
+    if (no) no.addEventListener('click', () => finish(false));
+  });
+}
+
+/**
  * Check if a detail view is currently open.
  * @returns {boolean}
  */
