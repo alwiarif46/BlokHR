@@ -30,19 +30,22 @@ Read `RECONCILIATION.md` once before P0-01 (capture vs school-* boundaries). The
 | P1-timetable.md | 5 | school-timetable | ✅ done (migrations 001–005 + instance-generator on disk) |
 | **W-wizard-vertical.md** | 5 | setup-wizard step 0 (Company/School), vertical plumbing via entitlements, BlokSchool brand assets + preset, terminology section + labels.js | ⬜ next |
 | **G-gateway.md** | 3 | `services/gateway` — one port, `/svc/<name>` proxy, static frontend, SSE passthrough, `dev:school` script | ⬜ after W (must precede F-01) |
-| P2-attendance.md | 9 (P2-00 rename first) | rename thin capture package → `capture-rollcall`, then real school-attendance + nudge | ⬜ |
+| P2-attendance.md | 10 (P2-00 rename first) | rename thin capture package → `capture-rollcall`, then real school-attendance + nudge + native staff leave (P2-09) | ⬜ |
 | P3-academics.md | 7 | school-academics + variance |
 | P4-assessment.md | 6 | school-assessment + HPC store |
 | P5-engagement.md | 4 | school-engagement |
 | P6-fees.md | 3 | school-fees |
 | P7-transport.md | 3 | school-transport |
 | P8-compliance.md | 4 | school-compliance (UDISE export, APAAR, OASIS/LOC calendars) |
+| **P9-guardian-auth.md** | 4 | guardian credentials + sessions (school-identity), gateway guardian guard + allowlist, guardian-scoped service endpoints, parent portal frontend | ⬜ after P5 + G |
 | F-frontend.md | 6 | frontend modules for the school shell |
 
-Roughly 63 sessions. Do not reorder phases: P1 needs P0 identity; W needs P0-01; G needs nothing but must precede F-01; P2-00 must precede P2-01; P2 needs P1 period instances; P3 needs P2 period-level attendance; P4 needs P3 outcome tags.
+Roughly 68 sessions. Do not reorder phases: P1 needs P0 identity; W needs P0-01; G needs nothing but must precede F-01; P2-00 must precede P2-01; P2 needs P1 period instances; P3 needs P2 period-level attendance; P4 needs P3 outcome tags; P9 needs P5 (threads) + G (gateway) and must precede any parent-facing release.
 
 ## Standing gaps (tracked, not yet prompted)
-- **Guardian login / parent surface** — P5 stores guardian channels but no guardian auth principal exists anywhere. Blocks the parent app. Needs its own prompt file after P5 (guardian credential store in school-identity or engagement + gateway deny rules).
-- **Teacher leave** — P2-05 gives school staff attendance natively, but no leave workflow exists for school tenants (HR `leaves` module is not in school module sets). Decision pending: entitle HR `leaves` for school tenants vs a thin leave feature in school-attendance.
 - **school-operations / library** — no prompt file yet. Locked decision: library is a distinct `school_library` moduleId (catalogue/ISBN/fines), assets-style issuance stays generic.
-- **Git repository** — still not initialised at the project root. Do this before running any further prompts: `git init`, commit everything as baseline. Non-negotiable safety net.
+
+## Resolved (2026-08-15)
+- Git initialised at root — baseline commit `3091c37` on `main`. Commit after every green prompt session.
+- Teacher leave → **P2-09** (thin, native in school-attendance; monolith `leaves` untouched).
+- Guardian login → **P9** (deferred past P5 by design, prompts ready).

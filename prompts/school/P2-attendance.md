@@ -128,3 +128,21 @@ Read CONVENTIONS + school-attendance rollups service. Rule-based only; no ML, no
 - Message vars only; NO message copy in this service.
 
 Tests: tiering; deterministic stable holdout; improving suppression; cap; event vars include precise dates; report math; disabled config = no-op; tenant isolation.
+
+---
+## PROMPT P2-09 — Staff leave (thin, native)
+
+Read CONVENTIONS + school-attendance staff service (P2-05). Locked decision: school tenants get a thin leave flow inside school-attendance — do NOT touch the monolith `leaves` domain, do not import from it, do not copy its accrual engine. Deliberately minimal: types, balances, requests, approval, and the write-through into `staff_attendance`.
+
+`migrations/008_staff_leave.sql`:
+- `leave_types`: id, tenant_id, code, label, annual_quota REAL, carry_forward INTEGER DEFAULT 0, is_active INTEGER DEFAULT 1. Unique (tenant_id, code). Seed lazily per tenant on first read: `CL/Casual Leave/12`, `EL/Earned Leave/15`, `ML/Medical Leave/10` — India-typical defaults, all editable.
+- `leave_balances`: tenant_id, member_id, leave_type_id, year INTEGER, opening REAL, used REAL DEFAULT 0. PK (tenant_id, member_id, leave_type_id, year). Row auto-created from annual_quota (+ carry-over of unused when carry_forward=1) on first request touching that (member, type, year).
+- `leave_requests`: id, tenant_id, member_id, leave_type_id, from_date, to_date, is_half_day INTEGER DEFAULT 0 (only when from=to), days REAL (server-computed: inclusive calendar days, 0.5 when half), reason TEXT, state (`pending|approved|rejected|cancelled`) DEFAULT 'pending', decided_by NULL, decided_at NULL, decision_note NULL, created_at, updated_at.
+
+Rules (service-enforced, each tested):
+1. `POST /api/attendance/:tenantId/staff/leave/requests` — dates ISO, to ≥ from, ≤ 30 days span; overlap with an existing pending/approved request for the same member → 409 `{error:"overlapping_request"}`.
+2. Approve: `POST .../leave/requests/:id/decide {decision: approved|rejected, decided_by, decision_note?}` — pending only (409 otherwise); rejection requires decision_note (400). Approval: balance check (remaining = opening − used ≥ days, else 400 `{error:"insufficient_balance", remaining}`), increments `used`, and **upserts `staff_attendance` rows with status `on_leave` for every date in range** (source `manual`, marked_by = decided_by) — skipping any date already inside a finalized month (those dates are listed in the response as `skipped_locked`, request still approves). Emits `school.staff.leave_approved`.
+3. Cancel: `POST .../leave/requests/:id/cancel {actor}` — pending or approved; approved-cancel restores `used`, deletes the on_leave `staff_attendance` rows it created (not rows since overwritten by a check-in — leave those, list as `kept`), emits `school.staff.leave_cancelled`. Cancelling into a finalized month → 409.
+4. `GET .../staff/leave/requests?member_id=&state=&year=`; `GET .../staff/leave/balances?member_id=&year=` → per type `{opening, used, remaining}`; types CRUD `GET/POST/PATCH .../staff/leave/types` (deactivate, never delete; quota change affects future balance rows only).
+
+Tests: seed-on-first-read; overlap 409; half-day maths; approve happy path writes on_leave rows + balance; insufficient balance; reject requires note; finalized-month skip on approve and 409 on cancel; approved-cancel restore incl. `kept` behaviour; tenant isolation. DoD per CONVENTIONS.

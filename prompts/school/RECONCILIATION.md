@@ -74,4 +74,6 @@ Source of truth = `Entitlement.vertical` (P0-01, shipped). The monolith keeps a 
 ## Locked packaging decisions (2026-08-15)
 - Library = distinct `school_library` moduleId when school-operations prompts are written; issuance stays generic.
 - HPC peer/parent capture lives in **school-assessment (P4-04) + F-06**, not the platform `surveys` module — surveys reuse would require cross-service coupling the conventions forbid. Platform surveys stay available to school tenants for feedback forms only.
-- Staff attendance for school tenants is **native in school-attendance (P2-05)**, not HR-module reuse. Teacher *leave* remains an open gap (see README standing gaps).
+- Staff attendance for school tenants is **native in school-attendance (P2-05)**, not HR-module reuse.
+- Teacher leave (2026-08-15): **thin native leave flow in school-attendance (P2-09)** — types/balances/requests/approval with write-through to `staff_attendance`. The monolith `leaves` domain and its accrual engine stay HR-only.
+- Guardian auth (2026-08-15): deferred past P5 but committed — **P9-guardian-auth.md**. Opaque sessions owned by school-identity, gateway introspection + hard allowlist, guardian identity always header-forced server-side, parent portal as a separate minimal entry at `/guardian`.
