@@ -141,3 +141,52 @@ export type {
   ItemAnalysisItem,
 } from './types-questions';
 
+export type {
+  HpcStage,
+  HpcAbility,
+  HpcSource,
+  HpcLevel,
+  Competency,
+  AssessmentInput,
+  CreateHpcInputPayload,
+  HpcVoiceLevels,
+  HpcStudentCompetencyView,
+  HpcMatrixCell,
+  HpcCoverageRow,
+} from './types-hpc';
+
+export type {
+  BoardFormat,
+  TemplateState,
+  ReportBlockType,
+  MarksAggregation,
+  ReportBlockDefinition,
+  ReportTemplate,
+  ReportCard,
+  CreateReportTemplateInput,
+  PatchReportTemplateInput,
+  GenerateReportCardStudent,
+  GenerateReportCardsInput,
+} from './types-reportcards';
+
+export interface OutcomePerformance {
+  tenantId: string;
+  examId: string;
+  outcomeCode: string;
+  meanPct: number;
+  nStudents: number;
+  computedAt: string;
+}
+
+export interface WeakOutcomeExamEvidence {
+  examId: string;
+  meanPct: number;
+  nStudents: number;
+}
+
+export interface WeakOutcomeRow {
+  outcomeCode: string;
+  meanPct: number;
+  exams: WeakOutcomeExamEvidence[];
+}
+

@@ -4,6 +4,11 @@ import path from 'path';
 import type { Logger } from 'pino';
 import { SchoolAssessmentSqlite, runSchoolAssessmentMigrations } from './db';
 import { LogEventPublisher, type EventPublisher } from './events';
+import {
+  HttpAcademicsClient,
+  NoopAcademicsClient,
+  type AcademicsClient,
+} from './clients/academics-client';
 import { AssessmentRepository } from './repositories/assessment-repository';
 import { AssessmentService } from './services/assessment-service';
 import { createAssessmentRouter } from './routes/assessment';
@@ -13,6 +18,8 @@ export interface SchoolAssessmentAppOptions {
   migrationsDir?: string;
   logger: Logger;
   eventPublisher?: EventPublisher;
+  academicsClient?: AcademicsClient;
+  academicsUrl?: string;
 }
 
 export async function createSchoolAssessmentApp(
@@ -25,7 +32,15 @@ export async function createSchoolAssessmentApp(
 
   const repo = new AssessmentRepository(db);
   const events = options.eventPublisher ?? new LogEventPublisher(options.logger);
-  const service = new AssessmentService(repo, events);
+  const academics =
+    options.academicsClient ??
+    (options.academicsUrl || process.env.ACADEMICS_URL
+      ? new HttpAcademicsClient(
+          options.logger,
+          options.academicsUrl ?? process.env.ACADEMICS_URL,
+        )
+      : new NoopAcademicsClient());
+  const service = new AssessmentService(repo, events, academics);
 
   const app = express();
   app.use(cors());
@@ -52,7 +67,18 @@ export {
   runSchoolAssessmentMigrations,
   createAssessmentRouter,
   LogEventPublisher,
+  HttpAcademicsClient,
+  NoopAcademicsClient,
 };
-export { analyzeItems, checkPaperConformance, pearsonCorrelation, questionBucket } from './services/item-analysis';
+export {
+  analyzeItems,
+  checkPaperConformance,
+  pearsonCorrelation,
+  questionBucket,
+} from './services/item-analysis';
+export { deriveLevelFromCircled, majorityLevel } from './services/hpc-levels';
+export { mapCbse9Point, mapMsbshseSsc } from './services/grade-maps';
+export { SAMPLE_HPC_COMPETENCY_COUNT, seedSampleHpcCompetencies } from './seed-hpc-sample';
 export * from './types';
 export * from './events';
+export type { AcademicsClient, InferAssessmentDeliveryInput } from './clients/academics-client';

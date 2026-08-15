@@ -3,16 +3,15 @@ import path from 'path';
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — sql.js ships without bundled types in this package
 import initSqlJs, { Database as SqlJsDatabase } from 'sql.js';
-import { seedSampleHpcCompetencies } from './seed-hpc-sample';
 
-export interface SchoolAssessmentDb {
+export interface SchoolFeesDb {
   get<T extends Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T | undefined>;
   all<T extends Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
   run(sql: string, params?: unknown[]): Promise<void>;
   close(): Promise<void>;
 }
 
-export class SchoolAssessmentSqlite implements SchoolAssessmentDb {
+export class SchoolFeesSqlite implements SchoolFeesDb {
   private db!: SqlJsDatabase;
   private persistPath: string | null;
 
@@ -20,8 +19,8 @@ export class SchoolAssessmentSqlite implements SchoolAssessmentDb {
     this.persistPath = persistPath === ':memory:' ? null : persistPath;
   }
 
-  static async create(dbPath: string): Promise<SchoolAssessmentSqlite> {
-    const engine = new SchoolAssessmentSqlite(dbPath);
+  static async create(dbPath: string): Promise<SchoolFeesSqlite> {
+    const engine = new SchoolFeesSqlite(dbPath);
     const SQL = await initSqlJs();
     if (dbPath !== ':memory:' && fs.existsSync(dbPath)) {
       const buf = fs.readFileSync(dbPath);
@@ -82,8 +81,8 @@ export class SchoolAssessmentSqlite implements SchoolAssessmentDb {
   }
 }
 
-export async function runSchoolAssessmentMigrations(
-  db: SchoolAssessmentDb,
+export async function runSchoolFeesMigrations(
+  db: SchoolFeesDb,
   migrationsDir: string,
 ): Promise<void> {
   await db.run(`
@@ -111,7 +110,4 @@ export async function runSchoolAssessmentMigrations(
     }
     await db.run('INSERT INTO schema_migrations (version) VALUES (?)', [version]);
   }
-
-  // SAMPLE SEED — replace with full PARAKH competency import.
-  await seedSampleHpcCompetencies(db);
 }

@@ -1,14 +1,66 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import type { AssessmentService } from '../services/assessment-service';
 import type {
+  BoardFormat,
   BlueprintBucket,
   ExamKind,
   ExamTermLabel,
+  HpcLevel,
+  HpcSource,
+  HpcStage,
   PatchExamInput,
   PatchExamTermInput,
   QuestionKind,
   QuestionProvenance,
+  ReportBlockDefinition,
 } from '../types';
+import type { CreateHpcInputPayload } from '../types-hpc';
+
+function parseHpcInputBody(body: Record<string, unknown>): CreateHpcInputPayload {
+  return {
+    studentId: String(body.student_id ?? body.studentId ?? ''),
+    competencyId: String(body.competency_id ?? body.competencyId ?? ''),
+    activityRef:
+      body.activity_ref !== undefined || body.activityRef !== undefined
+        ? body.activity_ref === null || body.activityRef === null
+          ? null
+          : String(body.activity_ref ?? body.activityRef)
+        : null,
+    source: String(body.source ?? '') as HpcSource,
+    level:
+      body.level !== undefined && body.level !== null
+        ? (String(body.level) as HpcLevel)
+        : null,
+    statementsCircled:
+      body.statements_circled !== undefined || body.statementsCircled !== undefined
+        ? body.statements_circled === null || body.statementsCircled === null
+          ? null
+          : Number(body.statements_circled ?? body.statementsCircled)
+        : null,
+    observationalChallenge:
+      body.observational_challenge != null || body.observationalChallenge != null
+        ? String(body.observational_challenge ?? body.observationalChallenge)
+        : null,
+    observationalResolution:
+      body.observational_resolution != null || body.observationalResolution != null
+        ? String(body.observational_resolution ?? body.observationalResolution)
+        : null,
+    evidenceRef:
+      body.evidence_ref !== undefined || body.evidenceRef !== undefined
+        ? body.evidence_ref === null || body.evidenceRef === null
+          ? null
+          : String(body.evidence_ref ?? body.evidenceRef)
+        : null,
+    academicSessionRef:
+      body.academic_session_ref !== undefined || body.academicSessionRef !== undefined
+        ? body.academic_session_ref === null || body.academicSessionRef === null
+          ? null
+          : String(body.academic_session_ref ?? body.academicSessionRef)
+        : null,
+    recordedBy: String(body.recorded_by ?? body.recordedBy ?? ''),
+    at: body.at != null ? String(body.at) : undefined,
+  };
+}
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -519,6 +571,304 @@ export function createAssessmentRouter(service: AssessmentService): Router {
         return;
       }
       res.status(201).json(result.paper);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/hpc/competencies',
+    asyncHandler(async (req, res) => {
+      const stage =
+        typeof req.query.stage === 'string' ? (req.query.stage as HpcStage) : undefined;
+      const result = await service.listCompetencies(req.params.tenantId, stage);
+      res.json({ competencies: result.competencies });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/hpc/inputs/bulk',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const raw = Array.isArray(body.inputs)
+        ? body.inputs
+        : Array.isArray(body)
+          ? body
+          : [];
+      const payloads = raw.map((row) => parseHpcInputBody(row as Record<string, unknown>));
+      const result = await service.createHpcInputsBulk(req.params.tenantId, payloads);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json({ inputs: result.inputs });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/hpc/inputs',
+    asyncHandler(async (req, res) => {
+      const result = await service.createHpcInput(
+        req.params.tenantId,
+        parseHpcInputBody(req.body as Record<string, unknown>),
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.input);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/hpc/students/:id/matrix',
+    asyncHandler(async (req, res) => {
+      const result = await service.getHpcStudentMatrix(req.params.tenantId, req.params.id);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ cells: result.cells });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/hpc/students/:id',
+    asyncHandler(async (req, res) => {
+      const session =
+        typeof req.query.session === 'string'
+          ? req.query.session
+          : typeof req.query.academic_session_ref === 'string'
+            ? req.query.academic_session_ref
+            : undefined;
+      const result = await service.getHpcStudentView(
+        req.params.tenantId,
+        req.params.id,
+        session,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ competencies: result.competencies });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/hpc/coverage',
+    asyncHandler(async (req, res) => {
+      let studentIds: string[] = [];
+      const raw = req.query.section_students ?? req.query.sectionStudents;
+      if (typeof raw === 'string') {
+        const trimmed = raw.trim();
+        if (trimmed.startsWith('[')) {
+          try {
+            const parsed = JSON.parse(trimmed) as unknown;
+            if (Array.isArray(parsed)) studentIds = parsed.map((x) => String(x));
+          } catch {
+            studentIds = [];
+          }
+        } else if (trimmed.length > 0) {
+          studentIds = trimmed.split(',').map((s) => s.trim()).filter(Boolean);
+        }
+      } else if (Array.isArray(raw)) {
+        studentIds = raw.map((x) => String(x));
+      }
+      const stage =
+        typeof req.query.stage === 'string' ? (req.query.stage as HpcStage) : undefined;
+      const result = await service.getHpcCoverage(req.params.tenantId, studentIds, stage);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ coverage: result.coverage });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/templates',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const definition = Array.isArray(body.definition)
+        ? (body.definition as ReportBlockDefinition[])
+        : [];
+      const result = await service.createReportTemplate(req.params.tenantId, {
+        label: String(body.label ?? ''),
+        boardFormat: String(body.board_format ?? body.boardFormat ?? '') as BoardFormat,
+        definition,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.template);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/templates',
+    asyncHandler(async (req, res) => {
+      const result = await service.listReportTemplates(req.params.tenantId);
+      res.json({ templates: result.templates });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/templates/:id',
+    asyncHandler(async (req, res) => {
+      const result = await service.getReportTemplate(req.params.tenantId, req.params.id);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.template);
+    }),
+  );
+
+  router.patch(
+    '/:tenantId/templates/:id',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await service.patchReportTemplate(req.params.tenantId, req.params.id, {
+        label: body.label !== undefined ? String(body.label) : undefined,
+        boardFormat:
+          body.board_format !== undefined || body.boardFormat !== undefined
+            ? (String(body.board_format ?? body.boardFormat) as BoardFormat)
+            : undefined,
+        definition: Array.isArray(body.definition)
+          ? (body.definition as ReportBlockDefinition[])
+          : undefined,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.template);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/templates/:id/promote',
+    asyncHandler(async (req, res) => {
+      const result = await service.promoteReportTemplate(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.template);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/templates/:id/clone',
+    asyncHandler(async (req, res) => {
+      const result = await service.cloneReportTemplate(req.params.tenantId, req.params.id);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.template);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/report-cards/generate',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const studentsRaw = Array.isArray(body.students) ? body.students : [];
+      const result = await service.generateReportCards(req.params.tenantId, {
+        templateId: String(body.template_id ?? body.templateId ?? ''),
+        session: String(body.session ?? body.academic_session_ref ?? ''),
+        generatedBy: String(body.generated_by ?? body.generatedBy ?? ''),
+        students: studentsRaw.map((row) => {
+          const s = row as Record<string, unknown>;
+          return {
+            studentId: String(s.student_id ?? s.studentId ?? ''),
+            attendance:
+              s.attendance != null ? (s.attendance as Record<string, unknown>) : null,
+            remarks: s.remarks != null ? String(s.remarks) : null,
+          };
+        }),
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json({ cards: result.cards });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/report-cards',
+    asyncHandler(async (req, res) => {
+      const result = await service.listReportCards(req.params.tenantId, {
+        studentId:
+          typeof req.query.student_id === 'string'
+            ? req.query.student_id
+            : typeof req.query.studentId === 'string'
+              ? req.query.studentId
+              : undefined,
+        session:
+          typeof req.query.session === 'string'
+            ? req.query.session
+            : typeof req.query.academic_session_ref === 'string'
+              ? req.query.academic_session_ref
+              : undefined,
+      });
+      res.json({ cards: result.cards });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/report-cards/:id',
+    asyncHandler(async (req, res) => {
+      const result = await service.getReportCard(req.params.tenantId, req.params.id);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.card);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/feedback/run',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await service.runFeedbackForExam(
+        req.params.tenantId,
+        String(body.exam_id ?? body.examId ?? ''),
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ performances: result.performances });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/outcomes/weak',
+    asyncHandler(async (req, res) => {
+      const thresholdRaw =
+        typeof req.query.threshold === 'string' ? req.query.threshold : '50';
+      const session =
+        typeof req.query.session === 'string'
+          ? req.query.session
+          : typeof req.query.academic_session_ref === 'string'
+            ? req.query.academic_session_ref
+            : undefined;
+      const result = await service.listWeakOutcomes(
+        req.params.tenantId,
+        Number(thresholdRaw),
+        session,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ outcomes: result.outcomes });
     }),
   );
 
