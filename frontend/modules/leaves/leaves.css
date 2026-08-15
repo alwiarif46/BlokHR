@@ -1,0 +1,448 @@
+/**
+ * modules/leaves/leaves.css
+ *
+ * Leave applications: toolbar, tabs, balance cards, leave cards grid,
+ * apply/edit modal, empty state. 4 theme variants.
+ * All colours use CSS custom properties.
+ */
+
+/* ── Wrapper ── */
+.lv-wrap {
+  padding: 20px 24px 60px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Toolbar ── */
+.lv-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── Tabs ── */
+.lv-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.lv-tab {
+  padding: 7px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx3);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.lv-tab.active {
+  background: var(--accent);
+  color: #000;
+}
+.theme-clean .lv-tab.active {
+  color: #fff;
+}
+.theme-clean .lv-tabs {
+  border-radius: 10px;
+}
+.lv-spacer {
+  flex: 1;
+}
+
+/* ── Action button ── */
+.lv-btn {
+  padding: 7px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--accent);
+  color: #000;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.theme-clean .lv-btn {
+  color: #fff;
+  border-radius: 10px;
+}
+.lv-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+.lv-btn.ghost {
+  background: transparent;
+  color: var(--accent);
+}
+
+/* ── Search (reuse toolbar search styling) ── */
+.lv-search {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--bd2);
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 11px;
+  color: var(--tx);
+  outline: none;
+  width: 180px;
+  transition: all 0.3s ease;
+  font-family: inherit;
+}
+.lv-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.lv-search::placeholder {
+  color: var(--tx3);
+}
+.theme-clean .lv-search {
+  background: var(--bg3);
+  border-radius: 10px;
+}
+
+/* ── Balance cards ── */
+.lv-balances {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+.lv-bal {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 12px;
+  text-align: center;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+.theme-clean .lv-bal {
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+.lv-bal:hover {
+  border-color: var(--accent);
+}
+.lv-bal-type {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--tx3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.lv-bal-num {
+  font-size: 22px;
+  font-weight: 900;
+  color: var(--tx);
+}
+.lv-bal-of {
+  font-size: 9px;
+  color: var(--tx4);
+}
+.lv-bal-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg4);
+  margin-top: 6px;
+  overflow: hidden;
+}
+.lv-bal-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.5s ease;
+}
+
+/* ── Leave card grid ── */
+.lv-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.lv-card {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 16px;
+  transition: all 0.3s ease;
+  animation: cardIn 0.4s var(--ease) both;
+}
+.lv-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.theme-chromium .lv-card {
+  background: linear-gradient(170deg, var(--bg2), var(--bg1));
+  border-color: var(--metal1, var(--bd));
+}
+.theme-neural .lv-card {
+  border-radius: 0;
+}
+.theme-holodeck .lv-card {
+  border-radius: 0;
+  background: rgba(10, 20, 34, 0.5);
+}
+.theme-clean .lv-card {
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Card header ── */
+.lv-card-hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.lv-card-av {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  border: 2px solid var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.theme-clean .lv-card-av {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+}
+.lv-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx);
+}
+.lv-card-type {
+  font-size: 10px;
+  color: var(--tx3);
+}
+
+/* ── Status badges ── */
+.lv-card-badge {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.theme-clean .lv-card-badge {
+  border-radius: 6px;
+}
+.lv-card-badge.pending {
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--status-break);
+}
+.lv-card-badge.approved {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--status-in);
+}
+.lv-card-badge.rejected {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--status-absent);
+}
+.lv-card-badge.cancelled {
+  background: rgba(107, 114, 128, 0.1);
+  color: var(--tx3);
+}
+
+/* ── Card details ── */
+.lv-card-dates {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--tx);
+}
+.lv-card-dates .lv-arrow {
+  color: var(--tx4);
+}
+.lv-card-days {
+  font-size: 18px;
+  font-weight: 900;
+  color: var(--accent);
+  flex-shrink: 0;
+  text-align: right;
+  min-width: 50px;
+}
+.lv-card-days span {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--tx3);
+  display: block;
+}
+.lv-card-reason {
+  font-size: 10px;
+  color: var(--tx3);
+  padding: 6px 0;
+  border-top: 1px solid var(--bd);
+  margin-top: 6px;
+}
+.lv-card-meta {
+  font-size: 9px;
+  margin-top: 4px;
+}
+.lv-card-meta.positive {
+  color: var(--status-in);
+}
+.lv-card-meta.negative {
+  color: var(--status-absent);
+}
+
+/* ── Card actions ── */
+.lv-card-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.lv-card-actions button {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  background: var(--bg3);
+  color: var(--tx2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+.theme-clean .lv-card-actions button {
+  border-radius: 8px;
+}
+.lv-card-actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.lv-card-actions button.approve {
+  background: var(--status-in);
+  color: #fff;
+  border-color: var(--status-in);
+}
+.lv-card-actions button.danger:hover {
+  border-color: var(--status-absent);
+  color: var(--status-absent);
+}
+
+/* ── Modal ── */
+.lv-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 700;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.lv-modal.open {
+  display: flex;
+}
+.lv-modal-box {
+  background: var(--bg1);
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  padding: 24px;
+  width: 480px;
+  max-width: 94vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5);
+  animation: modalIn 0.35s var(--ease);
+}
+.theme-clean .lv-modal-box {
+  border-radius: 20px;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.08);
+}
+.lv-modal-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 16px;
+}
+
+/* ── Form fields ── */
+.lv-field {
+  margin-bottom: 14px;
+}
+.lv-field label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tx3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+}
+.lv-field input,
+.lv-field select,
+.lv-field textarea {
+  width: 100%;
+  background: var(--bg3);
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  color: var(--tx);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  transition: all 0.25s ease;
+}
+.theme-clean .lv-field input,
+.theme-clean .lv-field select,
+.theme-clean .lv-field textarea {
+  border-radius: 10px;
+}
+.lv-field input:focus,
+.lv-field select:focus,
+.lv-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.lv-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.lv-days-calc {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+/* ── Empty state ── */
+.lv-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--tx3);
+}
+.lv-empty-icon {
+  font-size: 40px;
+  opacity: 0.15;
+  margin-bottom: 8px;
+}
+.lv-empty-text {
+  font-size: 13px;
+  font-weight: 600;
+}

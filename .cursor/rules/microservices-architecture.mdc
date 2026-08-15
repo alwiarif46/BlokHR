@@ -1,0 +1,70 @@
+---
+description: BlokHR is a microservices app — all new and edited features must be implemented as services
+alwaysApply: true
+---
+
+# Microservices Architecture (BlokHR)
+
+BlokHR is a **microservices application**. Treat the existing monolith as legacy. From now on, every feature you add or edit must follow microservices boundaries — do not grow the monolith.
+
+## Default behavior
+
+When adding or changing functionality:
+
+1. **Identify the bounded context** (e.g. attendance, leaves, auth, notifications, settings).
+2. **Implement it in a dedicated service** under `services/<service-name>/`, not as new logic in the root `backend/` monolith.
+3. **Keep data owned by that service** — each service has its own schema/migrations; no cross-service DB joins or shared tables.
+4. **Communicate across services** via HTTP APIs and/or the existing event bus — never import another service's repositories or internal modules.
+5. **Expose a stable API contract** (routes + request/response types). Frontend and other services consume only that contract.
+
+## Service layout
+
+Each service is a standalone deployable unit:
+
+```
+services/<service-name>/
+  package.json
+  src/
+    index.ts          # bootstrap + HTTP server
+    routes/
+    services/
+    repositories/
+  migrations/         # service-owned schema only
+  tests/
+```
+
+Match existing BlokHR conventions inside each service: routes → services → repositories, structured logging, env-based config, Vitest tests.
+
+## Editing existing monolith code
+
+When touching code under `backend/`:
+
+- **Prefer extraction**: move the change into the owning microservice and leave a thin proxy or remove monolith code if safe.
+- **Do not add new domains** to `backend/src/routes`, `backend/src/services`, or `backend/src/repositories`.
+- Bug fixes in the monolith are allowed only when extraction is out of scope for the task; still note which service should own the fix long term.
+
+## Frontend
+
+- Frontend modules in `frontend/modules/<name>/` map to backend **services**, not monolith route files.
+- Call the service API base URL for that domain (via gateway or direct service port in dev).
+- Do not assume a single shared backend process for new features.
+
+## Cross-cutting concerns
+
+| Concern | Approach |
+|---------|----------|
+| Auth | Shared auth service or gateway validates tokens; services trust gateway identity headers |
+| Events | Publish/subscribe via event bus; no direct service-to-service DB reads |
+| Notifications | Notification service consumes domain events |
+| File storage | Storage service; other services store metadata + references only |
+| SSE / realtime | Realtime/gateway service fans out events from domain event streams |
+
+## Checklist before finishing work
+
+- [ ] Change lives in the correct `services/<name>/` package (or monolith shrink, not grow)
+- [ ] Service owns its migrations and data
+- [ ] No imports from another service's internal `src/`
+- [ ] API contract documented or mirrored in frontend `shared/api.js` usage
+- [ ] Tests run in the service's own test suite
+
+If scope is ambiguous, split by domain boundary rather than adding to the monolith.

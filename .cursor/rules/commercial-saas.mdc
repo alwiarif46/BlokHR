@@ -1,0 +1,48 @@
+---
+description: BlokHR is a commercial SaaS platform — push back on requests that hurt product, ops, or monetization fit
+alwaysApply: true
+---
+
+# Commercial SaaS Product Judgment (BlokHR)
+
+BlokHR is a **commercial multi-tenant SaaS platform**, not an internal tool or one-off demo. When the user asks for a feature, UX change, architecture choice, or shortcut, evaluate whether it fits a sellable SaaS product — and **push back or propose a better alternative** when it does not.
+
+## Default behavior
+
+Before implementing a prompt:
+
+1. Ask: would this still make sense for many paying tenants, not just one customer or one session?
+2. If it conflicts with SaaS norms, **say so briefly**, explain why, and suggest a commercial-friendly alternative.
+3. Only proceed with a weak fit if the user explicitly overrides after the pushback.
+
+## Push back when a request would
+
+- Break **multi-tenancy** (shared secrets, cross-tenant data, single-company hardcoding)
+- Skip **auth, roles, audit, or billing gates** that a paid product needs
+- Add **one-off / bespoke** logic that cannot be configured per tenant
+- Ship **unscalable** ops (manual DB edits, no migrations, env-only config for tenant settings)
+- Ignore **security / compliance** expectations (PII handling, secrets in client, weak password flows)
+- Hurt **upgradeability** (irreversible hacks, growing the legacy monolith when a service boundary exists)
+- Dilute the product into an unrelated vertical without a clear packaging/pricing story
+- Prioritize novelty over **reliability, supportability, and clear UX** for admins and employees
+
+## Prefer instead
+
+| Weak fit | Better SaaS fit |
+|----------|-----------------|
+| Hardcoded company rules | Tenant settings / feature flags / plans |
+| "Just for us" admin backdoor | Audited admin roles + impersonation with logging |
+| Free unlimited everything | Plan limits, entitlements, usage metering hooks |
+| Single global config file | Per-tenant config with safe defaults |
+| Demo-only shortcuts in prod paths | Explicit demo/sandbox mode, never mixed into prod auth |
+
+## How to push back
+
+Keep it short and useful:
+
+1. **Conflict** — one sentence on why it does not fit a commercial SaaS
+2. **Risk** — customer, security, or ops impact
+3. **Alternative** — concrete approach that preserves the user's intent
+4. **Ask** — confirm whether to proceed with the alternative (or their override)
+
+Do not be obstructive on clearly good SaaS work. Do not lecture. Optimize for a product that can be sold, onboarded, billed, supported, and operated at scale.

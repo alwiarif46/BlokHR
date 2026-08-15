@@ -1,0 +1,343 @@
+/**
+ * modules/regularizations/regularizations.css
+ *
+ * Attendance regularization requests: submit corrections,
+ * 2-tier approve/reject flow. Card-based layout.
+ * All colours use CSS custom properties.
+ */
+
+/* ── Wrapper ── */
+.reg-wrap {
+  padding: 20px 24px 60px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ── Toolbar ── */
+.reg-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.reg-tabs {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+.reg-tab {
+  padding: 7px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx3);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+.reg-tab.active {
+  background: var(--accent);
+  color: #000;
+}
+.theme-clean .reg-tab.active {
+  color: #fff;
+}
+.theme-clean .reg-tabs {
+  border-radius: 10px;
+}
+
+/* ── Stats bar ── */
+.reg-stats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.reg-stat {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s ease;
+}
+.theme-clean .reg-stat {
+  border-radius: 12px;
+}
+.reg-stat:hover {
+  border-color: var(--accent);
+}
+.reg-stat-num {
+  font-size: 20px;
+  font-weight: 900;
+  color: var(--tx);
+}
+.reg-stat-label {
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--tx3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* ── Card grid ── */
+.reg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+.reg-card {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 16px;
+  transition: all 0.3s ease;
+  animation: cardIn 0.4s var(--ease) both;
+}
+.reg-card:hover {
+  border-color: var(--accent);
+  transform: translateY(-2px);
+}
+.theme-chromium .reg-card {
+  background: linear-gradient(170deg, var(--bg2), var(--bg1));
+}
+.theme-neural .reg-card {
+  border-radius: 0;
+}
+.theme-holodeck .reg-card {
+  border-radius: 0;
+  background: rgba(10, 20, 34, 0.5);
+}
+.theme-clean .reg-card {
+  border-radius: 14px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+/* ── Card header ── */
+.reg-card-hdr {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.reg-card-name {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx);
+  flex: 1;
+  min-width: 0;
+}
+.reg-card-date {
+  font-size: 10px;
+  color: var(--tx3);
+}
+.reg-card-badge {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.theme-clean .reg-card-badge {
+  border-radius: 6px;
+}
+.reg-card-badge.pending {
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--status-break);
+}
+.reg-card-badge.approved {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--status-in);
+}
+.reg-card-badge.rejected {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--status-absent);
+}
+
+/* ── Card body ── */
+.reg-card-body {
+  font-size: 12px;
+  color: var(--tx2);
+  padding: 8px 0;
+}
+.reg-card-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+.reg-card-row-label {
+  color: var(--tx3);
+}
+.reg-card-row-value {
+  font-weight: 600;
+  color: var(--tx);
+}
+.reg-card-reason {
+  font-size: 10px;
+  color: var(--tx3);
+  padding: 6px 0;
+  border-top: 1px solid var(--bd);
+  margin-top: 6px;
+}
+
+/* ── Card actions ── */
+.reg-card-actions {
+  display: flex;
+  gap: 4px;
+  margin-top: 8px;
+}
+.reg-card-actions button {
+  padding: 4px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  background: var(--bg3);
+  color: var(--tx2);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+}
+.theme-clean .reg-card-actions button {
+  border-radius: 8px;
+}
+.reg-card-actions button.approve {
+  background: var(--status-in);
+  color: #fff;
+  border-color: var(--status-in);
+}
+.reg-card-actions button.danger:hover {
+  border-color: var(--status-absent);
+  color: var(--status-absent);
+}
+
+/* ── Shared btn/modal/empty — reuse from lv- prefix patterns ── */
+.reg-btn {
+  padding: 7px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--accent);
+  color: #000;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.theme-clean .reg-btn {
+  color: #fff;
+  border-radius: 10px;
+}
+.reg-btn.ghost {
+  background: transparent;
+  color: var(--accent);
+}
+.reg-spacer {
+  flex: 1;
+}
+
+/* ── Modal ── */
+.reg-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 700;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+}
+.reg-modal.open {
+  display: flex;
+}
+.reg-modal-box {
+  background: var(--bg1);
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  padding: 24px;
+  width: 480px;
+  max-width: 94vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5);
+  animation: modalIn 0.35s var(--ease);
+}
+.theme-clean .reg-modal-box {
+  border-radius: 20px;
+}
+.reg-modal-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 16px;
+}
+.reg-field {
+  margin-bottom: 14px;
+}
+.reg-field label {
+  display: block;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tx3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 5px;
+}
+.reg-field input,
+.reg-field select,
+.reg-field textarea {
+  width: 100%;
+  background: var(--bg3);
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  color: var(--tx);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  transition: all 0.25s ease;
+}
+.theme-clean .reg-field input,
+.theme-clean .reg-field select,
+.theme-clean .reg-field textarea {
+  border-radius: 10px;
+}
+.reg-field input:focus,
+.reg-field select:focus,
+.reg-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.reg-form-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+/* ── Empty state ── */
+.reg-empty {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--tx3);
+}
+.reg-empty-icon {
+  font-size: 40px;
+  opacity: 0.15;
+  margin-bottom: 8px;
+}
+.reg-empty-text {
+  font-size: 13px;
+  font-weight: 600;
+}

@@ -1,0 +1,47 @@
+/**
+ * modules/face_recognition/face_recognition.css
+ * Face Recognition module. All colours use CSS custom properties.
+ */
+.fr-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
+.fr-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+.fr-spacer { flex: 1; }
+.fr-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
+.theme-clean .fr-btn { color: #fff; border-radius: 10px; }
+.fr-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+.fr-btn.ghost { background: transparent; color: var(--accent); }
+.fr-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.fr-stat { flex: 1; min-width: 100px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
+.theme-clean .fr-stat { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
+.fr-stat:hover { border-color: var(--accent); }
+.fr-stat-num { font-size: 24px; font-weight: 900; color: var(--tx); }
+.fr-stat-label { font-size: 9px; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-weight: 600; }
+.fr-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.fr-card { background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 16px; transition: all 0.3s ease; animation: cardIn 0.4s var(--ease) both; }
+.fr-card:hover { border-color: var(--accent); transform: translateY(-2px); }
+.theme-chromium .fr-card { background: linear-gradient(170deg, var(--bg2), var(--bg1)); }
+.theme-neural .fr-card { border-radius: 0; }
+.theme-holodeck .fr-card { border-radius: 0; background: rgba(10, 20, 34, 0.5); }
+.theme-clean .fr-card { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
+.fr-card-title { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
+.fr-card-sub { font-size: 10px; color: var(--tx3); }
+.fr-card-badge { font-size: 8px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; }
+.theme-clean .fr-card-badge { border-radius: 6px; }
+.fr-card-actions { display: flex; gap: 4px; margin-top: 8px; }
+.fr-card-actions button { padding: 4px 10px; font-size: 10px; font-weight: 600; border: 1px solid var(--bd); border-radius: 4px; background: var(--bg3); color: var(--tx2); cursor: pointer; font-family: inherit; transition: all 0.2s ease; }
+.theme-clean .fr-card-actions button { border-radius: 8px; }
+.fr-card-actions button:hover { border-color: var(--accent); color: var(--accent); }
+.fr-card-actions button.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
+.fr-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.fr-modal.open { display: flex; }
+.fr-modal-box { background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
+.theme-clean .fr-modal-box { border-radius: 20px; }
+.fr-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
+.fr-field { margin-bottom: 14px; }
+.fr-field label { display: block; font-size: 10px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+.fr-field input, .fr-field select, .fr-field textarea { width: 100%; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r); padding: 10px 12px; color: var(--tx); font-family: inherit; font-size: 12px; outline: none; transition: all 0.25s ease; }
+.theme-clean .fr-field input, .theme-clean .fr-field select, .theme-clean .fr-field textarea { border-radius: 10px; }
+.fr-field input:focus, .fr-field select:focus, .fr-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.fr-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.fr-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
+.fr-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }
+.fr-empty-text { font-size: 13px; font-weight: 600; }

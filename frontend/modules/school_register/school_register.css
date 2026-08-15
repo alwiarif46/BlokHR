@@ -1,0 +1,117 @@
+.sr-wrap {
+  padding: 16px 20px 40px;
+  max-width: 920px;
+}
+.sr-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.sr-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tx);
+  margin-right: auto;
+}
+.sr-badge {
+  font-size: 12px;
+  color: var(--tx-muted, #667);
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--bg-soft, #f0f2f5);
+}
+.sr-badge.warn {
+  background: #fff3cd;
+  color: #7a5b00;
+}
+.sr-btn {
+  border: 1px solid var(--bd, #d0d5dd);
+  background: var(--bg, #fff);
+  color: var(--tx);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+.sr-btn.ghost {
+  background: transparent;
+}
+.sr-btn:hover {
+  border-color: var(--accent, #2563eb);
+}
+.sr-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+.sr-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--tx-muted, #667);
+}
+.sr-controls select {
+  min-width: 160px;
+  padding: 8px;
+  border-radius: 8px;
+  border: 1px solid var(--bd, #d0d5dd);
+}
+.sr-hint {
+  font-size: 13px;
+  color: var(--tx-muted, #667);
+  margin-bottom: 12px;
+}
+.sr-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.sr-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--bd, #e8eaed);
+}
+.sr-name {
+  flex: 1;
+  font-weight: 600;
+  color: var(--tx);
+}
+.sr-actions {
+  display: flex;
+  gap: 6px;
+}
+.sr-mark {
+  text-transform: capitalize;
+  border: 1px solid var(--bd, #d0d5dd);
+  background: transparent;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.sr-mark.on {
+  background: #dcfce7;
+  border-color: #16a34a;
+  color: #166534;
+}
+.sr-mark[data-mark='absent'].on {
+  background: #fee2e2;
+  border-color: #dc2626;
+  color: #991b1b;
+}
+.sr-mark[data-mark='late'].on {
+  background: #ffedd5;
+  border-color: #ea580c;
+  color: #9a3412;
+}
+.sr-empty {
+  padding: 24px;
+  color: var(--tx-muted, #667);
+}

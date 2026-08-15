@@ -1,0 +1,84 @@
+.ca-wrap {
+  padding: 16px 20px 48px;
+  max-width: 980px;
+}
+.ca-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--tx);
+}
+.ca-sub {
+  font-size: 13px;
+  color: var(--tx-muted, #667);
+  margin: 6px 0 16px;
+}
+.ca-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.ca-card {
+  border: 1px solid var(--bd, #e5e7eb);
+  border-radius: 10px;
+  padding: 12px;
+}
+.ca-k {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tx-muted, #667);
+}
+.ca-v {
+  margin-top: 6px;
+  font-weight: 600;
+  color: var(--tx);
+  word-break: break-word;
+}
+.ca-section {
+  margin-bottom: 22px;
+}
+.ca-section h3 {
+  font-size: 14px;
+  margin: 0 0 10px;
+}
+.ca-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.ca-row input,
+.ca-row select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--bd, #d0d5dd);
+  min-width: 120px;
+}
+.ca-btn {
+  border: 1px solid var(--bd, #d0d5dd);
+  background: var(--bg, #fff);
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.ca-btn.ghost {
+  background: transparent;
+}
+.ca-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.ca-table th,
+.ca-table td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--bd, #eee);
+}
+.ca-mono {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  margin-top: 8px;
+}

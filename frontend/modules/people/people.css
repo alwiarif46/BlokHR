@@ -1,0 +1,77 @@
+/**
+ * modules/people/people.css
+ * People directory — admin list + add employee form.
+ */
+.ppl-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
+.ppl-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+.ppl-title { font-size: 13px; font-weight: 700; color: var(--tx); display: flex; align-items: center; gap: 8px; }
+.ppl-spacer { flex: 1; }
+.ppl-hint { font-size: 11px; color: var(--tx3); margin-bottom: 16px; max-width: 560px; line-height: 1.45; }
+.ppl-btn {
+  padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent);
+  border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer;
+  font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px;
+}
+.theme-clean .ppl-btn { color: #fff; border-radius: 10px; }
+.ppl-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
+.ppl-btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+.ppl-btn.ghost { background: transparent; color: var(--accent); }
+.ppl-btn.danger { border-color: var(--bd); color: var(--tx2); }
+.ppl-btn.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
+.ppl-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.ppl-stat {
+  min-width: 120px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r);
+  padding: 14px; text-align: center;
+}
+.theme-clean .ppl-stat { border-radius: 14px; }
+.ppl-stat-num { font-size: 24px; font-weight: 900; }
+.ppl-stat-label { font-size: 9px; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-weight: 600; }
+.ppl-list { display: flex; flex-direction: column; gap: 8px; }
+.ppl-row {
+  display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+  background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r);
+  animation: cardIn 0.35s var(--ease) both;
+}
+.theme-clean .ppl-row { border-radius: 14px; }
+.ppl-row:hover { border-color: var(--accent); }
+.ppl-row-actions { display: flex; gap: 6px; flex-shrink: 0; flex-wrap: wrap; justify-content: flex-end; }
+.ppl-av {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--accent-dim); color: var(--accent);
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0;
+}
+.ppl-info { flex: 1; min-width: 0; }
+.ppl-name { font-size: 13px; font-weight: 700; color: var(--tx); }
+.ppl-email { font-size: 11px; color: var(--tx3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ppl-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.ppl-badge {
+  font-size: 8px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase;
+  background: var(--accent-dim); color: var(--accent);
+}
+.ppl-group { font-size: 10px; color: var(--tx3); }
+.ppl-empty { text-align: center; padding: 48px 20px; color: var(--tx3); }
+.ppl-empty-icon { font-size: 36px; margin-bottom: 8px; }
+.ppl-empty-text { font-size: 14px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
+.ppl-empty-sub { font-size: 12px; margin-bottom: 16px; }
+.ppl-modal {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700;
+  display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px);
+}
+.ppl-modal.open { display: flex; }
+.ppl-modal-box {
+  background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px;
+  width: 440px; max-width: 94vw; max-height: 85vh; overflow-y: auto;
+  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease);
+}
+.theme-clean .ppl-modal-box { border-radius: 20px; }
+.ppl-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
+.ppl-field { margin-bottom: 14px; }
+.ppl-field label {
+  display: block; font-size: 10px; font-weight: 600; color: var(--tx3);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;
+}
+.ppl-field input, .ppl-field select {
+  width: 100%; padding: 10px 12px; font-size: 13px; border: 1px solid var(--bd);
+  border-radius: var(--r); background: var(--bg2); color: var(--tx); font-family: inherit;
+  box-sizing: border-box;
+}
+.ppl-form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
