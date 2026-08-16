@@ -7,12 +7,14 @@ import { LogEventPublisher, type EventPublisher } from './events';
 import { AttendanceRepository } from './repositories/attendance-repository';
 import { AttendanceService, hashCapturePayloadB64 } from './services/attendance-service';
 import { createAttendanceRouter } from './routes/attendance';
+import { resolveInternalSecret } from './internal-auth';
 
 export interface SchoolAttendanceAppOptions {
   dbPath: string;
   migrationsDir?: string;
   logger: Logger;
   eventPublisher?: EventPublisher;
+  internalSecret?: string;
 }
 
 export async function createSchoolAttendanceApp(
@@ -26,6 +28,8 @@ export async function createSchoolAttendanceApp(
   const repo = new AttendanceRepository(db);
   const events = options.eventPublisher ?? new LogEventPublisher(options.logger);
   const service = new AttendanceService(repo, events);
+  const internalSecret =
+    options.internalSecret ?? resolveInternalSecret(process.env);
 
   const app = express();
   app.use(cors());
@@ -35,7 +39,7 @@ export async function createSchoolAttendanceApp(
     res.json({ ok: true });
   });
 
-  app.use('/api/attendance', createAttendanceRouter(service));
+  app.use('/api/attendance', createAttendanceRouter(service, { internalSecret }));
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     options.logger.error({ err }, 'School attendance error');

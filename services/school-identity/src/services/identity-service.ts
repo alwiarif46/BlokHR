@@ -479,7 +479,19 @@ export class IdentityService {
     const guardian = await this.repo.getGuardian(tenantId, guardianId);
     if (!guardian) return { error: { error: 'Guardian not found', status: 404 } as ServiceError };
     const students = await this.repo.listStudentsForGuardian(tenantId, guardianId);
-    return { students };
+    const enriched = [];
+    for (const s of students) {
+      const enrolments = await this.repo.listActiveEnrolments(tenantId, s.id);
+      const active = enrolments[0] ?? null;
+      enriched.push({
+        ...s,
+        photo_ref: s.photoRef,
+        class_label: active?.classLabel ?? null,
+        section: active?.section ?? null,
+        classLabel: active?.classLabel ?? null,
+      });
+    }
+    return { students: enriched };
   }
 
   async listStudentConsents(

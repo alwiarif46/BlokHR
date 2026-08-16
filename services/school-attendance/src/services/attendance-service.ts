@@ -1279,6 +1279,75 @@ export class AttendanceService {
     return { rollups: await this.repo.listStudentRollups(tenantId, id) };
   }
 
+  async getGuardianStudentSummary(
+    tenantId: string,
+    studentId: string,
+    from: string,
+    to: string,
+  ): Promise<{
+    records?: Array<{
+      date: string;
+      status: string;
+      excuse: string;
+      reason_bucket: string | null;
+    }>;
+    monthly?: AttendanceMonthlyRollup[];
+    eligibility_pct?: number;
+    error?: ServiceError;
+  }> {
+    const id = (studentId || '').trim();
+    if (!id) return { error: { error: 'student id is required', status: 400 } };
+    if (!ISO_DATE.test(from) || !ISO_DATE.test(to)) {
+      return { error: { error: 'from and to must be ISO dates', status: 400 } };
+    }
+    if (to < from) {
+      return { error: { error: 'to must be on or after from', status: 400 } };
+    }
+
+    const raw = await this.repo.listRecordsForStudentDateRange(
+      tenantId,
+      id,
+      from,
+      to,
+    );
+    const records = [];
+    for (const r of raw) {
+      let reason_bucket: string | null = null;
+      if (r.reasonCodeId) {
+        const rc = await this.repo.getReasonCode(tenantId, r.reasonCodeId);
+        reason_bucket = rc?.bucket ?? null;
+      }
+      records.push({
+        date: r.date,
+        status: r.status,
+        excuse: r.excuse,
+        reason_bucket,
+      });
+    }
+
+    const allRollups = await this.repo.listStudentRollups(tenantId, id);
+    const fromMonth = from.slice(0, 7);
+    const toMonth = to.slice(0, 7);
+    const monthly = allRollups.filter(
+      (m) => m.month >= fromMonth && m.month <= toMonth,
+    );
+
+    const eligibility = await this.getStudentEligibility(
+      tenantId,
+      id,
+      from,
+      to,
+      75,
+    );
+    if (eligibility.error) return { error: eligibility.error };
+
+    return {
+      records,
+      monthly,
+      eligibility_pct: eligibility.eligibility!.pct,
+    };
+  }
+
   async getStudentEligibility(
     tenantId: string,
     studentId: string,

@@ -1,0 +1,197 @@
+/**
+ * modules/school_library/school_library.css
+ * Catalogue | Issue/Return | Holds | Fines — CSS variables only.
+ */
+
+.lib-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx);
+}
+
+.lib-wrap {
+  padding: 16px 20px 72px;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.lib-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 14px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.lib-tab {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--tx3);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.lib-tab.active {
+  background: var(--accent);
+  color: #000;
+}
+
+.theme-clean .lib-tab.active {
+  color: #fff;
+}
+
+.lib-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.lib-input,
+.lib-select {
+  padding: 7px 10px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  color: var(--tx);
+  font-size: 11px;
+  font-family: inherit;
+  min-width: 120px;
+}
+
+.lib-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--tx2);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.lib-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+}
+
+.theme-clean .lib-btn.primary {
+  color: #fff;
+  border-radius: 10px;
+}
+
+.lib-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.lib-hint {
+  font-size: 11px;
+  color: var(--tx3);
+  margin: 0 0 10px;
+}
+
+.lib-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.lib-table th,
+.lib-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bd);
+  text-align: left;
+  color: var(--tx2);
+  vertical-align: top;
+}
+
+.lib-table th {
+  color: var(--tx3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.lib-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--r);
+  border: 1px solid var(--bd);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--tx2);
+  background: var(--bg1);
+}
+
+.lib-chip.available {
+  color: var(--ok, var(--tx));
+}
+
+.lib-chip.on_loan,
+.lib-chip.reserved {
+  color: var(--warn, var(--tx2));
+}
+
+.lib-chip.withdrawn {
+  color: var(--tx3);
+}
+
+.lib-panel {
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 12px;
+  background: var(--bg1);
+  margin-bottom: 12px;
+}
+
+.lib-panel h3 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--tx);
+}
+
+.lib-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.lib-field label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--tx3);
+  margin-bottom: 4px;
+}
+
+.lib-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--tx3);
+  font-size: 12px;
+}
+
+.lib-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lib-sub {
+  font-size: 11px;
+  color: var(--tx3);
+}

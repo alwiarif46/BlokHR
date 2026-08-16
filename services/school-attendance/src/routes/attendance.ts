@@ -33,6 +33,7 @@ import type {
   UpsertAttendanceSettingsInput,
   UpsertNudgeConfigInput,
 } from '../types';
+import { enforceGuardianAccess, isGuardianPrincipal } from '../internal-auth';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -42,7 +43,11 @@ function asyncHandler(
   };
 }
 
-export function createAttendanceRouter(service: AttendanceService): Router {
+export function createAttendanceRouter(
+  service: AttendanceService,
+  opts: { internalSecret?: string } = {},
+): Router {
+  const internalSecret = opts.internalSecret ?? '';
   const router = Router({ mergeParams: true });
 
   router.get(
@@ -669,12 +674,20 @@ export function createAttendanceRouter(service: AttendanceService): Router {
     '/:tenantId/reported-absences',
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
+      const studentId = String(body.student_id ?? body.studentId ?? '');
+      const gate = enforceGuardianAccess(req, internalSecret, studentId);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
       const datesRaw = Array.isArray(body.dates) ? body.dates : [];
       const input: CreateReportedAbsenceInput = {
-        studentId: String(body.student_id ?? body.studentId ?? ''),
-        reportedByGuardianId: String(
-          body.reported_by_guardian_id ?? body.reportedByGuardianId ?? '',
-        ),
+        studentId,
+        reportedByGuardianId: gate.guardianId
+          ? gate.guardianId
+          : String(
+              body.reported_by_guardian_id ?? body.reportedByGuardianId ?? '',
+            ),
         dates: datesRaw.map((d) => String(d)),
         reasonCodeId: String(body.reason_code_id ?? body.reasonCodeId ?? ''),
         note: body.note != null ? String(body.note) : null,
@@ -688,6 +701,39 @@ export function createAttendanceRouter(service: AttendanceService): Router {
       res.status(result.merged ? 200 : 201).json({
         ...result.reportedAbsence,
         merged: result.merged === true,
+      });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/students/:studentId/summary',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const studentId = req.params.studentId;
+      const gate = enforceGuardianAccess(req, internalSecret, studentId);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const from = typeof req.query.from === 'string' ? req.query.from : '';
+      const to = typeof req.query.to === 'string' ? req.query.to : '';
+      const result = await service.getGuardianStudentSummary(
+        req.params.tenantId,
+        studentId,
+        from,
+        to,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        records: result.records,
+        monthly: result.monthly,
+        eligibility_pct: result.eligibility_pct,
       });
     }),
   );

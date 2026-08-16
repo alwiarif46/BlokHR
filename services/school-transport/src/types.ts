@@ -92,3 +92,13 @@ export interface ManifestStudent {
   pickup: { boarded: boolean; alighted: boolean; missed: boolean };
   drop: { boarded: boolean; alighted: boolean; missed: boolean };
 }
+
+export interface VehiclePing {
+  id: string;
+  tenantId: string;
+  vehicleId: string;
+  lat: number;
+  lng: number;
+  speedKmh: number | null;
+  at: string;
+}

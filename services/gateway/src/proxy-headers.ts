@@ -29,9 +29,18 @@ export function injectInternalSecret(proxyReq: ClientRequest, secret: string): v
   proxyReq.setHeader('X-Blok-Internal', secret);
 }
 
-export function applyProxyHeaderHygiene(proxyReq: ClientRequest, secret: string): void {
+export function applyProxyHeaderHygiene(
+  proxyReq: ClientRequest,
+  secret: string,
+  extraBlokHeaders?: Record<string, string>,
+): void {
   stripInboundBlokHeaders(proxyReq);
   injectInternalSecret(proxyReq, secret);
+  if (extraBlokHeaders) {
+    for (const [key, value] of Object.entries(extraBlokHeaders)) {
+      proxyReq.setHeader(key, value);
+    }
+  }
 }
 
 type TimedRequest = IncomingMessage & {

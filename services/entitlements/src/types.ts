@@ -105,6 +105,7 @@ export const SCHOOL_PREMIUM_MODULES = [
   'school_transport',
   'school_compliance',
   'school_operations',
+  'school_library',
   'school_nudge',
 ] as const;
 

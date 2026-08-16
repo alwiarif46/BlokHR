@@ -15,14 +15,31 @@ import {
   markProxyStart,
 } from './proxy-headers';
 import { applySsePassthroughHeaders, clearSseSocketTimeouts, isSseStreamPath } from './sse-proxy';
+import {
+  isGuardianSurfacePath,
+  resolveGuardianAllowlist,
+} from './guards/guardian-allowlist';
+import {
+  CachedIntrospect,
+  createHttpIntrospect,
+  parseBearer,
+  safeIntrospect,
+  type IntrospectFn,
+} from './guards/guardian-introspect';
 
 const PROXY_TIMEOUT_MS = 30_000;
 /** 0 = no timeout kill (SSE must stay open). */
 const SSE_NO_TIMEOUT = 0;
 
+type GuardianProxyRequest = Request & {
+  _blokExtraHeaders?: Record<string, string>;
+};
+
 export interface GatewayAppOptions {
   config: GatewayConfig;
   logger: Logger;
+  /** Override identity introspect (tests). */
+  introspect?: IntrospectFn;
 }
 
 function buildProxyHooks(
@@ -35,7 +52,8 @@ function buildProxyHooks(
   return {
     proxyReq: (proxyReq, req) => {
       markProxyStart(req);
-      applyProxyHeaderHygiene(proxyReq, internalSecret);
+      const extra = (req as GuardianProxyRequest)._blokExtraHeaders;
+      applyProxyHeaderHygiene(proxyReq, internalSecret, extra);
       if (opts.ssePassthrough || isSseStreamPath(req)) {
         req.socket?.setTimeout(0);
         proxyReq.setTimeout(0);
@@ -59,10 +77,34 @@ function buildProxyHooks(
   };
 }
 
-export function createGatewayApp(options: GatewayAppOptions): { app: Express } {
+function guardianBlokHeaders(
+  tenantId: string,
+  guardianId: string,
+  studentIds: string[],
+): Record<string, string> {
+  return {
+    'X-Blok-Principal': 'guardian',
+    'X-Blok-Guardian': guardianId,
+    'X-Blok-Tenant': tenantId,
+    'X-Blok-Students': studentIds.join(','),
+  };
+}
+
+export function createGatewayApp(options: GatewayAppOptions): {
+  app: Express;
+  introspectCache: CachedIntrospect;
+} {
   const { config, logger } = options;
   const app = express();
   app.use(cors());
+
+  const introspectFn =
+    options.introspect ??
+    createHttpIntrospect({
+      identityUrl: config.identityUrl,
+      internalSecret: config.internalSecret,
+    });
+  const introspectCache = new CachedIntrospect(introspectFn);
 
   app.get('/healthz', (_req: Request, res: Response) => {
     res.json({ ok: true, services: [...SERVICE_NAMES] });
@@ -91,6 +133,116 @@ export function createGatewayApp(options: GatewayAppOptions): { app: Express } {
       createProxyMiddleware(proxyOpts) as (req: Request, res: Response, next: NextFunction) => void,
     );
   }
+
+  // Parent portal entry (static) — before authenticated /guardian proxy
+  app.get(['/guardian', '/guardian/'], (_req: Request, res: Response, next: NextFunction) => {
+    res.sendFile(path.join(config.frontendDir, 'guardian.html'), (err) => {
+      if (err) next(err);
+    });
+  });
+
+  // Guardian login — no bearer; proxies to identity login
+  app.post('/guardian/login', (req: Request, res: Response, next: NextFunction) => {
+    const proxy = serviceProxies.get('school-identity');
+    if (!proxy) {
+      res.status(502).json({ error: 'upstream_unavailable', service: 'school-identity' });
+      return;
+    }
+    req.url = '/api/identity/guardian-auth/login';
+    proxy(req, res, next);
+  });
+
+  // Deny guardian principal outside /guardian/*
+  app.use(async (req: Request, res: Response, next: NextFunction) => {
+    if (isGuardianSurfacePath(req.path)) {
+      next();
+      return;
+    }
+
+    const principal = String(req.headers['x-blok-principal'] ?? '')
+      .trim()
+      .toLowerCase();
+    if (principal === 'guardian') {
+      res.status(403).json({ error: 'guardian_scope' });
+      return;
+    }
+
+    const token = parseBearer(
+      typeof req.headers.authorization === 'string'
+        ? req.headers.authorization
+        : undefined,
+    );
+    if (!token) {
+      next();
+      return;
+    }
+
+    const result = await safeIntrospect(introspectCache, token, logger);
+    if (result === 'down') {
+      // Staff paths: do not fail closed when identity is down (guardian surface does).
+      next();
+      return;
+    }
+    if (result.active) {
+      res.status(403).json({ error: 'guardian_scope' });
+      return;
+    }
+    next();
+  });
+
+  // Guardian surface → introspect + allowlist rewrite + service proxy
+  app.use('/guardian', async (req: Request, res: Response, next: NextFunction) => {
+    const token = parseBearer(
+      typeof req.headers.authorization === 'string'
+        ? req.headers.authorization
+        : undefined,
+    );
+    if (!token) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const result = await safeIntrospect(introspectCache, token, logger);
+    if (result === 'down') {
+      res.status(503).json({ error: 'introspect_unavailable' });
+      return;
+    }
+    if (!result.active) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const surfacePath = (req.originalUrl || '').split('?')[0] || '/guardian';
+    const search = (req.originalUrl || '').includes('?')
+      ? `?${(req.originalUrl || '').split('?').slice(1).join('?')}`
+      : '';
+    const pathWithQuery = `${surfacePath}${search}`;
+
+    const match = resolveGuardianAllowlist(req.method, pathWithQuery, {
+      tenantId: result.tenantId,
+      guardianId: result.guardianId,
+    });
+    if (!match) {
+      res.status(403).json({ error: 'guardian_scope' });
+      return;
+    }
+
+    const proxy = serviceProxies.get(match.service);
+    if (!proxy) {
+      res.status(502).json({ error: 'upstream_unavailable', service: match.service });
+      return;
+    }
+
+    const gReq = req as GuardianProxyRequest;
+    gReq._blokExtraHeaders = guardianBlokHeaders(
+      result.tenantId,
+      result.guardianId,
+      result.studentIds ?? [],
+    );
+    // Rewrite URL to upstream path for the service proxy (no /svc prefix).
+    req.url = match.upstreamPath;
+    proxy(req, res, next);
+  });
 
   app.use('/svc/:service', (req: Request, res: Response, next: NextFunction) => {
     const service = req.params.service;
@@ -143,7 +295,12 @@ export function createGatewayApp(options: GatewayAppOptions): { app: Express } {
       next();
       return;
     }
-    if (req.path.startsWith('/api') || req.path.startsWith('/svc') || req.path === '/healthz') {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/svc') ||
+      req.path.startsWith('/guardian') ||
+      req.path === '/healthz'
+    ) {
       next();
       return;
     }
@@ -163,5 +320,16 @@ export function createGatewayApp(options: GatewayAppOptions): { app: Express } {
     }
   });
 
-  return { app };
+  return { app, introspectCache };
 }
+
+export {
+  resolveGuardianAllowlist,
+  isGuardianSurfacePath,
+} from './guards/guardian-allowlist';
+export {
+  CachedIntrospect,
+  createHttpIntrospect,
+  hashBearerToken,
+  parseBearer,
+} from './guards/guardian-introspect';

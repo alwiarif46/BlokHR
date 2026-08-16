@@ -9,6 +9,7 @@ import type {
   Stop,
   TransportBinding,
   Vehicle,
+  VehiclePing,
 } from '../types';
 
 interface VehicleRow extends Record<string, unknown> {
@@ -565,6 +566,95 @@ export class TransportRepository {
       [tenantId, routeId, leg, sweepDate],
     );
   }
+
+  async insertPing(p: VehiclePing): Promise<VehiclePing> {
+    await this.db.run(
+      `INSERT INTO vehicle_pings (id, tenant_id, vehicle_id, lat, lng, speed_kmh, at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [p.id, p.tenantId, p.vehicleId, p.lat, p.lng, p.speedKmh, p.at],
+    );
+    const created = await this.getPing(p.tenantId, p.id);
+    if (!created) throw new Error('Failed to read inserted ping');
+    return created;
+  }
+
+  async getPing(tenantId: string, id: string): Promise<VehiclePing | null> {
+    const row = await this.db.get<PingRow>(
+      'SELECT * FROM vehicle_pings WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
+    return row ? mapPing(row) : null;
+  }
+
+  async getLatestPing(
+    tenantId: string,
+    vehicleId: string,
+  ): Promise<VehiclePing | null> {
+    const row = await this.db.get<PingRow>(
+      `SELECT * FROM vehicle_pings
+       WHERE tenant_id = ? AND vehicle_id = ?
+       ORDER BY at DESC
+       LIMIT 1`,
+      [tenantId, vehicleId],
+    );
+    return row ? mapPing(row) : null;
+  }
+
+  async listRecentPings(
+    tenantId: string,
+    vehicleId: string,
+    limit: number,
+  ): Promise<VehiclePing[]> {
+    const rows = await this.db.all<PingRow>(
+      `SELECT * FROM vehicle_pings
+       WHERE tenant_id = ? AND vehicle_id = ?
+       ORDER BY at DESC
+       LIMIT ?`,
+      [tenantId, vehicleId, limit],
+    );
+    return rows.map(mapPing);
+  }
+
+  async prunePingsOlderThan(tenantId: string, cutoffIso: string): Promise<number> {
+    const before = await this.db.get<{ c: number }>(
+      `SELECT COUNT(*) as c FROM vehicle_pings
+       WHERE tenant_id = ? AND at < ?`,
+      [tenantId, cutoffIso],
+    );
+    await this.db.run(
+      'DELETE FROM vehicle_pings WHERE tenant_id = ? AND at < ?',
+      [tenantId, cutoffIso],
+    );
+    return Number(before?.c ?? 0);
+  }
+
+  async hasDelayLog(
+    tenantId: string,
+    routeId: string,
+    leg: BoardingLeg,
+    delayDate: string,
+  ): Promise<boolean> {
+    const row = await this.db.get<{ route_id: string }>(
+      `SELECT route_id FROM delay_log
+       WHERE tenant_id = ? AND route_id = ? AND leg = ? AND delay_date = ?`,
+      [tenantId, routeId, leg, delayDate],
+    );
+    return !!row;
+  }
+
+  async insertDelayLog(
+    tenantId: string,
+    routeId: string,
+    leg: BoardingLeg,
+    delayDate: string,
+    minutesLate: number,
+  ): Promise<void> {
+    await this.db.run(
+      `INSERT INTO delay_log (tenant_id, route_id, leg, delay_date, minutes_late)
+       VALUES (?, ?, ?, ?, ?)`,
+      [tenantId, routeId, leg, delayDate, minutesLate],
+    );
+  }
 }
 
 interface BindingRow extends Record<string, unknown> {
@@ -622,5 +712,27 @@ function mapBoardingEvent(row: BoardingEventRow): BoardingEvent {
     idempotencyKey: row.idempotency_key,
     unmatched: row.unmatched === 1,
     createdAt: row.created_at,
+  };
+}
+
+interface PingRow extends Record<string, unknown> {
+  id: string;
+  tenant_id: string;
+  vehicle_id: string;
+  lat: number;
+  lng: number;
+  speed_kmh: number | null;
+  at: string;
+}
+
+function mapPing(row: PingRow): VehiclePing {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    vehicleId: row.vehicle_id,
+    lat: row.lat,
+    lng: row.lng,
+    speedKmh: row.speed_kmh,
+    at: row.at,
   };
 }

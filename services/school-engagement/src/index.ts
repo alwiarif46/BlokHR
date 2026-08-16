@@ -9,6 +9,7 @@ import { EngagementService } from './services/engagement-service';
 import { MessageService } from './services/message-service';
 import { ThreadService } from './services/thread-service';
 import { createEngagementRouter } from './routes/engagement';
+import { resolveInternalSecret } from './internal-auth';
 
 export interface SchoolEngagementAppOptions {
   dbPath: string;
@@ -16,6 +17,7 @@ export interface SchoolEngagementAppOptions {
   logger: Logger;
   notifySink?: NotifySink;
   clock?: () => Date;
+  internalSecret?: string;
 }
 
 export async function createSchoolEngagementApp(
@@ -38,6 +40,8 @@ export async function createSchoolEngagementApp(
   const clock = options.clock ?? (() => new Date());
   const messages = new MessageService(repo, service, notify, clock, options.logger);
   const threads = new ThreadService(repo, clock);
+  const internalSecret =
+    options.internalSecret ?? resolveInternalSecret(process.env);
 
   const app = express();
   app.use(cors());
@@ -47,7 +51,10 @@ export async function createSchoolEngagementApp(
     res.json({ ok: true });
   });
 
-  app.use('/api/engagement', createEngagementRouter(service, messages, threads));
+  app.use(
+    '/api/engagement',
+    createEngagementRouter(service, messages, threads, { internalSecret }),
+  );
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     options.logger.error({ err }, 'School engagement error');

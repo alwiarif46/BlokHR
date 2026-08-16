@@ -386,3 +386,227 @@ describe('Gateway G-03 — root dev:school script', () => {
     expect(script).toContain('services/gateway');
   });
 });
+
+describe('Gateway P9-02 — guardian principal guard', () => {
+  let frontendDir: string;
+  let echoServer: http.Server;
+  let monolithServer: http.Server;
+  let echoPort: number;
+  let monolithPort: number;
+  let config: GatewayConfig;
+  let introspectCalls: number;
+  let introspectMode: 'active' | 'inactive' | 'down';
+
+  beforeEach(async () => {
+    frontendDir = fs.mkdtempSync(path.join(os.tmpdir(), 'blokhr-gw-fe-'));
+    fs.writeFileSync(
+      path.join(frontendDir, 'shell.html'),
+      '<!doctype html><html><body>shell-ok</body></html>',
+      'utf8',
+    );
+    echoServer = createEchoServer();
+    monolithServer = createEchoServer();
+    echoPort = await listen(echoServer);
+    monolithPort = await listen(monolithServer);
+    config = loadGatewayConfig(
+      baseEnv(monolithPort, echoPort, frontendDir),
+      path.resolve(__dirname, '..'),
+    );
+    introspectCalls = 0;
+    introspectMode = 'active';
+  });
+
+  afterEach(async () => {
+    await close(echoServer);
+    await close(monolithServer);
+    fs.rmSync(frontendDir, { recursive: true, force: true });
+  });
+
+  function stubIntrospect() {
+    return async () => {
+      introspectCalls += 1;
+      if (introspectMode === 'down') {
+        throw new Error('identity down');
+      }
+      if (introspectMode === 'inactive') {
+        return { active: false as const };
+      }
+      return {
+        active: true as const,
+        tenantId: 'tenant-from-token',
+        guardianId: 'guardian-from-token',
+        studentIds: ['stu-linked-1', 'stu-9'],
+      };
+    };
+  }
+
+  it('allowlist happy paths inject guardian headers from introspect', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      introspect: stubIntrospect(),
+    });
+
+    const students = await request(app)
+      .get('/guardian/me/students')
+      .set('Authorization', 'Bearer good-token')
+      .set('X-Blok-Guardian', 'spoofed-guardian');
+    expect(students.status).toBe(200);
+    expect(students.body.path).toBe(
+      '/api/identity/tenant-from-token/guardians/guardian-from-token/students',
+    );
+    expect(students.body.headers['x-blok-principal']).toBe('guardian');
+    expect(students.body.headers['x-blok-guardian']).toBe('guardian-from-token');
+    expect(students.body.headers['x-blok-tenant']).toBe('tenant-from-token');
+    expect(students.body.headers['x-blok-students']).toBe('stu-linked-1,stu-9');
+    expect(students.body.headers['x-blok-internal']).toBe('gw-test-secret');
+
+    const attendance = await request(app)
+      .get('/guardian/students/stu-9/attendance?from=2026-01-01')
+      .set('Authorization', 'Bearer good-token');
+    expect(attendance.status).toBe(200);
+    expect(attendance.body.path).toBe(
+      '/api/attendance/tenant-from-token/guardian/students/stu-9/summary?from=2026-01-01',
+    );
+
+    const absence = await request(app)
+      .post('/guardian/reported-absences')
+      .set('Authorization', 'Bearer good-token')
+      .send({ student_id: 'stu-9' });
+    expect(absence.status).toBe(200);
+    expect(absence.body.path).toBe(
+      '/api/attendance/tenant-from-token/reported-absences',
+    );
+    expect(absence.body.method).toBe('POST');
+
+    const threads = await request(app)
+      .get('/guardian/threads?state=open')
+      .set('Authorization', 'Bearer good-token');
+    expect(threads.status).toBe(200);
+    expect(threads.body.path).toContain(
+      '/api/engagement/tenant-from-token/threads?',
+    );
+    expect(threads.body.path).toContain('guardian_ref=guardian-from-token');
+    expect(threads.body.path).toContain('state=open');
+
+    const surveys = await request(app)
+      .get('/guardian/surveys')
+      .set('Authorization', 'Bearer good-token');
+    expect(surveys.status).toBe(200);
+    expect(surveys.body.path).toBe(
+      '/api/surveys/tenant-from-token/guardian/pending',
+    );
+    expect(surveys.body.headers['x-blok-principal']).toBe('guardian');
+
+    const surveyOne = await request(app)
+      .get('/guardian/surveys/sv-1')
+      .set('Authorization', 'Bearer good-token');
+    expect(surveyOne.status).toBe(200);
+    expect(surveyOne.body.path).toBe(
+      '/api/surveys/tenant-from-token/guardian/surveys/sv-1',
+    );
+
+    const respond = await request(app)
+      .post('/guardian/surveys/sv-1/respond')
+      .set('Authorization', 'Bearer good-token')
+      .send({ answers: { q1: 5 }, student_ref: 'stu-9' });
+    expect(respond.status).toBe(200);
+    expect(respond.body.path).toBe(
+      '/api/surveys/tenant-from-token/guardian/surveys/sv-1/respond',
+    );
+    expect(respond.body.method).toBe('POST');
+  });
+
+  it('deny matrix: guardian cannot reach non-guardian paths', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      introspect: stubIntrospect(),
+    });
+
+    for (const path of [
+      '/api/members',
+      '/svc/school-identity/api/identity/t1/students',
+      '/api/settings',
+    ]) {
+      const byHeader = await request(app)
+        .get(path)
+        .set('X-Blok-Principal', 'guardian');
+      expect(byHeader.status).toBe(403);
+      expect(byHeader.body.error).toBe('guardian_scope');
+
+      const byToken = await request(app)
+        .get(path)
+        .set('Authorization', 'Bearer good-token');
+      expect(byToken.status).toBe(403);
+      expect(byToken.body.error).toBe('guardian_scope');
+    }
+  });
+
+  it('expired/inactive token → 401; introspect down → 503', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      introspect: stubIntrospect(),
+    });
+
+    introspectMode = 'inactive';
+    const unauthorized = await request(app)
+      .get('/guardian/me/students')
+      .set('Authorization', 'Bearer dead-token');
+    expect(unauthorized.status).toBe(401);
+
+    introspectMode = 'down';
+    const down = await request(app)
+      .get('/guardian/me/students')
+      .set('Authorization', 'Bearer any');
+    expect(down.status).toBe(503);
+    expect(down.body.error).toBe('introspect_unavailable');
+  });
+
+  it('cache hit skips second introspect call', async () => {
+    const { app, introspectCache } = createGatewayApp({
+      config,
+      logger,
+      introspect: stubIntrospect(),
+    });
+
+    await request(app)
+      .get('/guardian/me/students')
+      .set('Authorization', 'Bearer cached-token');
+    await request(app)
+      .get('/guardian/me/students')
+      .set('Authorization', 'Bearer cached-token');
+
+    expect(introspectCalls).toBe(1);
+    expect(introspectCache.callCount).toBe(1);
+  });
+
+  it('IDENTITY_URL defaults to school-identity service URL', () => {
+    expect(config.identityUrl).toBe(config.serviceUrls['school-identity']);
+  });
+
+  it('serves guardian.html at /guardian and proxies login without bearer', async () => {
+    fs.writeFileSync(
+      path.join(frontendDir, 'guardian.html'),
+      '<!doctype html><html><body>guardian-portal-ok</body></html>',
+      'utf8',
+    );
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      introspect: stubIntrospect(),
+    });
+
+    const page = await request(app).get('/guardian');
+    expect(page.status).toBe(200);
+    expect(page.text).toContain('guardian-portal-ok');
+
+    const login = await request(app)
+      .post('/guardian/login')
+      .send({ phone: '999', password: 'x' });
+    expect(login.status).toBe(200);
+    expect(login.body.path).toBe('/api/identity/guardian-auth/login');
+    expect(login.body.method).toBe('POST');
+  });
+});

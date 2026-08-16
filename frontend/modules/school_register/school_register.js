@@ -49,6 +49,7 @@ export function renderSchoolRegisterPage(container) {
     '<div class="sr-wrap">' +
       '<div class="sr-toolbar">' +
         '<div class="sr-title">School register</div>' +
+        '<div class="sr-spacer"></div>' +
         '<div class="sr-badge" id="srPending">0 pending sync</div>' +
         '<button type="button" class="sr-btn" id="srSync">Sync now</button>' +
         '<button type="button" class="sr-btn ghost" id="srQr">Scan QR card</button>' +
@@ -61,7 +62,7 @@ export function renderSchoolRegisterPage(container) {
         '<button type="button" class="sr-btn" id="srNewPeriod">New period</button>' +
         '<button type="button" class="sr-btn ghost" id="srNewClass">New class</button>' +
       '</div>' +
-      '<div class="sr-hint" id="srHint">Roll call works offline. Sync when online.</div>' +
+      '<div class="sr-hint" id="srHint">Capture-side register. For period photo roll call, open <strong>Roll Call</strong> in the School menu.</div>' +
       '<div class="sr-roster" id="srRoster"></div>' +
     '</div>';
 
@@ -89,8 +90,10 @@ async function boot() {
     if (fpBtn && _modalities.includes('fingerprint')) fpBtn.style.display = '';
   }
   if (!_rollCall) {
-    _container.querySelector('#srHint').textContent =
-      'school_roll_call module not entitled — contact your admin.';
+    const hint = _container.querySelector('#srHint');
+    hint.classList.add('warn');
+    hint.textContent =
+      'school_roll_call not entitled for capture. Use School → Roll Call for period marking, or contact your admin.';
   }
   await refreshClasses();
   await syncPending();

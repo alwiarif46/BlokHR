@@ -13,6 +13,7 @@ import type {
   ThreadDirection,
   ThreadState,
 } from '../types';
+import { enforceGuardianPrincipal } from '../internal-auth';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -26,7 +27,9 @@ export function createEngagementRouter(
   service: EngagementService,
   messages: MessageService,
   threads: ThreadService,
+  opts: { internalSecret?: string } = {},
 ): Router {
+  const internalSecret = opts.internalSecret ?? '';
   const router = Router({ mergeParams: true });
 
   router.get(
@@ -262,9 +265,16 @@ export function createEngagementRouter(
   router.post(
     '/:tenantId/threads',
     asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
       const body = req.body as Record<string, unknown>;
       const result = await threads.createThread(req.params.tenantId, {
-        guardianRef: String(body.guardian_ref ?? body.guardianRef ?? ''),
+        guardianRef: gate.guardianId
+          ? gate.guardianId
+          : String(body.guardian_ref ?? body.guardianRef ?? ''),
         studentRef: String(body.student_ref ?? body.studentRef ?? ''),
         subject: String(body.subject ?? ''),
         body: String(body.body ?? ''),
@@ -308,13 +318,19 @@ export function createEngagementRouter(
   router.get(
     '/:tenantId/threads',
     asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
       const result = await threads.list(req.params.tenantId, {
         state:
           typeof req.query.state === 'string'
             ? (req.query.state as ThreadState)
             : undefined,
-        guardianRef:
-          typeof req.query.guardian_ref === 'string'
+        guardianRef: gate.guardianId
+          ? gate.guardianId
+          : typeof req.query.guardian_ref === 'string'
             ? req.query.guardian_ref
             : typeof req.query.guardianRef === 'string'
               ? req.query.guardianRef
@@ -339,9 +355,22 @@ export function createEngagementRouter(
   router.get(
     '/:tenantId/threads/:id',
     asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
       const result = await threads.get(req.params.tenantId, req.params.id);
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      if (
+        gate.guardianId &&
+        result.thread &&
+        result.thread.guardianRef !== gate.guardianId
+      ) {
+        res.status(403).json({ error: 'forbidden' });
         return;
       }
       res.json({ thread: result.thread, messages: result.messages });
@@ -351,11 +380,31 @@ export function createEngagementRouter(
   router.post(
     '/:tenantId/threads/:id/reply',
     asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      if (gate.guardianId) {
+        const existing = await threads.get(req.params.tenantId, req.params.id);
+        if (existing.error) {
+          res.status(existing.error.status).json({ error: existing.error.error });
+          return;
+        }
+        if (existing.thread!.guardianRef !== gate.guardianId) {
+          res.status(403).json({ error: 'forbidden' });
+          return;
+        }
+      }
       const body = req.body as Record<string, unknown>;
       const result = await threads.reply(req.params.tenantId, req.params.id, {
-        direction: String(body.direction ?? '') as ThreadDirection,
+        direction: gate.guardianId
+          ? 'guardian'
+          : (String(body.direction ?? '') as ThreadDirection),
         body: String(body.body ?? ''),
-        author: String(body.author ?? ''),
+        author: gate.guardianId
+          ? String(body.author ?? `guardian:${gate.guardianId}`)
+          : String(body.author ?? ''),
         langOriginal:
           body.lang_original !== undefined || body.langOriginal !== undefined
             ? body.lang_original == null && body.langOriginal == null

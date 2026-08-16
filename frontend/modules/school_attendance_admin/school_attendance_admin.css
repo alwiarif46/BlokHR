@@ -1,0 +1,297 @@
+/**
+ * modules/school_attendance_admin/school_attendance_admin.css
+ * Admin tabs: registers, unexplained, settings, eligibility, nudge.
+ * CSS custom properties only.
+ */
+
+.aa-wrap {
+  padding: 18px 22px 56px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.aa-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 10px;
+}
+
+.aa-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 14px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.aa-tab {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--tx3);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.aa-tab.active {
+  background: var(--accent);
+  color: #000;
+}
+
+.theme-clean .aa-tab.active {
+  color: #fff;
+}
+
+.aa-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.aa-pill {
+  padding: 6px 12px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  font-size: 11px;
+  color: var(--tx2);
+}
+
+.aa-pill strong {
+  color: var(--tx);
+}
+
+.aa-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.aa-input,
+.aa-select {
+  padding: 7px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  color: var(--tx);
+}
+
+.aa-btn {
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--accent);
+  color: #000;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.theme-clean .aa-btn {
+  color: #fff;
+}
+
+.aa-btn.ghost {
+  background: transparent;
+  color: var(--tx2);
+  border-color: var(--bd);
+}
+
+.aa-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.aa-table th,
+.aa-table td {
+  text-align: left;
+  padding: 8px;
+  border-bottom: 1px solid var(--bd);
+  color: var(--tx2);
+}
+
+.aa-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+.aa-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--bd);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.aa-badge.unmarked {
+  color: var(--tx3);
+}
+
+.aa-badge.present {
+  color: var(--status-in, var(--accent));
+  border-color: var(--status-in, var(--accent));
+}
+
+.aa-badge.absent {
+  color: var(--status-out, var(--tx3));
+  border-color: var(--status-out, var(--tx3));
+}
+
+.aa-badge.eligible {
+  color: var(--status-in, var(--accent));
+}
+
+.aa-badge.ineligible {
+  color: var(--status-out, var(--tx3));
+}
+
+.aa-empty {
+  padding: 28px 8px;
+  text-align: center;
+  color: var(--tx3);
+  font-size: 13px;
+}
+
+.aa-help {
+  font-size: 11px;
+  color: var(--tx3);
+  margin: 4px 0 12px;
+  line-height: 1.4;
+}
+
+.aa-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  max-width: 420px;
+}
+
+.aa-field label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+.aa-field input,
+.aa-field select,
+.aa-field textarea {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg0);
+  color: var(--tx);
+}
+
+.aa-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: color-mix(in srgb, var(--bg0) 55%, transparent);
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.aa-modal.open {
+  display: flex;
+}
+
+.aa-modal-box {
+  width: min(480px, 100%);
+  background: var(--bg1);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 18px 20px;
+}
+
+.aa-modal-title {
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 10px;
+}
+
+.aa-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.aa-panel {
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  padding: 14px;
+  margin-top: 12px;
+  max-width: 560px;
+}
+
+.aa-panel h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--tx);
+}
+
+.aa-report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.aa-report-card {
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  padding: 14px;
+}
+
+.aa-report-card h4 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--tx);
+}
+
+.aa-metric {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--tx);
+}
+
+.aa-metric-label {
+  font-size: 11px;
+  color: var(--tx3);
+  margin-bottom: 10px;
+}
+
+.aa-acked {
+  opacity: 0.55;
+}
+
+@media (max-width: 720px) {
+  .aa-report-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -16,6 +16,9 @@ export const SERVICE_MAP = {
   'school-fees': 3017,
   'school-transport': 3018,
   'school-compliance': 3019,
+  'school-library': 3020,
+  learning: 3021,
+  'school-surveys': 3022,
 } as const;
 
 export type ServiceName = keyof typeof SERVICE_MAP;
@@ -28,6 +31,8 @@ export interface GatewayConfig {
   frontendDir: string;
   /** Shared secret injected as X-Blok-Internal on every proxied request. */
   internalSecret: string;
+  /** school-identity base URL for guardian token introspection. */
+  identityUrl: string;
   /** Absolute upstream base URLs keyed by service name. */
   serviceUrls: Record<ServiceName, string>;
 }
@@ -88,7 +93,19 @@ export function loadGatewayConfig(
     serviceUrls[name] = assertHttpUrl(envName, env[envName] ?? fallback);
   }
 
-  return { port, monolithUrl, frontendDir, internalSecret, serviceUrls };
+  const identityUrl = assertHttpUrl(
+    'IDENTITY_URL',
+    env.IDENTITY_URL ?? serviceUrls['school-identity'],
+  );
+
+  return {
+    port,
+    monolithUrl,
+    frontendDir,
+    internalSecret,
+    identityUrl,
+    serviceUrls,
+  };
 }
 
 export function isKnownService(name: string): name is ServiceName {

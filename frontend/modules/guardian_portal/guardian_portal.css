@@ -1,0 +1,274 @@
+/* Parent guardian portal — CSS variables only (shared themes) */
+
+.guardian-body {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--bg0);
+  color: var(--tx);
+  font-family: var(--font, system-ui, sans-serif);
+}
+
+.gp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border, var(--bg2));
+  background: var(--bg1);
+}
+
+.gp-wordmark {
+  height: 1.75rem;
+  width: auto;
+  display: block;
+}
+
+.gp-main {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.gp-login {
+  max-width: 22rem;
+  margin: 3rem auto;
+}
+
+.gp-login h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.35rem;
+}
+
+.gp-login p {
+  color: var(--tx-muted, var(--tx2));
+  margin: 0 0 1.25rem;
+}
+
+.gp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.gp-field label {
+  font-size: 0.85rem;
+  color: var(--tx-muted, var(--tx2));
+}
+
+.gp-field input,
+.gp-field select,
+.gp-field textarea {
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--border, var(--bg2));
+  border-radius: 0.4rem;
+  background: var(--bg1);
+  color: var(--tx);
+  font: inherit;
+}
+
+.gp-btn {
+  border: none;
+  border-radius: 0.4rem;
+  padding: 0.65rem 1rem;
+  font: inherit;
+  cursor: pointer;
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+}
+
+.gp-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.gp-btn.ghost {
+  background: transparent;
+  color: var(--tx);
+  border: 1px solid var(--border, var(--bg2));
+}
+
+.gp-btn.secondary {
+  background: var(--bg2);
+  color: var(--tx);
+}
+
+.gp-error {
+  color: var(--status-absent, #c44);
+  margin: 0.5rem 0 0;
+  font-size: 0.9rem;
+}
+
+.gp-siblings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.gp-sib {
+  border: 1px solid var(--border, var(--bg2));
+  background: var(--bg1);
+  color: var(--tx);
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  min-width: 8rem;
+}
+
+.gp-sib.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.gp-sib .gp-sib-meta {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--tx-muted, var(--tx2));
+  margin-top: 0.2rem;
+}
+
+.gp-panes {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.gp-pane {
+  background: var(--bg1);
+  border: 1px solid var(--border, var(--bg2));
+  border-radius: 0.5rem;
+  padding: 1rem;
+}
+
+.gp-pane h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.05rem;
+}
+
+.gp-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.gp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.35rem;
+  background: var(--bg2);
+  font-size: 0.85rem;
+}
+
+.gp-chip.ok {
+  background: color-mix(in srgb, var(--status-in, #2a8) 22%, var(--bg2));
+}
+
+.gp-chip.warn {
+  background: color-mix(in srgb, var(--status-absent, #c44) 22%, var(--bg2));
+}
+
+.gp-month-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.gp-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  border-radius: 0.25rem;
+  background: var(--bg2);
+  color: var(--tx-muted, var(--tx2));
+}
+
+.gp-day.head {
+  background: transparent;
+  font-weight: 600;
+}
+
+.gp-day.present {
+  background: color-mix(in srgb, var(--status-in, #2a8) 35%, var(--bg2));
+  color: var(--tx);
+}
+
+.gp-day.absent {
+  background: color-mix(in srgb, var(--status-absent, #c44) 35%, var(--bg2));
+  color: var(--tx);
+}
+
+.gp-day.late {
+  background: color-mix(in srgb, var(--status-break, #c90) 35%, var(--bg2));
+  color: var(--tx);
+}
+
+.gp-success {
+  padding: 0.75rem;
+  border-radius: 0.4rem;
+  background: color-mix(in srgb, var(--status-in, #2a8) 18%, var(--bg2));
+}
+
+.gp-threads {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.gp-thread {
+  border: 1px solid var(--border, var(--bg2));
+  border-radius: 0.4rem;
+  padding: 0.65rem;
+  cursor: pointer;
+  background: var(--bg0);
+}
+
+.gp-thread.active {
+  border-color: var(--accent);
+}
+
+.gp-messages {
+  max-height: 14rem;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.gp-msg {
+  padding: 0.5rem 0.65rem;
+  border-radius: 0.35rem;
+  background: var(--bg2);
+  font-size: 0.9rem;
+}
+
+.gp-msg.guardian {
+  align-self: flex-end;
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg2));
+}
+
+.gp-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+.gp-row textarea {
+  flex: 1;
+}
+
+@media (max-width: 640px) {
+  .gp-main {
+    padding: 0.85rem;
+  }
+}

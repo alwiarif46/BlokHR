@@ -11,6 +11,7 @@ import type {
   StudentGender,
   StudentStatus,
 } from '../types';
+import { enforceGuardianPrincipal } from '../internal-auth';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -69,7 +70,11 @@ function pickStudentBody(body: Record<string, unknown>): CreateStudentInput {
   };
 }
 
-export function createIdentityRouter(service: IdentityService): Router {
+export function createIdentityRouter(
+  service: IdentityService,
+  opts: { internalSecret?: string } = {},
+): Router {
+  const internalSecret = opts.internalSecret ?? '';
   const router = Router({ mergeParams: true });
 
   router.get(
@@ -327,7 +332,17 @@ export function createIdentityRouter(service: IdentityService): Router {
   router.get(
     '/:tenantId/guardians/:id/students',
     asyncHandler(async (req, res) => {
-      const result = await service.listStudentsForGuardian(req.params.tenantId, req.params.id);
+      const gate = enforceGuardianPrincipal(req, internalSecret, {
+        mustMatchGuardianId: req.params.id,
+      });
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const result = await service.listStudentsForGuardian(
+        req.params.tenantId,
+        req.params.id,
+      );
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
         return;

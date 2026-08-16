@@ -1,0 +1,42 @@
+.ssv-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
+.ssv-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+.ssv-title { font-size: 13px; font-weight: 700; color: var(--tx); }
+.ssv-spacer { flex: 1; }
+.ssv-btn {
+  padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent);
+  border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit;
+}
+.ssv-btn.ghost { background: transparent; color: var(--accent); }
+.ssv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.ssv-card {
+  background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 16px;
+}
+.ssv-card-title { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
+.ssv-card-sub { font-size: 10px; color: var(--tx3); }
+.ssv-actions { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.ssv-actions button {
+  padding: 4px 10px; font-size: 10px; border: 1px solid var(--bd); border-radius: 4px;
+  background: var(--bg3); color: var(--tx2); cursor: pointer; font-family: inherit;
+}
+.ssv-actions button.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
+.ssv-empty { text-align: center; padding: 48px; color: var(--tx3); font-size: 13px; }
+.ssv-modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 700; display: none;
+  align-items: center; justify-content: center;
+}
+.ssv-modal.open { display: flex; }
+.ssv-modal-box {
+  background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r);
+  padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto;
+}
+.ssv-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
+.ssv-field { margin-bottom: 12px; }
+.ssv-field label {
+  display: block; font-size: 10px; font-weight: 600; color: var(--tx3);
+  text-transform: uppercase; margin-bottom: 5px;
+}
+.ssv-field input, .ssv-field select, .ssv-field textarea {
+  width: 100%; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r);
+  padding: 10px 12px; color: var(--tx); font-family: inherit; font-size: 12px;
+}
+.ssv-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }

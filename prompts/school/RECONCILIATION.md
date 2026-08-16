@@ -72,7 +72,7 @@ School-transport **publishes/consumes** boarding intents; capture may verify RFI
 Source of truth = `Entitlement.vertical` (P0-01, shipped). The monolith keeps a write-once read copy in `settings_json.vertical` and exposes it on `/api/setup/status` and the session payload (W-01). There is deliberately **no `tenants.vertical` column** — do not add one.
 
 ## Locked packaging decisions (2026-08-15)
-- Library = distinct `school_library` moduleId when school-operations prompts are written; issuance stays generic.
+- Library = distinct `school_library` moduleId — prompts in `P10-library.md` (`services/school-library`, port 3020). Issuance stays generic (HR/assets untouched).
 - HPC peer/parent capture lives in **school-assessment (P4-04) + F-06**, not the platform `surveys` module — surveys reuse would require cross-service coupling the conventions forbid. Platform surveys stay available to school tenants for feedback forms only.
 - Staff attendance for school tenants is **native in school-attendance (P2-05)**, not HR-module reuse.
 - Teacher leave (2026-08-15): **thin native leave flow in school-attendance (P2-09)** — types/balances/requests/approval with write-through to `staff_attendance`. The monolith `leaves` domain and its accrual engine stay HR-only.

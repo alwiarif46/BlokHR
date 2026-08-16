@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BlokSchool</title>
+    <link rel="stylesheet" href="/shared/shared.css" />
+    <link rel="stylesheet" href="/modules/guardian_portal/guardian_portal.css" />
+  </head>
+  <body class="theme-chromium guardian-body">
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+    <div id="guardianRoot"></div>
+    <script type="module">
+      import { initApi } from '/shared/api.js';
+      import { setTheme } from '/shared/themes.js';
+      import { applyBrand } from '/shared/brand.js';
+      import { loadGuardianSession } from '/shared/session.js';
+      import { bootGuardianPortal } from '/modules/guardian_portal/guardian_portal.js';
+
+      initApi({});
+      setTheme('chromium');
+      applyBrand('school');
+      loadGuardianSession();
+      bootGuardianPortal(document.getElementById('guardianRoot'));
+    </script>
+  </body>
+</html>

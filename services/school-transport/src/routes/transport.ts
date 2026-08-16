@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import type { TransportService } from '../services/transport-service';
 import type { BoardingService } from '../services/boarding-service';
+import type { TelemetryService } from '../services/telemetry-service';
 import type { BoardingDirection, BoardingLeg } from '../types';
 
 function asyncHandler(
@@ -14,6 +15,7 @@ function asyncHandler(
 export function createTransportRouter(
   service: TransportService,
   boarding: BoardingService,
+  telemetry: TelemetryService,
 ): Router {
   const router = Router({ mergeParams: true });
 
@@ -445,6 +447,111 @@ export function createTransportRouter(
         return;
       }
       res.json({ students: result.students });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/pings/prune',
+    asyncHandler(async (req, res) => {
+      // Data minimisation: vehicle location is sensitive — retain ≤30 days.
+      const result = await telemetry.prunePings(req.params.tenantId);
+      res.json(result);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/pings',
+    asyncHandler(async (req, res) => {
+      const raw = Array.isArray(req.body)
+        ? req.body
+        : Array.isArray((req.body as { pings?: unknown }).pings)
+          ? (req.body as { pings: unknown[] }).pings
+          : null;
+      if (!raw) {
+        res.status(400).json({ error: 'body must be an array of pings' });
+        return;
+      }
+      const rows = raw.map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          vehicleId: String(row.vehicle_id ?? row.vehicleId ?? ''),
+          lat: Number(row.lat),
+          lng: Number(row.lng),
+          speedKmh:
+            row.speed_kmh !== undefined || row.speedKmh !== undefined
+              ? row.speed_kmh == null && row.speedKmh == null
+                ? null
+                : Number(row.speed_kmh ?? row.speedKmh)
+              : undefined,
+          at: row.at !== undefined ? String(row.at) : undefined,
+        };
+      });
+      const result = await telemetry.ingestPings(req.params.tenantId, rows);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json({ pings: result.pings });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/vehicles/:id/last-known',
+    asyncHandler(async (req, res) => {
+      const result = await telemetry.lastKnown(req.params.tenantId, req.params.id);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ ping: result.ping, staleSeconds: result.staleSeconds });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/routes/:id/eta',
+    asyncHandler(async (req, res) => {
+      const stopId =
+        typeof req.query.stop_id === 'string'
+          ? req.query.stop_id
+          : typeof req.query.stopId === 'string'
+            ? req.query.stopId
+            : '';
+      const result = await telemetry.routeEta(
+        req.params.tenantId,
+        req.params.id,
+        stopId,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        eta: result.eta ?? null,
+        stale: result.stale ?? false,
+        ...(result.distanceKm !== undefined ? { distanceKm: result.distanceKm } : {}),
+        ...(result.speedKmh !== undefined ? { speedKmh: result.speedKmh } : {}),
+      });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/routes/:id/check-delay',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await telemetry.checkDelay(
+        req.params.tenantId,
+        req.params.id,
+        String(body.leg ?? '') as BoardingLeg,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        delayed: result.delayed ?? false,
+        minutesLate: result.minutesLate,
+        skipped: result.skipped ?? false,
+      });
     }),
   );
 
