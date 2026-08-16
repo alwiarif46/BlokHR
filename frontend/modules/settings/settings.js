@@ -139,7 +139,25 @@ const SECTIONS = [
     { id: 'notifNote', label: '8 channels: Teams, Slack, Google Chat, Discord, Telegram, WhatsApp, ClickUp, Email/SMTP. Each channel has enabled toggle, credentials, and Test Connection button. Secret fields are masked (****XXXX).', type: 'note' },
   ]},
   /* §6.19 */ { key: 'meetings', title: 'Meeting Integrations', icon: '\uD83D\uDCF9', fields: [
-    { id: 'meetNote', label: 'Zoom, Webex, GoToMeeting, BlueJeans. Each platform: enabled toggle, credentials, Test Connection.', type: 'note' },
+    { id: 'meetNote', label: 'Enable a platform for this tenant, then users link their identity on Meetings. Secrets are masked on load. Env vars override these values when set.', type: 'note' },
+    { id: 'calMsClientId', label: 'Microsoft calendar client ID', type: 'text', path: 'meetings.calendar.microsoft.clientId' },
+    { id: 'calMsClientSecret', label: 'Microsoft calendar client secret', type: 'password', path: 'meetings.calendar.microsoft.clientSecret' },
+    { id: 'calMsTenantId', label: 'Microsoft calendar tenant ID', type: 'text', path: 'meetings.calendar.microsoft.tenantId' },
+    { id: 'calMsRedirect', label: 'Microsoft calendar redirect URI', type: 'text', path: 'meetings.calendar.microsoft.redirectUri' },
+    { id: 'calGoClientId', label: 'Google calendar client ID', type: 'text', path: 'meetings.calendar.google.clientId' },
+    { id: 'calGoClientSecret', label: 'Google calendar client secret', type: 'password', path: 'meetings.calendar.google.clientSecret' },
+    { id: 'calGoRedirect', label: 'Google calendar redirect URI', type: 'text', path: 'meetings.calendar.google.redirectUri' },
+    { id: 'platZoomEn', label: 'Zoom enabled', type: 'toggle', path: 'meetings.platforms.zoom.enabled' },
+    { id: 'platZoomAccount', label: 'Zoom account ID', type: 'text', path: 'meetings.platforms.zoom.accountId' },
+    { id: 'platZoomClientId', label: 'Zoom client ID', type: 'text', path: 'meetings.platforms.zoom.clientId' },
+    { id: 'platZoomSecret', label: 'Zoom client secret', type: 'password', path: 'meetings.platforms.zoom.clientSecret' },
+    { id: 'platWebexEn', label: 'Webex enabled', type: 'toggle', path: 'meetings.platforms.webex.enabled' },
+    { id: 'platWebexToken', label: 'Webex bot token', type: 'password', path: 'meetings.platforms.webex.botToken' },
+    { id: 'platGotoEn', label: 'GoToMeeting enabled', type: 'toggle', path: 'meetings.platforms.gotomeeting.enabled' },
+    { id: 'platGotoClientId', label: 'GoTo client ID', type: 'text', path: 'meetings.platforms.gotomeeting.clientId' },
+    { id: 'platGotoSecret', label: 'GoTo client secret', type: 'password', path: 'meetings.platforms.gotomeeting.clientSecret' },
+    { id: 'platBjEn', label: 'BlueJeans enabled', type: 'toggle', path: 'meetings.platforms.bluejeans.enabled' },
+    { id: 'platBjKey', label: 'BlueJeans API key', type: 'password', path: 'meetings.platforms.bluejeans.apiKey' },
   ]},
   /* §6.20 */ { key: 'security', title: 'Security & Session', icon: '\uD83D\uDD12', fields: [
     { id: 'sessionTimeoutMinutes', label: 'Session timeout (min)', type: 'number', min: 15, max: 1440, path: 'security.sessionTimeoutMinutes' },
@@ -582,6 +600,11 @@ async function _saveSection(secKey) {
     if (f.type === 'toggle') val = el.checked;
     else if (f.type === 'number') val = el.value !== '' ? parseFloat(el.value) : null;
     else val = el.value;
+
+    /* Do not overwrite stored secrets with masked GET values */
+    if (f.type === 'password' && typeof val === 'string' && (val === '' || val.indexOf('****') === 0)) {
+      return;
+    }
 
     _setNestedVal(body.settings_json, f.path, val);
   });

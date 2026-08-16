@@ -421,7 +421,16 @@ export class SettingsService {
       name: r.name,
       date: r.date,
       type: r.correction_type,
+      correction_type: r.correction_type,
       status: r.status,
+      in_time: r.in_time,
+      out_time: r.out_time,
+      reason: r.reason,
+      manager_approver_email: r.manager_approver_email,
+      hr_approver_email: r.hr_approver_email,
+      rejection_comments: r.rejection_comments,
+      created_at: r.created_at,
+      updated_at: r.updated_at,
     }));
 
     const meetings = meetingRows.map((m) => ({

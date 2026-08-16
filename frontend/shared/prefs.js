@@ -16,7 +16,7 @@
  */
 
 import { api } from './api.js';
-import { setTheme, applyColourOverrides, applyBackgroundImage } from './themes.js';
+import { setTheme, applyColourOverrides, applyBackgroundImage, clearColourOverrides } from './themes.js';
 
 let _prefs = null;
 
@@ -73,7 +73,8 @@ export function applyPrefsToDOM(prefs) {
   /* 1. Theme */
   setTheme(prefs.theme || 'chromium');
 
-  /* 2. Colour overrides */
+  /* 2. Colour overrides — clear first so null fields reset to theme defaults */
+  clearColourOverrides();
   applyColourOverrides(prefs);
 
   /* 3. Background image */
