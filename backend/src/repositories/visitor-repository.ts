@@ -126,6 +126,13 @@ export class VisitorRepository {
     );
   }
 
+  async markNoShow(id: string): Promise<void> {
+    await this.db.run(
+      "UPDATE visitor_visits SET status = 'no_show', updated_at = datetime('now') WHERE id = ?",
+      [id],
+    );
+  }
+
   async updateVisit(
     id: string,
     fields: Partial<

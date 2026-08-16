@@ -133,8 +133,34 @@ describe('Asset Management Module', () => {
     });
   });
 
+  describe('PUT /api/assets/:id', () => {
+    it('updates with camelCase fields', async () => {
+      const a = await request(app).post('/api/assets')
+        .send({ name: 'Laptop', assetTag: 'L-PUT', assetType: 'laptop' })
+        .set('X-User-Email', 'admin@shaavir.com');
+
+      const res = await request(app).put(`/api/assets/${a.body.asset.id}`)
+        .send({
+          name: 'Laptop Pro',
+          serialNumber: 'SN-99',
+          location: 'Floor 2',
+          purchaseCost: 1200,
+        })
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      const got = await request(app).get(`/api/assets/${a.body.asset.id}`)
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(got.body.asset.name).toBe('Laptop Pro');
+      expect(got.body.asset.serial_number).toBe('SN-99');
+      expect(got.body.asset.location).toBe('Floor 2');
+      expect(got.body.asset.purchase_cost).toBe(1200);
+    });
+  });
+
   describe('Maintenance', () => {
-    it('schedules and completes maintenance', async () => {
+    it('schedules and completes maintenance and flips status', async () => {
       const a = await request(app).post('/api/assets')
         .send({ name: 'Printer', assetTag: 'PRT-1' }).set('X-User-Email', 'admin@shaavir.com');
 
@@ -143,13 +169,40 @@ describe('Asset Management Module', () => {
         .set('X-User-Email', 'admin@shaavir.com');
       expect(sched.status).toBe(201);
 
+      const mid = await request(app).get(`/api/assets/${a.body.asset.id}`)
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(mid.body.asset.status).toBe('maintenance');
+
+      const open = await request(app).get('/api/assets/maintenance-open')
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(open.body.records).toHaveLength(1);
+      expect(open.body.records[0].asset_name).toBe('Printer');
+
       await request(app).post(`/api/assets/maintenance/${sched.body.record.id}/complete`)
         .set('X-User-Email', 'admin@shaavir.com');
+
+      const after = await request(app).get(`/api/assets/${a.body.asset.id}`)
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(after.body.asset.status).toBe('available');
 
       const history = await request(app).get(`/api/assets/${a.body.asset.id}/maintenance`)
         .set('X-User-Email', 'admin@shaavir.com');
       expect(history.body.records).toHaveLength(1);
       expect(history.body.records[0].completed_date).toBeTruthy();
+    });
+
+    it('rejects maintenance when asset is assigned', async () => {
+      const a = await request(app).post('/api/assets')
+        .send({ name: 'Phone', assetTag: 'PH-1', assetType: 'phone' })
+        .set('X-User-Email', 'admin@shaavir.com');
+      await request(app).post(`/api/assets/${a.body.asset.id}/assign`)
+        .send({ email: 'alice@shaavir.com' }).set('X-User-Email', 'admin@shaavir.com');
+
+      const res = await request(app).post(`/api/assets/${a.body.asset.id}/maintenance`)
+        .send({ scheduledDate: '2026-07-01' })
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/cannot go into maintenance/);
     });
   });
 });

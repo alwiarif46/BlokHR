@@ -4,11 +4,16 @@ import type { DatabaseEngine } from '../db/engine';
 import { AppError, asyncHandler } from '../app';
 import { AuditService } from '../audit/audit-service';
 import { VisitorService } from '../services/visitor-service';
+import type { NotificationDispatcher } from '../services/notification/dispatcher';
 
-export function createVisitorRouter(db: DatabaseEngine, logger: Logger): Router {
+export function createVisitorRouter(
+  db: DatabaseEngine,
+  logger: Logger,
+  dispatcher?: NotificationDispatcher,
+): Router {
   const router = Router();
   const auditService = new AuditService(db, logger);
-  const service = new VisitorService(db, logger, auditService);
+  const service = new VisitorService(db, logger, auditService, dispatcher ?? null);
 
   router.post(
     '/visitors',
@@ -75,6 +80,20 @@ export function createVisitorRouter(db: DatabaseEngine, logger: Logger): Router 
     }),
   );
 
+  router.put(
+    '/visitors/:id',
+    asyncHandler(async (req: Request, res: Response) => {
+      const actor = req.identity?.email ?? '';
+      const result = await service.updateVisit(
+        req.params.id,
+        req.body as Record<string, unknown>,
+        actor,
+      );
+      if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
+      res.json({ success: true });
+    }),
+  );
+
   router.post(
     '/visitors/:id/check-in',
     asyncHandler(async (req: Request, res: Response) => {
@@ -101,6 +120,16 @@ export function createVisitorRouter(db: DatabaseEngine, logger: Logger): Router 
     asyncHandler(async (req: Request, res: Response) => {
       const actor = req.identity?.email ?? '';
       const result = await service.cancelVisit(req.params.id, actor);
+      if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
+      res.json({ success: true });
+    }),
+  );
+
+  router.post(
+    '/visitors/:id/no-show',
+    asyncHandler(async (req: Request, res: Response) => {
+      const actor = req.identity?.email ?? '';
+      const result = await service.markNoShow(req.params.id, actor);
       if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
       res.json({ success: true });
     }),

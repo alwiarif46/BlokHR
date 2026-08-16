@@ -153,4 +153,77 @@ describe('Visitor Management Module', () => {
       expect(forms.body.forms).toHaveLength(1);
     });
   });
+
+  describe('PUT /api/visitors/:id', () => {
+    it('updates with camelCase fields', async () => {
+      const v = await request(app).post('/api/visitors')
+        .send({ visitorName: 'Edit Me', hostEmail: 'host@shaavir.com', expectedDate: '2026-05-01', purpose: 'Demo' })
+        .set('X-User-Email', 'reception@shaavir.com');
+
+      const res = await request(app).put(`/api/visitors/${v.body.visit.id}`)
+        .send({
+          visitorName: 'Edited Guest',
+          visitorCompany: 'Acme',
+          purpose: 'Meeting',
+          expectedTime: '14:00',
+          expectedDurationMinutes: 90,
+        })
+        .set('X-User-Email', 'reception@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      const got = await request(app).get(`/api/visitors/${v.body.visit.id}`)
+        .set('X-User-Email', 'reception@shaavir.com');
+      expect(got.body.visit.visitor_name).toBe('Edited Guest');
+      expect(got.body.visit.visitor_company).toBe('Acme');
+      expect(got.body.visit.purpose).toBe('Meeting');
+      expect(got.body.visit.expected_time).toBe('14:00');
+      expect(got.body.visit.expected_duration_minutes).toBe(90);
+    });
+
+    it('rejects update after check-out', async () => {
+      const v = await request(app).post('/api/visitors')
+        .send({ visitorName: 'Done', hostEmail: 'host@shaavir.com', expectedDate: '2026-05-01' })
+        .set('X-User-Email', 'reception@shaavir.com');
+      await request(app).post(`/api/visitors/${v.body.visit.id}/check-in`)
+        .set('X-User-Email', 'reception@shaavir.com');
+      await request(app).post(`/api/visitors/${v.body.visit.id}/check-out`)
+        .set('X-User-Email', 'reception@shaavir.com');
+
+      const res = await request(app).put(`/api/visitors/${v.body.visit.id}`)
+        .send({ visitorName: 'Nope' })
+        .set('X-User-Email', 'reception@shaavir.com');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/Cannot update/);
+    });
+  });
+
+  describe('POST /api/visitors/:id/no-show', () => {
+    it('marks a pre-registered visit as no-show', async () => {
+      const v = await request(app).post('/api/visitors')
+        .send({ visitorName: 'No Show', hostEmail: 'host@shaavir.com', expectedDate: '2026-05-01' })
+        .set('X-User-Email', 'reception@shaavir.com');
+
+      const res = await request(app).post(`/api/visitors/${v.body.visit.id}/no-show`)
+        .set('X-User-Email', 'reception@shaavir.com');
+      expect(res.body.success).toBe(true);
+
+      const got = await request(app).get(`/api/visitors/${v.body.visit.id}`)
+        .set('X-User-Email', 'reception@shaavir.com');
+      expect(got.body.visit.status).toBe('no_show');
+    });
+
+    it('rejects no-show after check-in', async () => {
+      const v = await request(app).post('/api/visitors')
+        .send({ visitorName: 'Present', hostEmail: 'host@shaavir.com', expectedDate: '2026-05-01' })
+        .set('X-User-Email', 'reception@shaavir.com');
+      await request(app).post(`/api/visitors/${v.body.visit.id}/check-in`)
+        .set('X-User-Email', 'reception@shaavir.com');
+
+      const res = await request(app).post(`/api/visitors/${v.body.visit.id}/no-show`)
+        .set('X-User-Email', 'reception@shaavir.com');
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/no-show/);
+    });
+  });
 });

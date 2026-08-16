@@ -233,6 +233,10 @@ export class AssetRepository {
       'INSERT INTO maintenance_records (id, asset_id, scheduled_date, cost, notes, created_by) VALUES (?, ?, ?, ?, ?, ?)',
       [id, data.assetId, data.scheduledDate, data.cost ?? 0, data.notes ?? '', data.createdBy],
     );
+    await this.db.run(
+      "UPDATE assets SET status = 'maintenance', updated_at = datetime('now') WHERE id = ?",
+      [data.assetId],
+    );
     const row = await this.db.get<MaintenanceRecordRow>(
       'SELECT * FROM maintenance_records WHERE id = ?',
       [id],
@@ -241,10 +245,33 @@ export class AssetRepository {
     return row;
   }
 
+  async getMaintenanceById(id: string): Promise<MaintenanceRecordRow | null> {
+    return this.db.get<MaintenanceRecordRow>('SELECT * FROM maintenance_records WHERE id = ?', [id]);
+  }
+
   async completeMaintenance(id: string): Promise<void> {
+    const record = await this.getMaintenanceById(id);
+    if (!record) throw new Error('Maintenance record not found');
     await this.db.run(
       "UPDATE maintenance_records SET completed_date = datetime('now') WHERE id = ?",
       [id],
+    );
+    const openAssignment = await this.getCurrentAssignment(record.asset_id);
+    if (!openAssignment) {
+      await this.db.run(
+        "UPDATE assets SET status = 'available', updated_at = datetime('now') WHERE id = ?",
+        [record.asset_id],
+      );
+    }
+  }
+
+  async listOpenMaintenance(): Promise<(MaintenanceRecordRow & { asset_name: string; asset_tag: string })[]> {
+    return this.db.all<MaintenanceRecordRow & { asset_name: string; asset_tag: string }>(
+      `SELECT mr.*, a.name AS asset_name, a.asset_tag
+       FROM maintenance_records mr
+       INNER JOIN assets a ON a.id = mr.asset_id
+       WHERE mr.completed_date IS NULL
+       ORDER BY mr.scheduled_date ASC`,
     );
   }
 

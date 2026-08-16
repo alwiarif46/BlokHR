@@ -60,6 +60,14 @@ export function createAssetRouter(db: DatabaseEngine, logger: Logger): Router {
   );
 
   router.get(
+    '/assets/maintenance-open',
+    asyncHandler(async (_req: Request, res: Response) => {
+      const records = await service.listOpenMaintenance();
+      res.json({ records });
+    }),
+  );
+
+  router.get(
     '/assets/:id',
     asyncHandler(async (req: Request, res: Response) => {
       const asset = await service.getAssetById(req.params.id);

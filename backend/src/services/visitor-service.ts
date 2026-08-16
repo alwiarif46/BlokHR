@@ -20,6 +20,40 @@ interface MemberRow {
   active: number;
 }
 
+/** Map camelCase or snake_case update fields to DB column names. */
+export function mapVisitUpdateFields(fields: Record<string, unknown>): Record<string, unknown> {
+  const keyMap: Record<string, string> = {
+    visitorName: 'visitor_name',
+    visitor_name: 'visitor_name',
+    visitorCompany: 'visitor_company',
+    visitor_company: 'visitor_company',
+    visitorEmail: 'visitor_email',
+    visitor_email: 'visitor_email',
+    visitorPhone: 'visitor_phone',
+    visitor_phone: 'visitor_phone',
+    purpose: 'purpose',
+    expectedDate: 'expected_date',
+    expected_date: 'expected_date',
+    expectedTime: 'expected_time',
+    expected_time: 'expected_time',
+    expectedDurationMinutes: 'expected_duration_minutes',
+    expected_duration_minutes: 'expected_duration_minutes',
+    receptionNotes: 'reception_notes',
+    reception_notes: 'reception_notes',
+    badgeDataJson: 'badge_data_json',
+    badge_data_json: 'badge_data_json',
+    photoFileId: 'photo_file_id',
+    photo_file_id: 'photo_file_id',
+  };
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (v === undefined) continue;
+    const col = keyMap[k];
+    if (col) out[col] = v;
+  }
+  return out;
+}
+
 export class VisitorService {
   private readonly repo: VisitorRepository;
 
@@ -118,6 +152,36 @@ export class VisitorService {
     }
     await this.repo.cancelVisit(visitId);
     this.logAudit('visitor_visit', visitId, 'cancelled', actorEmail, {});
+    return { success: true };
+  }
+
+  async markNoShow(visitId: string, actorEmail: string): Promise<ServiceResult> {
+    const visit = await this.repo.getVisitById(visitId);
+    if (!visit) return { success: false, error: 'Visit not found' };
+    if (visit.status !== 'pre_registered') {
+      return { success: false, error: `Cannot mark no-show with status "${visit.status}"` };
+    }
+    await this.repo.markNoShow(visitId);
+    this.logAudit('visitor_visit', visitId, 'no_show', actorEmail, {});
+    return { success: true };
+  }
+
+  async updateVisit(
+    id: string,
+    fields: Record<string, unknown>,
+    actorEmail: string,
+  ): Promise<ServiceResult> {
+    const existing = await this.repo.getVisitById(id);
+    if (!existing) return { success: false, error: 'Visit not found' };
+    if (existing.status === 'checked_out' || existing.status === 'cancelled') {
+      return { success: false, error: `Cannot update visit with status "${existing.status}"` };
+    }
+    const mapped = mapVisitUpdateFields(fields);
+    if (Object.keys(mapped).length === 0) {
+      return { success: false, error: 'No valid fields to update' };
+    }
+    await this.repo.updateVisit(id, mapped as Parameters<typeof this.repo.updateVisit>[1]);
+    this.logAudit('visitor_visit', id, 'updated', actorEmail, mapped);
     return { success: true };
   }
 

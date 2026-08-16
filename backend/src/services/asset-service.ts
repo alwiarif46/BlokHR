@@ -30,6 +30,38 @@ const VALID_ASSET_TYPES = [
   'other',
 ];
 
+/** Map camelCase or snake_case update fields to DB column names. */
+export function mapAssetUpdateFields(fields: Record<string, unknown>): Record<string, unknown> {
+  const keyMap: Record<string, string> = {
+    name: 'name',
+    description: 'description',
+    serialNumber: 'serial_number',
+    serial_number: 'serial_number',
+    assetType: 'asset_type',
+    asset_type: 'asset_type',
+    status: 'status',
+    purchaseDate: 'purchase_date',
+    purchase_date: 'purchase_date',
+    purchaseCost: 'purchase_cost',
+    purchase_cost: 'purchase_cost',
+    warrantyExpiry: 'warranty_expiry',
+    warranty_expiry: 'warranty_expiry',
+    depreciationMethod: 'depreciation_method',
+    depreciation_method: 'depreciation_method',
+    usefulLifeYears: 'useful_life_years',
+    useful_life_years: 'useful_life_years',
+    location: 'location',
+    notes: 'notes',
+  };
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (v === undefined) continue;
+    const col = keyMap[k];
+    if (col) out[col] = v;
+  }
+  return out;
+}
+
 export class AssetService {
   private readonly repo: AssetRepository;
 
@@ -87,8 +119,15 @@ export class AssetService {
   ): Promise<ServiceResult> {
     const existing = await this.repo.getAssetById(id);
     if (!existing) return { success: false, error: 'Asset not found' };
-    await this.repo.updateAsset(id, fields as Parameters<typeof this.repo.updateAsset>[1]);
-    this.logAudit('asset', id, 'updated', actorEmail, fields);
+    const mapped = mapAssetUpdateFields(fields);
+    if (mapped.asset_type && !VALID_ASSET_TYPES.includes(String(mapped.asset_type))) {
+      return {
+        success: false,
+        error: `Invalid asset type. Must be one of: ${VALID_ASSET_TYPES.join(', ')}`,
+      };
+    }
+    await this.repo.updateAsset(id, mapped as Parameters<typeof this.repo.updateAsset>[1]);
+    this.logAudit('asset', id, 'updated', actorEmail, mapped);
     return { success: true };
   }
 
@@ -195,19 +234,34 @@ export class AssetService {
   ): Promise<ServiceResult<MaintenanceRecordRow>> {
     const asset = await this.repo.getAssetById(data.assetId);
     if (!asset) return { success: false, error: 'Asset not found' };
+    if (asset.status !== 'available' && asset.status !== 'maintenance') {
+      return {
+        success: false,
+        error: `Asset cannot go into maintenance (current status: ${asset.status})`,
+      };
+    }
     const record = await this.repo.createMaintenance({ ...data, createdBy: actorEmail });
     this.logAudit('maintenance', record.id, 'scheduled', actorEmail, { assetId: data.assetId });
     return { success: true, data: record };
   }
 
   async completeMaintenance(id: string, actorEmail: string): Promise<ServiceResult> {
+    const record = await this.repo.getMaintenanceById(id);
+    if (!record) return { success: false, error: 'Maintenance record not found' };
+    if (record.completed_date) return { success: false, error: 'Already completed' };
     await this.repo.completeMaintenance(id);
-    this.logAudit('maintenance', id, 'completed', actorEmail, {});
+    this.logAudit('maintenance', id, 'completed', actorEmail, { assetId: record.asset_id });
     return { success: true };
   }
 
   async getMaintenanceHistory(assetId: string): Promise<MaintenanceRecordRow[]> {
     return this.repo.getMaintenanceByAsset(assetId);
+  }
+
+  async listOpenMaintenance(): Promise<
+    (MaintenanceRecordRow & { asset_name: string; asset_tag: string })[]
+  > {
+    return this.repo.listOpenMaintenance();
   }
 
   private logAudit(

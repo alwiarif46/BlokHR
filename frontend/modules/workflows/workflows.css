@@ -5,10 +5,19 @@
 .wf-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
 .wf-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .wf-spacer { flex: 1; }
+.wf-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.wf-tab {
+  padding: 6px 12px; font-size: 11px; font-weight: 600; border: 1px solid var(--bd);
+  border-radius: var(--r); background: var(--bg2); color: var(--tx2); cursor: pointer;
+  font-family: inherit; transition: all 0.2s ease;
+}
+.wf-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.theme-clean .wf-tab { border-radius: 10px; }
 .wf-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
 .theme-clean .wf-btn { color: #fff; border-radius: 10px; }
 .wf-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 .wf-btn.ghost { background: transparent; color: var(--accent); }
+.wf-btn.sm { padding: 4px 10px; font-size: 10px; }
 .wf-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .wf-stat { flex: 1; min-width: 100px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
 .theme-clean .wf-stat { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
@@ -24,9 +33,9 @@
 .theme-clean .wf-card { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .wf-card-title { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
 .wf-card-sub { font-size: 10px; color: var(--tx3); }
-.wf-card-badge { font-size: 8px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; }
+.wf-card-badge { font-size: 8px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; display: inline-block; margin-top: 6px; }
 .theme-clean .wf-card-badge { border-radius: 6px; }
-.wf-card-actions { display: flex; gap: 4px; margin-top: 8px; }
+.wf-card-actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
 .wf-card-actions button { padding: 4px 10px; font-size: 10px; font-weight: 600; border: 1px solid var(--bd); border-radius: 4px; background: var(--bg3); color: var(--tx2); cursor: pointer; font-family: inherit; transition: all 0.2s ease; }
 .theme-clean .wf-card-actions button { border-radius: 8px; }
 .wf-card-actions button:hover { border-color: var(--accent); color: var(--accent); }
@@ -34,14 +43,27 @@
 .wf-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .wf-modal.open { display: flex; }
 .wf-modal-box { background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
+.wf-modal-box.wide { width: 720px; }
 .theme-clean .wf-modal-box { border-radius: 20px; }
 .wf-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
+.wf-row { display: flex; gap: 12px; }
 .wf-field { margin-bottom: 14px; }
 .wf-field label { display: block; font-size: 10px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
 .wf-field input, .wf-field select, .wf-field textarea { width: 100%; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r); padding: 10px 12px; color: var(--tx); font-family: inherit; font-size: 12px; outline: none; transition: all 0.25s ease; }
 .theme-clean .wf-field input, .theme-clean .wf-field select, .theme-clean .wf-field textarea { border-radius: 10px; }
 .wf-field input:focus, .wf-field select:focus, .wf-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.wf-field input[type="checkbox"] { width: auto; margin-right: 6px; }
+.wf-steps { display: flex; flex-direction: column; gap: 8px; }
+.wf-step-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.wf-step-row select, .wf-step-row input { flex: 1; min-width: 100px; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r); padding: 8px 10px; color: var(--tx); font-family: inherit; font-size: 11px; }
+.wf-steps-empty { font-size: 11px; color: var(--tx3); padding: 8px 0; }
+.wf-history { max-height: 240px; overflow: auto; background: var(--bg3); border: 1px solid var(--bd); border-radius: var(--r); padding: 10px; }
+.wf-history-row { font-size: 11px; color: var(--tx2); padding: 6px 0; border-bottom: 1px solid var(--bd); }
+.wf-history-row:last-child { border-bottom: 0; }
 .wf-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 .wf-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
 .wf-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }
 .wf-empty-text { font-size: 13px; font-weight: 600; }
+@media (max-width: 700px) {
+  .wf-row { flex-direction: column; }
+}
