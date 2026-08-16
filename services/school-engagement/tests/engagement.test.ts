@@ -7,16 +7,20 @@ import {
   createSchoolEngagementApp,
   type SchoolEngagementSqlite,
 } from '../src/index';
+import { SECRET, staff } from './helpers/auth';
 
 describe('school-engagement prefs (P5-01)', () => {
   let app: Express;
   let db: SchoolEngagementSqlite;
+  const admin = staff('school_admin');
+  const office = staff('office');
 
   beforeEach(async () => {
     const created = await createSchoolEngagementApp({
       dbPath: ':memory:',
       migrationsDir: path.resolve(__dirname, '../migrations'),
       logger: pino({ level: 'silent' }),
+      internalSecret: SECRET,
     });
     app = created.app;
     db = created.db;
@@ -27,7 +31,7 @@ describe('school-engagement prefs (P5-01)', () => {
   });
 
   it('health ok', async () => {
-    const res = await request(app).get('/health');
+    const res = await request(app).get('/health').set(staff('school_admin'));
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
   });
@@ -35,6 +39,7 @@ describe('school-engagement prefs (P5-01)', () => {
   it('channels PUT full-replace ordered by priority', async () => {
     const put = await request(app)
       .put('/api/engagement/t1/guardians/g1/channels')
+      .set(admin)
       .send({
         channels: [
           { channel: 'sms', address: '+911', priority: 2, verified: true },
@@ -50,11 +55,14 @@ describe('school-engagement prefs (P5-01)', () => {
     ]);
     expect(put.body.channels[0].priority).toBe(1);
 
-    const listed = await request(app).get('/api/engagement/t1/guardians/g1/channels');
+    const listed = await request(app)
+      .get('/api/engagement/t1/guardians/g1/channels')
+      .set(office);
     expect(listed.body.channels).toHaveLength(3);
 
     const replace = await request(app)
       .put('/api/engagement/t1/guardians/g1/channels')
+      .set(admin)
       .send({
         channels: [{ channel: 'ivr', address: '+919', priority: 1, verified: true }],
       });
@@ -63,29 +71,34 @@ describe('school-engagement prefs (P5-01)', () => {
   });
 
   it('settings GET defaults + PUT validation', async () => {
-    const defaults = await request(app).get('/api/engagement/t1/settings');
+    const defaults = await request(app).get('/api/engagement/t1/settings').set(office);
     expect(defaults.status).toBe(200);
     expect(defaults.body.dailyCapPerStudent).toBe(3);
     expect(defaults.body.digestHour).toBe(17);
     expect(defaults.body.quietStart).toBe(21);
 
-    const badCap = await request(app).put('/api/engagement/t1/settings').send({
-      daily_cap_per_student: 11,
-    });
+    const badCap = await request(app)
+      .put('/api/engagement/t1/settings')
+      .set(admin)
+      .send({ daily_cap_per_student: 11 });
     expect(badCap.status).toBe(400);
 
-    const badHour = await request(app).put('/api/engagement/t1/settings').send({
-      digest_hour: 24,
-    });
+    const badHour = await request(app)
+      .put('/api/engagement/t1/settings')
+      .set(admin)
+      .send({ digest_hour: 24 });
     expect(badHour.status).toBe(400);
 
-    const ok = await request(app).put('/api/engagement/t1/settings').send({
-      daily_cap_per_student: 5,
-      digest_hour: 18,
-      digest_frequency: 'weekly',
-      quiet_start: 22,
-      quiet_end: 6,
-    });
+    const ok = await request(app)
+      .put('/api/engagement/t1/settings')
+      .set(admin)
+      .send({
+        daily_cap_per_student: 5,
+        digest_hour: 18,
+        digest_frequency: 'weekly',
+        quiet_start: 22,
+        quiet_end: 6,
+      });
     expect(ok.status).toBe(200);
     expect(ok.body.dailyCapPerStudent).toBe(5);
     expect(ok.body.digestFrequency).toBe('weekly');
@@ -93,17 +106,23 @@ describe('school-engagement prefs (P5-01)', () => {
   });
 
   it('tenant isolation', async () => {
-    await request(app).put('/api/engagement/t1/guardians/g1/channels').send({
-      channels: [{ channel: 'sms', address: '+911', priority: 1 }],
-    });
-    await request(app).put('/api/engagement/t1/settings').send({
-      daily_cap_per_student: 4,
-    });
+    await request(app)
+      .put('/api/engagement/t1/guardians/g1/channels')
+      .set(admin)
+      .send({
+        channels: [{ channel: 'sms', address: '+911', priority: 1 }],
+      });
+    await request(app)
+      .put('/api/engagement/t1/settings')
+      .set(admin)
+      .send({ daily_cap_per_student: 4 });
 
-    const channels = await request(app).get('/api/engagement/t2/guardians/g1/channels');
+    const channels = await request(app)
+      .get('/api/engagement/t2/guardians/g1/channels')
+      .set(office);
     expect(channels.body.channels).toEqual([]);
 
-    const settings = await request(app).get('/api/engagement/t2/settings');
+    const settings = await request(app).get('/api/engagement/t2/settings').set(office);
     expect(settings.body.dailyCapPerStudent).toBe(3);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -17,15 +18,15 @@ describe('school-library fines (P10-03)', () => {
   let now: Date;
 
   async function seedOnLoan(student = 'stu-1', barcode = 'F1') {
-    const title = await request(app).post('/api/library/t1/titles').send({
+    const title = await request(app).post('/api/library/t1/titles').set(staff('school_admin')).send({
       title: 'Fine Book',
       authors: ['A'],
     });
-    const copy = await request(app).post('/api/library/t1/copies').send({
+    const copy = await request(app).post('/api/library/t1/copies').set(staff('school_admin')).send({
       title_id: title.body.id,
       barcode,
     });
-    const loan = await request(app).post('/api/library/t1/loans').send({
+    const loan = await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: copy.body.id,
       student_ref: student,
       issued_on: '2026-01-01',
@@ -55,7 +56,7 @@ describe('school-library fines (P10-03)', () => {
     });
     app = created.app;
     db = created.db;
-    await request(app).put('/api/library/t1/settings').send({
+    await request(app).put('/api/library/t1/settings').set(staff('school_admin')).send({
       loan_days: 7,
       renew_limit: 1,
       max_open_loans: 5,
@@ -74,29 +75,29 @@ describe('school-library fines (P10-03)', () => {
     const { loanId } = await seedOnLoan();
     // due = 2026-01-08; as_of Jan 15 → 7 days × 500 = 3500
     const a1 = await request(app)
-      .post('/api/library/t1/fines/assess')
+      .post('/api/library/t1/fines/assess').set(staff('school_admin'))
       .send({ as_of: '2026-01-15' });
     expect(a1.body.assessed).toBe(1);
     expect(a1.body.total_paise).toBe(3500);
 
     const a2 = await request(app)
-      .post('/api/library/t1/fines/assess')
+      .post('/api/library/t1/fines/assess').set(staff('school_admin'))
       .send({ as_of: '2026-01-15' });
     expect(a2.body.assessed).toBe(1);
     expect(a2.body.total_paise).toBe(3500);
 
     const listed = await request(app)
-      .get('/api/library/t1/fines')
+      .get('/api/library/t1/fines').set(staff('school_admin'))
       .query({ status: 'open' });
     expect(listed.body.fines).toHaveLength(1);
 
     // Return with later date recomputes fine before close
     now = new Date(Date.UTC(2026, 0, 18));
-    await request(app).post(`/api/library/t1/loans/${loanId}/return`).send({
+    await request(app).post(`/api/library/t1/loans/${loanId}/return`).set(staff('school_admin')).send({
       returned_on: '2026-01-18',
     });
     const after = await request(app)
-      .get('/api/library/t1/fines')
+      .get('/api/library/t1/fines').set(staff('school_admin'))
       .query({ status: 'open' });
     expect(after.body.fines).toHaveLength(1);
     expect(after.body.fines[0].daysOverdue).toBe(10);
@@ -106,22 +107,22 @@ describe('school-library fines (P10-03)', () => {
   it('pay and waive + events; issue blocked then cleared', async () => {
     await seedOnLoan('stu-1', 'P1');
     await request(app)
-      .post('/api/library/t1/fines/assess')
+      .post('/api/library/t1/fines/assess').set(staff('school_admin'))
       .send({ as_of: '2026-01-15' });
     const fines = await request(app)
-      .get('/api/library/t1/fines')
+      .get('/api/library/t1/fines').set(staff('school_admin'))
       .query({ student_ref: 'stu-1', status: 'open' });
     const fineId = fines.body.fines[0].id as string;
 
-    const title = await request(app).post('/api/library/t1/titles').send({
+    const title = await request(app).post('/api/library/t1/titles').set(staff('school_admin')).send({
       title: 'Another',
       authors: ['B'],
     });
-    const copy = await request(app).post('/api/library/t1/copies').send({
+    const copy = await request(app).post('/api/library/t1/copies').set(staff('school_admin')).send({
       title_id: title.body.id,
       barcode: 'P2',
     });
-    const blocked = await request(app).post('/api/library/t1/loans').send({
+    const blocked = await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: copy.body.id,
       student_ref: 'stu-1',
     });
@@ -130,7 +131,7 @@ describe('school-library fines (P10-03)', () => {
     expect(blocked.body.open_fines_paise).toBe(3500);
 
     const paid = await request(app)
-      .post(`/api/library/t1/fines/${fineId}/pay`)
+      .post(`/api/library/t1/fines/${fineId}/pay`).set(staff('school_admin'))
       .send({});
     expect(paid.status).toBe(200);
     expect(paid.body.status).toBe('paid');
@@ -141,20 +142,20 @@ describe('school-library fines (P10-03)', () => {
     // Seed a new overdue fine via another loan to test waive path
     const again = await seedOnLoan('stu-2', 'W1');
     await request(app)
-      .post('/api/library/t1/fines/assess')
+      .post('/api/library/t1/fines/assess').set(staff('school_admin'))
       .send({ as_of: '2026-01-15' });
     const open2 = await request(app)
-      .get('/api/library/t1/fines')
+      .get('/api/library/t1/fines').set(staff('school_admin'))
       .query({ student_ref: 'stu-2', status: 'open' });
     const fine2 = open2.body.fines[0].id as string;
 
     const badWaive = await request(app)
-      .post(`/api/library/t1/fines/${fine2}/waive`)
+      .post(`/api/library/t1/fines/${fine2}/waive`).set(staff('school_admin'))
       .send({ reason: 'no' });
     expect(badWaive.status).toBe(400);
 
     const waived = await request(app)
-      .post(`/api/library/t1/fines/${fine2}/waive`)
+      .post(`/api/library/t1/fines/${fine2}/waive`).set(staff('school_admin'))
       .send({ reason: 'hardship' });
     expect(waived.body.status).toBe('waived');
     expect(events.some((e) => e.type === 'school.library.fine_waived')).toBe(
@@ -162,24 +163,24 @@ describe('school-library fines (P10-03)', () => {
     );
 
     // After waive, stu-2 can borrow another copy
-    const t3 = await request(app).post('/api/library/t1/titles').send({
+    const t3 = await request(app).post('/api/library/t1/titles').set(staff('school_admin')).send({
       title: 'Third',
       authors: ['C'],
     });
-    const c3 = await request(app).post('/api/library/t1/copies').send({
+    const c3 = await request(app).post('/api/library/t1/copies').set(staff('school_admin')).send({
       title_id: t3.body.id,
       barcode: 'W2',
     });
     // Return first loan so max loans isn't the issue — stu-2 still has open loan
-    await request(app).post(`/api/library/t1/loans/${again.loanId}/return`).send({});
-    const ok = await request(app).post('/api/library/t1/loans').send({
+    await request(app).post(`/api/library/t1/loans/${again.loanId}/return`).set(staff('school_admin')).send({});
+    const ok = await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: c3.body.id,
       student_ref: 'stu-2',
     });
     expect(ok.status).toBe(201);
 
     // stu-1 already paid — can issue
-    const ok1 = await request(app).post('/api/library/t1/loans').send({
+    const ok1 = await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: copy.body.id,
       student_ref: 'stu-1',
     });
@@ -189,12 +190,12 @@ describe('school-library fines (P10-03)', () => {
   it('library-summary shape + tenant isolation', async () => {
     await seedOnLoan('stu-1', 'S1');
     await request(app)
-      .post('/api/library/t1/fines/assess')
+      .post('/api/library/t1/fines/assess').set(staff('school_admin'))
       .send({ as_of: '2026-01-15' });
 
     const summary = await request(app).get(
       '/api/library/t1/students/stu-1/library-summary',
-    );
+    ).set(staff('school_admin'));
     expect(summary.status).toBe(200);
     expect(summary.body).toEqual({
       open_loans: 1,
@@ -207,7 +208,7 @@ describe('school-library fines (P10-03)', () => {
       (
         await request(app).get(
           '/api/library/t2/students/stu-1/library-summary',
-        )
+        ).set(staff('school_admin'))
       ).body,
     ).toEqual({
       open_loans: 0,

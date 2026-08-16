@@ -15,6 +15,12 @@ import type {
   ReportBlockDefinition,
 } from '../types';
 import type { CreateHpcInputPayload } from '../types-hpc';
+import { resolveInternalSecret } from '../internal-auth';
+import { guardRoutes } from '../role-guard';
+import { ASSESSMENT_ROUTE_POLICIES } from '../route-policies';
+import type { TimetableClient } from '../clients/timetable-client';
+import { assertTeacherSectionScope } from '../teacher-scope';
+
 
 function parseHpcInputBody(body: Record<string, unknown>): CreateHpcInputPayload {
   return {
@@ -70,9 +76,14 @@ function asyncHandler(
   };
 }
 
-export function createAssessmentRouter(service: AssessmentService): Router {
+export function createAssessmentRouter(
+  service: AssessmentService,
+  opts: { internalSecret?: string; timetable?: TimetableClient } = {},
+): Router {
   const router = Router({ mergeParams: true });
-
+  const internalSecret = opts.internalSecret ?? resolveInternalSecret();
+  const timetable = opts.timetable;
+  guardRoutes(router, ASSESSMENT_ROUTE_POLICIES, { internalSecret });
   router.post(
     '/:tenantId/exam-terms',
     asyncHandler(async (req, res) => {
@@ -248,6 +259,22 @@ export function createAssessmentRouter(service: AssessmentService): Router {
   router.put(
     '/:tenantId/exams/:examId/marks',
     asyncHandler(async (req, res) => {
+      if (timetable) {
+        const exam = await service.getExam(req.params.tenantId, req.params.examId);
+        if (exam.error) {
+          res.status(exam.error.status).json({ error: exam.error.error });
+          return;
+        }
+        // section_ref from stored exam only — ignore any forged body field (P12-05).
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef: exam.exam!.sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
       const result = await service.putExamMarks(
         req.params.tenantId,
         req.params.examId,
@@ -594,6 +621,43 @@ export function createAssessmentRouter(service: AssessmentService): Router {
           ? body
           : [];
       const payloads = raw.map((row) => parseHpcInputBody(row as Record<string, unknown>));
+      if (timetable) {
+        for (const payload of payloads) {
+          const activityRef = (payload.activityRef ?? '').trim();
+          if (!activityRef) {
+            // Teacher L5 needs a stored exam/activity; admins skip via role check inside helper.
+            const scope = await assertTeacherSectionScope(req, timetable, {
+              tenantId: req.params.tenantId,
+              sectionRef: '',
+            });
+            if (!('ok' in scope)) {
+              res.status(scope.status).json({ error: scope.error });
+              return;
+            }
+            continue;
+          }
+          const exam = await service.getExam(req.params.tenantId, activityRef);
+          if (exam.error) {
+            const scope = await assertTeacherSectionScope(req, timetable, {
+              tenantId: req.params.tenantId,
+              sectionRef: '',
+            });
+            if (!('ok' in scope)) {
+              res.status(403).json({ error: 'scope_denied' });
+              return;
+            }
+            continue;
+          }
+          const scope = await assertTeacherSectionScope(req, timetable, {
+            tenantId: req.params.tenantId,
+            sectionRef: exam.exam!.sectionRef,
+          });
+          if (!('ok' in scope)) {
+            res.status(scope.status).json({ error: scope.error });
+            return;
+          }
+        }
+      }
       const result = await service.createHpcInputsBulk(req.params.tenantId, payloads);
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
@@ -606,10 +670,25 @@ export function createAssessmentRouter(service: AssessmentService): Router {
   router.post(
     '/:tenantId/hpc/inputs',
     asyncHandler(async (req, res) => {
-      const result = await service.createHpcInput(
-        req.params.tenantId,
-        parseHpcInputBody(req.body as Record<string, unknown>),
-      );
+      const payload = parseHpcInputBody(req.body as Record<string, unknown>);
+      if (timetable) {
+        const activityRef = (payload.activityRef ?? '').trim();
+        let sectionRef = '';
+        if (activityRef) {
+          const exam = await service.getExam(req.params.tenantId, activityRef);
+          if (!exam.error) sectionRef = exam.exam!.sectionRef;
+        }
+        // Forged body.section_ref is ignored — only stored exam section counts.
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
+      const result = await service.createHpcInput(req.params.tenantId, payload);
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
         return;

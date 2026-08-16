@@ -12,6 +12,34 @@ export type TemplateKind = 'transactional' | 'informational';
 
 export type MessageUrgency = 'interrupt' | 'digest';
 
+export type DiaryKind = 'homework' | 'note' | 'remark' | 'reminder';
+
+export interface DiaryEntry {
+  id: string;
+  tenantId: string;
+  sectionRef: string;
+  studentRef: string | null;
+  entryDate: string;
+  kind: DiaryKind;
+  body: string;
+  attachmentRefs: string[] | null;
+  authorMemberId: string;
+  createdAt: string;
+  updatedAt: string;
+  /** guardians_total is null — engagement does not know guardian counts; BFF/frontend composes */
+  acks?: number;
+  guardiansTotal?: null;
+}
+
+export interface DiaryAck {
+  id: string;
+  tenantId: string;
+  entryId: string;
+  guardianRef: string;
+  studentRef: string;
+  at: string;
+}
+
 export type OutboundStatus =
   | 'queued'
   | 'sent'

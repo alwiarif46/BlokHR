@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -33,14 +34,14 @@ describe('school-assessment marks (P4-02)', () => {
     app = created.app;
     db = created.db;
 
-    const term = await request(app).post('/api/assessment/t1/exam-terms').send({
+    const term = await request(app).post('/api/assessment/t1/exam-terms').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       label: 'PT1',
       starts_on: '2025-07-01',
       ends_on: '2025-07-15',
       weightage_pct: 20,
     });
-    const exam = await request(app).post('/api/assessment/t1/exams').send({
+    const exam = await request(app).post('/api/assessment/t1/exams').set(staff('school_admin')).send({
       exam_term_id: term.body.id,
       course_ref: 'course-1',
       section_ref: '8A',
@@ -58,26 +59,26 @@ describe('school-assessment marks (P4-02)', () => {
   });
 
   it('bulk entry validation: range, exclusive flags, reject assigned write', async () => {
-    const over = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    const over = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [{ student_id: 's1', draft_marks: 41 }],
     });
     expect(over.status).toBe(400);
 
-    const both = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    const both = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [{ student_id: 's1', draft_marks: 10, is_absent: true }],
     });
     expect(both.status).toBe(400);
 
-    const direct = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    const direct = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [{ student_id: 's1', assigned_marks: 10 }],
     });
     expect(direct.status).toBe(400);
     expect(direct.body.error).toMatch(/assigned_marks/);
 
-    const ok = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    const ok = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [
         { student_id: 's1', draft_marks: 30 },
@@ -94,7 +95,7 @@ describe('school-assessment marks (P4-02)', () => {
   });
 
   it('atomic publish fails listing missing students; then publishes with event', async () => {
-    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [
         { student_id: 's1', draft_marks: 30 },
@@ -104,24 +105,24 @@ describe('school-assessment marks (P4-02)', () => {
     });
 
     const fail = await request(app)
-      .post(`/api/assessment/t1/exams/${examId}/publish`)
+      .post(`/api/assessment/t1/exams/${examId}/publish`).set(staff('school_admin'))
       .send({ published_by: 'coord-1' });
     expect(fail.status).toBe(400);
     expect(fail.body.student_ids).toEqual(['s2']);
 
-    const still = await request(app).get(`/api/assessment/t1/exams/${examId}/marks`);
+    const still = await request(app).get(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin'));
     expect(still.body.marks.every((m: { assignedMarks: number | null }) => m.assignedMarks == null)).toBe(
       true,
     );
     expect(events).toHaveLength(0);
 
-    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [{ student_id: 's2', draft_marks: 20 }],
     });
 
     const pub = await request(app)
-      .post(`/api/assessment/t1/exams/${examId}/publish`)
+      .post(`/api/assessment/t1/exams/${examId}/publish`).set(staff('school_admin'))
       .send({ published_by: 'coord-1' });
     expect(pub.status).toBe(200);
     expect(pub.body.count).toBe(3);
@@ -139,7 +140,7 @@ describe('school-assessment marks (P4-02)', () => {
   });
 
   it('moderation + audit; stats exclude exempt', async () => {
-    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [
         { student_id: 's1', draft_marks: 40 },
@@ -149,10 +150,10 @@ describe('school-assessment marks (P4-02)', () => {
       ],
     });
     await request(app)
-      .post(`/api/assessment/t1/exams/${examId}/publish`)
+      .post(`/api/assessment/t1/exams/${examId}/publish`).set(staff('school_admin'))
       .send({ published_by: 'coord-1' });
 
-    const listed = await request(app).get(`/api/assessment/t1/exams/${examId}/marks`);
+    const listed = await request(app).get(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin'));
     expect(listed.status).toBe(200);
     expect(listed.body.stats.mean).toBe(30);
     expect(listed.body.stats.median).toBe(30);
@@ -165,7 +166,7 @@ describe('school-assessment marks (P4-02)', () => {
 
     const s1 = listed.body.marks.find((m: { studentId: string }) => m.studentId === 's1');
     const mod = await request(app)
-      .post(`/api/assessment/t1/marks/${s1.id}/moderate`)
+      .post(`/api/assessment/t1/marks/${s1.id}/moderate`).set(staff('school_admin'))
       .send({ assigned_marks: 36, moderated_by: 'hod-1', reason: 'recheck' });
     expect(mod.status).toBe(200);
     expect(mod.body.mark.assignedMarks).toBe(36);
@@ -179,7 +180,7 @@ describe('school-assessment marks (P4-02)', () => {
     expect(auditRows).toHaveLength(1);
 
     // draft still editable after publish
-    const draftEdit = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    const draftEdit = await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [{ student_id: 's2', draft_marks: 22 }],
     });
@@ -189,11 +190,11 @@ describe('school-assessment marks (P4-02)', () => {
   });
 
   it('tenant isolation', async () => {
-    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr-1',
       marks: [{ student_id: 's1', draft_marks: 10 }],
     });
-    const other = await request(app).get(`/api/assessment/t2/exams/${examId}/marks`);
+    const other = await request(app).get(`/api/assessment/t2/exams/${examId}/marks`).set(staff('school_admin'));
     expect(other.status).toBe(404);
   });
 });

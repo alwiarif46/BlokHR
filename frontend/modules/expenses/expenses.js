@@ -6,6 +6,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog, confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -692,7 +693,15 @@ export async function expApprove(id) {
 }
 
 export async function expReject(id) {
-  const reason = window.prompt('Rejection reason', '') || '';
+  const reason = await promptDialog({
+    title: 'Reject expense',
+    label: 'Rejection reason',
+    placeholder: 'Why is this being rejected?',
+    confirmLabel: 'Reject',
+    required: true,
+    danger: true,
+  });
+  if (reason === null) return;
   const result = await api.post('/api/expenses/' + id + '/reject', { reason });
   if (result && !result._error) {
     toast('Rejected', 'success');
@@ -719,7 +728,7 @@ export async function expReimburse(id) {
 }
 
 export async function expDelete(id) {
-  if (!confirm('Delete this draft expense?')) return;
+  if (!(await confirmDialog({ message: 'Delete this draft expense?', confirmLabel: 'Delete', danger: true }))) return;
   const result = await api.delete('/api/expenses/' + id);
   if (result && !result._error) {
     toast('Deleted', 'success');

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -17,12 +18,12 @@ describe('school-library circulation (P10-02)', () => {
   let now: Date;
 
   async function seedTitleCopy(barcode = 'BK-1') {
-    const title = await request(app).post('/api/library/t1/titles').send({
+    const title = await request(app).post('/api/library/t1/titles').set(staff('school_admin')).send({
       title: 'Seed Book',
       authors: ['Author'],
     });
     const titleId = title.body.id as string;
-    const copy = await request(app).post('/api/library/t1/copies').send({
+    const copy = await request(app).post('/api/library/t1/copies').set(staff('school_admin')).send({
       title_id: titleId,
       barcode,
     });
@@ -53,12 +54,12 @@ describe('school-library circulation (P10-02)', () => {
   });
 
   it('settings defaults + validation caps', async () => {
-    const get = await request(app).get('/api/library/t1/settings');
+    const get = await request(app).get('/api/library/t1/settings').set(staff('school_admin'));
     expect(get.status).toBe(200);
     expect(get.body.loanDays).toBe(14);
     expect(get.body.maxOpenLoans).toBe(3);
 
-    const bad = await request(app).put('/api/library/t1/settings').send({
+    const bad = await request(app).put('/api/library/t1/settings').set(staff('school_admin')).send({
       loan_days: 100,
       renew_limit: 1,
       max_open_loans: 3,
@@ -66,7 +67,7 @@ describe('school-library circulation (P10-02)', () => {
     });
     expect(bad.status).toBe(400);
 
-    const ok = await request(app).put('/api/library/t1/settings').send({
+    const ok = await request(app).put('/api/library/t1/settings').set(staff('school_admin')).send({
       loan_days: 7,
       renew_limit: 2,
       max_open_loans: 2,
@@ -78,7 +79,7 @@ describe('school-library circulation (P10-02)', () => {
 
   it('issue/return happy path + barcode + events', async () => {
     const { copyId, barcode } = await seedTitleCopy('BAR-9');
-    const issued = await request(app).post('/api/library/t1/loans').send({
+    const issued = await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       barcode,
       student_ref: 'stu-1',
     });
@@ -88,11 +89,11 @@ describe('school-library circulation (P10-02)', () => {
       true,
     );
 
-    const copy = await request(app).get(`/api/library/t1/copies/${copyId}`);
+    const copy = await request(app).get(`/api/library/t1/copies/${copyId}`).set(staff('school_admin'));
     expect(copy.body.status).toBe('on_loan');
 
     const returned = await request(app)
-      .post(`/api/library/t1/loans/${issued.body.id}/return`)
+      .post(`/api/library/t1/loans/${issued.body.id}/return`).set(staff('school_admin'))
       .send({});
     expect(returned.status).toBe(200);
     expect(returned.body.status).toBe('returned');
@@ -100,12 +101,12 @@ describe('school-library circulation (P10-02)', () => {
       true,
     );
     expect(
-      (await request(app).get(`/api/library/t1/copies/${copyId}`)).body.status,
+      (await request(app).get(`/api/library/t1/copies/${copyId}`).set(staff('school_admin'))).body.status,
     ).toBe('available');
   });
 
   it('enforces max_open_loans', async () => {
-    await request(app).put('/api/library/t1/settings').send({
+    await request(app).put('/api/library/t1/settings').set(staff('school_admin')).send({
       loan_days: 14,
       renew_limit: 1,
       max_open_loans: 1,
@@ -115,13 +116,13 @@ describe('school-library circulation (P10-02)', () => {
     const b = await seedTitleCopy('B1');
     expect(
       (
-        await request(app).post('/api/library/t1/loans').send({
+        await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
           copy_id: a.copyId,
           student_ref: 'stu-1',
         })
       ).status,
     ).toBe(201);
-    const second = await request(app).post('/api/library/t1/loans').send({
+    const second = await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: b.copyId,
       student_ref: 'stu-1',
     });
@@ -130,14 +131,14 @@ describe('school-library circulation (P10-02)', () => {
   });
 
   it('renew limits, overdue block, hold_pending', async () => {
-    await request(app).put('/api/library/t1/settings').send({
+    await request(app).put('/api/library/t1/settings').set(staff('school_admin')).send({
       loan_days: 7,
       renew_limit: 1,
       max_open_loans: 3,
       hold_days: 3,
     });
     const { copyId, titleId } = await seedTitleCopy('R1');
-    const loan = await request(app).post('/api/library/t1/loans').send({
+    const loan = await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: copyId,
       student_ref: 'stu-1',
     });
@@ -145,7 +146,7 @@ describe('school-library circulation (P10-02)', () => {
 
     const renewed = await request(app).post(
       `/api/library/t1/loans/${loanId}/renew`,
-    );
+    ).set(staff('school_admin'));
     expect(renewed.status).toBe(200);
     expect(renewed.body.renewals).toBe(1);
     expect(renewed.body.dueOn).toBe('2026-01-22');
@@ -155,7 +156,7 @@ describe('school-library circulation (P10-02)', () => {
 
     const again = await request(app).post(
       `/api/library/t1/loans/${loanId}/renew`,
-    );
+    ).set(staff('school_admin'));
     expect(again.status).toBe(409);
     expect(again.body.error).toBe('renew_limit');
 
@@ -163,29 +164,29 @@ describe('school-library circulation (P10-02)', () => {
     now = new Date(Date.UTC(2026, 0, 30));
     const overdue = await request(app).post(
       `/api/library/t1/loans/${loanId}/renew`,
-    );
+    ).set(staff('school_admin'));
     expect(overdue.status).toBe(400);
     expect(overdue.body.error).toBe('overdue_cannot_renew');
 
     // Fresh loan for hold_pending: return overdue first so we can re-issue
-    await request(app).post(`/api/library/t1/loans/${loanId}/return`).send({});
+    await request(app).post(`/api/library/t1/loans/${loanId}/return`).set(staff('school_admin')).send({});
     // Overdue return assesses a fine — clear it so re-issue is allowed
     const openFines = await request(app)
-      .get('/api/library/t1/fines')
+      .get('/api/library/t1/fines').set(staff('school_admin'))
       .query({ student_ref: 'stu-1', status: 'open' });
     for (const f of openFines.body.fines || []) {
       await request(app)
-        .post(`/api/library/t1/fines/${f.id}/waive`)
+        .post(`/api/library/t1/fines/${f.id}/waive`).set(staff('school_admin'))
         .send({ reason: 'test clear' });
     }
     now = new Date(Date.UTC(2026, 0, 15));
-    const loan2 = await request(app).post('/api/library/t1/loans').send({
+    const loan2 = await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: copyId,
       student_ref: 'stu-1',
     });
     expect(loan2.status).toBe(201);
     // No available copies → place hold
-    const hold = await request(app).post('/api/library/t1/holds').send({
+    const hold = await request(app).post('/api/library/t1/holds').set(staff('school_admin')).send({
       title_id: titleId,
       student_ref: 'stu-2',
     });
@@ -193,30 +194,30 @@ describe('school-library circulation (P10-02)', () => {
 
     const blocked = await request(app).post(
       `/api/library/t1/loans/${loan2.body.id}/renew`,
-    );
+    ).set(staff('school_admin'));
     expect(blocked.status).toBe(409);
     expect(blocked.body.error).toBe('hold_pending');
   });
 
   it('holds only when zero available; return → hold_ready; fulfill; cancel reorders', async () => {
     const { titleId, copyId } = await seedTitleCopy('H1');
-    const availableHold = await request(app).post('/api/library/t1/holds').send({
+    const availableHold = await request(app).post('/api/library/t1/holds').set(staff('school_admin')).send({
       title_id: titleId,
       student_ref: 'stu-2',
     });
     expect(availableHold.status).toBe(400);
     expect(availableHold.body.error).toBe('copies_available');
 
-    await request(app).post('/api/library/t1/loans').send({
+    await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: copyId,
       student_ref: 'stu-1',
     });
 
-    const h1 = await request(app).post('/api/library/t1/holds').send({
+    const h1 = await request(app).post('/api/library/t1/holds').set(staff('school_admin')).send({
       title_id: titleId,
       student_ref: 'stu-2',
     });
-    const h2 = await request(app).post('/api/library/t1/holds').send({
+    const h2 = await request(app).post('/api/library/t1/holds').set(staff('school_admin')).send({
       title_id: titleId,
       student_ref: 'stu-3',
     });
@@ -224,69 +225,69 @@ describe('school-library circulation (P10-02)', () => {
     expect(h2.body.position).toBe(2);
 
     const loanList = await request(app)
-      .get('/api/library/t1/loans')
+      .get('/api/library/t1/loans').set(staff('school_admin'))
       .query({ student_ref: 'stu-1', status: 'open' });
     const loanId = loanList.body.loans[0].id as string;
 
     const returned = await request(app)
-      .post(`/api/library/t1/loans/${loanId}/return`)
+      .post(`/api/library/t1/loans/${loanId}/return`).set(staff('school_admin'))
       .send({});
     expect(returned.status).toBe(200);
     expect(events.some((e) => e.type === 'school.library.hold_ready')).toBe(
       true,
     );
     expect(
-      (await request(app).get(`/api/library/t1/copies/${copyId}`)).body.status,
+      (await request(app).get(`/api/library/t1/copies/${copyId}`).set(staff('school_admin'))).body.status,
     ).toBe('reserved');
 
     const ready = await request(app)
-      .get('/api/library/t1/holds')
+      .get('/api/library/t1/holds').set(staff('school_admin'))
       .query({ status: 'ready' });
     expect(ready.body.holds).toHaveLength(1);
     expect(ready.body.holds[0].studentRef).toBe('stu-2');
 
     const fulfilled = await request(app)
-      .post(`/api/library/t1/holds/${ready.body.holds[0].id}/fulfill`)
+      .post(`/api/library/t1/holds/${ready.body.holds[0].id}/fulfill`).set(staff('school_admin'))
       .send({ copy_id: copyId });
     expect(fulfilled.status).toBe(201);
     expect(fulfilled.body.studentRef).toBe('stu-2');
 
     // Return again → next hold ready
     await request(app)
-      .post(`/api/library/t1/loans/${fulfilled.body.id}/return`)
+      .post(`/api/library/t1/loans/${fulfilled.body.id}/return`).set(staff('school_admin'))
       .send({});
     const ready2 = await request(app)
-      .get('/api/library/t1/holds')
+      .get('/api/library/t1/holds').set(staff('school_admin'))
       .query({ status: 'ready' });
     expect(ready2.body.holds[0].studentRef).toBe('stu-3');
 
     // Cancel ready → copy available (no more queue)
     const cancel = await request(app).post(
       `/api/library/t1/holds/${ready2.body.holds[0].id}/cancel`,
-    );
+    ).set(staff('school_admin'));
     expect(cancel.status).toBe(200);
     expect(
-      (await request(app).get(`/api/library/t1/copies/${copyId}`)).body.status,
+      (await request(app).get(`/api/library/t1/copies/${copyId}`).set(staff('school_admin'))).body.status,
     ).toBe('available');
   });
 
   it('cancel queued reorders positions', async () => {
     const { titleId, copyId } = await seedTitleCopy('Q1');
-    await request(app).post('/api/library/t1/loans').send({
+    await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: copyId,
       student_ref: 'stu-1',
     });
-    const a = await request(app).post('/api/library/t1/holds').send({
+    const a = await request(app).post('/api/library/t1/holds').set(staff('school_admin')).send({
       title_id: titleId,
       student_ref: 'stu-a',
     });
-    const b = await request(app).post('/api/library/t1/holds').send({
+    const b = await request(app).post('/api/library/t1/holds').set(staff('school_admin')).send({
       title_id: titleId,
       student_ref: 'stu-b',
     });
-    await request(app).post(`/api/library/t1/holds/${a.body.id}/cancel`);
+    await request(app).post(`/api/library/t1/holds/${a.body.id}/cancel`).set(staff('school_admin'));
     const listed = await request(app)
-      .get('/api/library/t1/holds')
+      .get('/api/library/t1/holds').set(staff('school_admin'))
       .query({ title_id: titleId, status: 'queued' });
     expect(listed.body.holds).toHaveLength(1);
     expect(listed.body.holds[0].id).toBe(b.body.id);
@@ -295,25 +296,25 @@ describe('school-library circulation (P10-02)', () => {
 
   it('mark-overdue counts without changing status; tenant isolation', async () => {
     const { copyId } = await seedTitleCopy('O1');
-    await request(app).post('/api/library/t1/loans').send({
+    await request(app).post('/api/library/t1/loans').set(staff('school_admin')).send({
       copy_id: copyId,
       student_ref: 'stu-1',
       issued_on: '2026-01-01',
     });
     const marked = await request(app)
-      .post('/api/library/t1/loans/mark-overdue')
+      .post('/api/library/t1/loans/mark-overdue').set(staff('school_admin'))
       .send({ as_of: '2026-01-20' });
     expect(marked.body.count).toBe(1);
 
     now = new Date(Date.UTC(2026, 0, 20));
     const open = await request(app)
-      .get('/api/library/t1/loans')
+      .get('/api/library/t1/loans').set(staff('school_admin'))
       .query({ overdue: '1' });
     expect(open.body.loans).toHaveLength(1);
     expect(open.body.loans[0].status).toBe('open');
 
     expect(
-      (await request(app).get('/api/library/t2/loans')).body.loans,
+      (await request(app).get('/api/library/t2/loans').set(staff('school_admin'))).body.loans,
     ).toEqual([]);
   });
 });

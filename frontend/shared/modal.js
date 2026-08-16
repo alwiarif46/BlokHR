@@ -175,13 +175,19 @@ export function closeModal() {
 
 /**
  * Promise-based confirm dialog (CRUD overlay).
- * @param {{ title?: string, message: string, confirmLabel?: string, cancelLabel?: string }} opts
+ *
+ * Use this instead of window.confirm: native dialogs do not render inside
+ * embedded webviews, where confirm() returns true immediately and lets
+ * destructive actions run without the user ever seeing a prompt.
+ *
+ * @param {{ title?: string, message: string, confirmLabel?: string, cancelLabel?: string, danger?: boolean }} opts
  * @returns {Promise<boolean>}
  */
 export function confirmDialog(opts) {
   const message = (opts && opts.message) || '';
   const confirmLabel = (opts && opts.confirmLabel) || 'Continue';
   const cancelLabel = (opts && opts.cancelLabel) || 'Cancel';
+  const danger = !!(opts && opts.danger);
   return new Promise((resolve) => {
     let settled = false;
     const finish = (value) => {
@@ -198,7 +204,9 @@ export function confirmDialog(opts) {
       '<button type="button" class="crud-confirm-cancel" data-confirm="no">' +
       _esc(cancelLabel) +
       '</button>' +
-      '<button type="button" class="crud-confirm-ok" data-confirm="yes">' +
+      '<button type="button" class="crud-confirm-ok' +
+      (danger ? ' danger' : '') +
+      '" data-confirm="yes">' +
       _esc(confirmLabel) +
       '</button></div>';
 
@@ -216,6 +224,113 @@ export function confirmDialog(opts) {
     const no = box.querySelector('[data-confirm="no"]');
     if (yes) yes.addEventListener('click', () => finish(true));
     if (no) no.addEventListener('click', () => finish(false));
+  });
+}
+
+/**
+ * Promise-based text prompt (CRUD overlay).
+ *
+ * Use this instead of window.prompt, which in embedded webviews resolves to its
+ * default value — or to '' when there is no default — without ever rendering.
+ * That silently turned "enter a rejection reason" into "reject with no reason".
+ *
+ * Resolves to the trimmed input, or null when cancelled. With `required`, the
+ * confirm button stays disabled until the field has content.
+ *
+ * @param {{
+ *   title?: string,
+ *   label?: string,
+ *   value?: string,
+ *   placeholder?: string,
+ *   confirmLabel?: string,
+ *   cancelLabel?: string,
+ *   required?: boolean,
+ *   multiline?: boolean,
+ *   danger?: boolean
+ * }} opts
+ * @returns {Promise<string|null>}
+ */
+export function promptDialog(opts) {
+  const o = opts || {};
+  const value = o.value == null ? '' : String(o.value);
+  const confirmLabel = o.confirmLabel || 'Save';
+  const cancelLabel = o.cancelLabel || 'Cancel';
+  const required = !!o.required;
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+      closeModal();
+    };
+
+    const field = o.multiline
+      ? '<textarea id="crudPromptInput" rows="3" placeholder="' +
+        _esc(o.placeholder || '') +
+        '">' +
+        _esc(value) +
+        '</textarea>'
+      : '<input type="text" id="crudPromptInput" autocomplete="off" value="' +
+        _esc(value) +
+        '" placeholder="' +
+        _esc(o.placeholder || '') +
+        '">';
+
+    const html =
+      '<div class="crud-prompt-field">' +
+      (o.label ? '<label for="crudPromptInput">' + _esc(o.label) + '</label>' : '') +
+      field +
+      '</div><div class="crud-confirm-actions">' +
+      '<button type="button" class="crud-confirm-cancel" data-confirm="no">' +
+      _esc(cancelLabel) +
+      '</button>' +
+      '<button type="button" class="crud-confirm-ok' +
+      (o.danger ? ' danger' : '') +
+      '" data-confirm="yes"' +
+      (required && !value.trim() ? ' disabled' : '') +
+      '>' +
+      _esc(confirmLabel) +
+      '</button></div>';
+
+    openModal(html, {
+      title: o.title || 'Enter a value',
+      onClose: () => finish(null),
+    });
+
+    const box = document.getElementById('crudModalBox');
+    if (!box) {
+      finish(null);
+      return;
+    }
+    const input = box.querySelector('#crudPromptInput');
+    const yes = box.querySelector('[data-confirm="yes"]');
+    const no = box.querySelector('[data-confirm="no"]');
+
+    const submit = () => {
+      const v = input ? input.value.trim() : '';
+      if (required && !v) return;
+      finish(v);
+    };
+
+    if (input) {
+      if (required && yes) {
+        input.addEventListener('input', () => {
+          yes.disabled = !input.value.trim();
+        });
+      }
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !o.multiline) {
+          e.preventDefault();
+          submit();
+        }
+      });
+      input.focus();
+      input.select();
+    }
+    if (yes) yes.addEventListener('click', submit);
+    if (no) no.addEventListener('click', () => finish(null));
   });
 }
 

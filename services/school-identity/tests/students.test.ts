@@ -4,6 +4,7 @@ import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
 import { createSchoolIdentityApp, type DomainEvent, type EventPublisher } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolIdentitySqlite } from '../src/db';
 
 class RecordingPublisher implements EventPublisher {
@@ -53,7 +54,7 @@ describe('school-identity students', () => {
   });
 
   async function seedSession(tenant = 't1') {
-    const res = await request(app).post(`/api/identity/${tenant}/sessions`).send({
+    const res = await request(app).post(`/api/identity/${tenant}/sessions`).set(staff('school_admin')).send({
       label: '2025-26',
       starts_on: '2025-04-01',
       ends_on: '2026-03-31',
@@ -64,18 +65,18 @@ describe('school-identity students', () => {
 
   it('creates, reads, and patches a student', async () => {
     const created = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(studentPayload());
     expect(created.status).toBe(201);
     expect(created.body.firstName).toBe('Asha');
     expect(created.body.aadhaarLast4).toBe('1234');
 
-    const got = await request(app).get(`/api/identity/t1/students/${created.body.id}`);
+    const got = await request(app).get(`/api/identity/t1/students/${created.body.id}`).set(staff('admin'));
     expect(got.status).toBe(200);
     expect(got.body.admissionNumber).toBe('ADM-001');
 
     const patched = await request(app)
-      .patch(`/api/identity/t1/students/${created.body.id}`)
+      .patch(`/api/identity/t1/students/${created.body.id}`).set(staff('admin'))
       .send({ first_name: 'Ashaa', status: 'admitted' });
     expect(patched.status).toBe(200);
     expect(patched.body.firstName).toBe('Ashaa');
@@ -84,35 +85,35 @@ describe('school-identity students', () => {
 
   it('rejects invalid enums and full aadhaar', async () => {
     const badGender = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(studentPayload({ gender: 'nb' }));
     expect(badGender.status).toBe(400);
 
     const full = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(studentPayload({ aadhaar: '123456789012' }));
     expect(full.status).toBe(400);
     expect(full.body.error).toBe('aadhaar_not_accepted');
 
     const twelveInField = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(studentPayload({ mother_name: '123456789012' }));
     expect(twelveInField.status).toBe(400);
     expect(twelveInField.body.error).toBe('aadhaar_not_accepted');
   });
 
   it('rejects duplicate admission_number with 409', async () => {
-    await request(app).post('/api/identity/t1/students').send(studentPayload());
-    const dup = await request(app).post('/api/identity/t1/students').send(studentPayload());
+    await request(app).post('/api/identity/t1/students').set(staff('admin')).send(studentPayload());
+    const dup = await request(app).post('/api/identity/t1/students').set(staff('admin')).send(studentPayload());
     expect(dup.status).toBe(409);
   });
 
   it('rejects immutable admission_number on patch', async () => {
     const created = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(studentPayload());
     const res = await request(app)
-      .patch(`/api/identity/t1/students/${created.body.id}`)
+      .patch(`/api/identity/t1/students/${created.body.id}`).set(staff('admin'))
       .send({ admission_number: 'OTHER' });
     expect(res.status).toBe(400);
   });
@@ -120,12 +121,12 @@ describe('school-identity students', () => {
   it('enrols, rejects duplicate enrol, exits with events', async () => {
     const sessionId = await seedSession();
     const created = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(studentPayload({ admission_number: 'ADM-E1' }));
     const studentId = created.body.id as string;
 
     const enrol = await request(app)
-      .post(`/api/identity/t1/students/${studentId}/enrol`)
+      .post(`/api/identity/t1/students/${studentId}/enrol`).set(staff('admin'))
       .send({
         academic_session_id: sessionId,
         class_label: '5',
@@ -136,7 +137,7 @@ describe('school-identity students', () => {
     expect(publisher.events.some((e) => e.type === 'school.student.enrolled')).toBe(true);
 
     const dup = await request(app)
-      .post(`/api/identity/t1/students/${studentId}/enrol`)
+      .post(`/api/identity/t1/students/${studentId}/enrol`).set(staff('admin'))
       .send({
         academic_session_id: sessionId,
         class_label: '5',
@@ -146,7 +147,7 @@ describe('school-identity students', () => {
     expect(dup.status).toBe(409);
 
     const exit = await request(app)
-      .post(`/api/identity/t1/students/${studentId}/exit`)
+      .post(`/api/identity/t1/students/${studentId}/exit`).set(staff('admin'))
       .send({
         exited_on: '2025-12-01',
         exit_reason: 'Transferred',
@@ -160,25 +161,25 @@ describe('school-identity students', () => {
   it('paginates student list', async () => {
     for (let i = 0; i < 3; i++) {
       await request(app)
-        .post('/api/identity/t1/students')
+        .post('/api/identity/t1/students').set(staff('admin'))
         .send(studentPayload({ admission_number: `ADM-P${i}`, first_name: `Kid${i}` }));
     }
-    const page = await request(app).get('/api/identity/t1/students?limit=2&offset=0');
+    const page = await request(app).get('/api/identity/t1/students?limit=2&offset=0').set(staff('admin'));
     expect(page.status).toBe(200);
     expect(page.body.items).toHaveLength(2);
     expect(page.body.total).toBe(3);
 
-    const q = await request(app).get('/api/identity/t1/students?q=Kid1');
+    const q = await request(app).get('/api/identity/t1/students?q=Kid1').set(staff('admin'));
     expect(q.body.total).toBe(1);
   });
 
   it('isolates students by tenant', async () => {
     await request(app)
-      .post('/api/identity/tenant-a/students')
+      .post('/api/identity/tenant-a/students').set(staff('admin'))
       .send(studentPayload({ admission_number: 'A-1' }));
-    const b = await request(app).get('/api/identity/tenant-b/students');
+    const b = await request(app).get('/api/identity/tenant-b/students').set(staff('admin'));
     expect(b.body.total).toBe(0);
-    const a = await request(app).get('/api/identity/tenant-a/students');
+    const a = await request(app).get('/api/identity/tenant-a/students').set(staff('admin'));
     expect(a.body.total).toBe(1);
   });
 });

@@ -128,7 +128,8 @@ export function createApp(
   app.use(express.urlencoded({ extended: false }));
 
   // ── 7. Static files ──
-  app.use(express.static(config.publicDir));
+  // shell.html is the single app shell (the gateway serves it the same way).
+  app.use(express.static(config.publicDir, { index: 'shell.html' }));
 
   // ── 8. Identity extraction ──
   app.use((req: Request, _res: Response, next: NextFunction) => {

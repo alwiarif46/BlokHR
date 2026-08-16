@@ -282,6 +282,103 @@
   border-bottom: none;
 }
 
+.rc-mode {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.rc-diary {
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rc-diary-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.rc-diary-compose {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rc-diary-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rc-diary-field label {
+  font-size: 11px;
+  color: var(--tx2);
+}
+
+.rc-diary-field select,
+.rc-diary-field textarea {
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 12px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg0);
+  color: var(--tx);
+}
+
+.rc-diary-count {
+  font-size: 11px;
+  color: var(--tx3);
+  text-align: right;
+}
+
+.rc-diary-offline {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--r);
+  background: color-mix(in srgb, var(--status-absent, #c44) 18%, var(--bg2));
+  color: var(--tx);
+  font-size: 12px;
+}
+
+.rc-diary-list h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--tx);
+}
+
+.rc-diary-entry {
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 10px;
+  margin-bottom: 8px;
+  background: var(--bg0);
+}
+
+.rc-diary-entry-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.rc-diary-entry-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 12px;
+}
+
+.rc-tile.diary-pick.selected {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
 @media (max-width: 720px) {
   .rc-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));

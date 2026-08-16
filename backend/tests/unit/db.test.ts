@@ -283,7 +283,7 @@ describe('MigrationRunner', () => {
     const realMigDir = path.resolve(__dirname, '../../migrations');
     const runner = new MigrationRunner(engine, realMigDir, logger);
     const count = await runner.run();
-    expect(count).toBe(50);
+    expect(count).toBe(51);
 
     // Verify infrastructure tables exist
     const tables = await engine.all<{ name: string }>(
@@ -304,6 +304,8 @@ describe('MigrationRunner', () => {
     expect(tableNames).toContain('system_settings');
     expect(tableNames).toContain('member_types');
     expect(tableNames).toContain('designations');
+    // 051_auth_sessions (P12-01 staff introspect)
+    expect(tableNames).toContain('auth_sessions');
     // 003_attendance tables
     expect(tableNames).toContain('attendance_daily');
     expect(tableNames).toContain('clock_events');

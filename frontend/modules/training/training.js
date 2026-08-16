@@ -5,6 +5,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog, confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -1039,7 +1040,7 @@ function _bindEvents(container) {
       return;
     }
     if (action === 'delete-course') {
-      if (!confirm('Delete this course and its lessons?')) return;
+      if (!(await confirmDialog({ message: 'Delete this course and its lessons?', confirmLabel: 'Delete', danger: true }))) return;
       const result = await api.delete('/api/training/courses/' + btn.dataset.id);
       if (result && !result._error) {
         toast('Deleted', 'success');
@@ -1086,7 +1087,7 @@ function _bindEvents(container) {
       return;
     }
     if (action === 'delete-lesson') {
-      if (!confirm('Remove this lesson?')) return;
+      if (!(await confirmDialog({ message: 'Remove this lesson?', confirmLabel: 'Remove', danger: true }))) return;
       const courseId = _courseDetail && _courseDetail.course && _courseDetail.course.id;
       const result = await api.delete('/api/training/lessons/' + btn.dataset.id);
       if (result && !result._error) {
@@ -1110,9 +1111,15 @@ function _bindEvents(container) {
       return;
     }
     if (action === 'add-skill') {
-      const name = prompt('Skill name');
+      const name = await promptDialog({
+        title: 'New skill',
+        label: 'Skill name',
+        placeholder: 'e.g. Advanced Excel',
+        confirmLabel: 'Create skill',
+        required: true,
+      });
       if (!name) return;
-      const result = await api.post('/api/training/skills', { name: name.trim() });
+      const result = await api.post('/api/training/skills', { name: name });
       if (result && !result._error) {
         toast('Skill created', 'success');
         await trnLoadData();
@@ -1135,7 +1142,15 @@ function _bindEvents(container) {
       return;
     }
     if (action === 'reject-req') {
-      const reason = prompt('Rejection reason') || '';
+      const reason = await promptDialog({
+        title: 'Reject training request',
+        label: 'Rejection reason',
+        placeholder: 'Why is this being rejected?',
+        confirmLabel: 'Reject',
+        required: true,
+        danger: true,
+      });
+      if (reason === null) return;
       const result = await api.post(
         '/api/training/external-requests/' + btn.dataset.id + '/reject',
         { reason: reason },

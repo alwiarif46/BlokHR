@@ -4,6 +4,7 @@ import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
 import { createSchoolAttendanceApp } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolAttendanceSqlite } from '../src/db';
 
 describe('school-attendance settings', () => {
@@ -25,7 +26,7 @@ describe('school-attendance settings', () => {
   });
 
   it('returns defaults on first settings read', async () => {
-    const res = await request(app).get('/api/attendance/t1/settings');
+    const res = await request(app).get('/api/attendance/t1/settings').set(staff('school_admin'));
     expect(res.status).toBe(200);
     expect(res.body.granularity).toBe('day');
     expect(res.body.editWindowMinutes).toBe(120);
@@ -35,7 +36,7 @@ describe('school-attendance settings', () => {
   });
 
   it('updates settings and validates ranges', async () => {
-    const updated = await request(app).put('/api/attendance/t1/settings').send({
+    const updated = await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       granularity: 'period',
       edit_window_minutes: 60,
       late_threshold_minutes: 15,
@@ -47,25 +48,25 @@ describe('school-attendance settings', () => {
     expect(updated.body.lateThresholdMinutes).toBe(15);
     expect(updated.body.halfDayMinMinutes).toBe(200);
 
-    const got = await request(app).get('/api/attendance/t1/settings');
+    const got = await request(app).get('/api/attendance/t1/settings').set(staff('school_admin'));
     expect(got.body.granularity).toBe('period');
 
-    const badGranularity = await request(app).put('/api/attendance/t1/settings').send({
+    const badGranularity = await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       granularity: 'week',
     });
     expect(badGranularity.status).toBe(400);
 
-    const badEdit = await request(app).put('/api/attendance/t1/settings').send({
+    const badEdit = await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       edit_window_minutes: 2000,
     });
     expect(badEdit.status).toBe(400);
 
-    const badLate = await request(app).put('/api/attendance/t1/settings').send({
+    const badLate = await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       late_threshold_minutes: 2,
     });
     expect(badLate.status).toBe(400);
 
-    const badHalf = await request(app).put('/api/attendance/t1/settings').send({
+    const badHalf = await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       half_day_min_minutes: 30,
     });
     expect(badHalf.status).toBe(400);
@@ -83,12 +84,12 @@ describe('school-attendance settings', () => {
   });
 
   it('isolates settings per tenant', async () => {
-    await request(app).put('/api/attendance/tenant-a/settings').send({
+    await request(app).put('/api/attendance/tenant-a/settings').set(staff('school_admin')).send({
       granularity: 'session',
     });
-    const b = await request(app).get('/api/attendance/tenant-b/settings');
+    const b = await request(app).get('/api/attendance/tenant-b/settings').set(staff('school_admin'));
     expect(b.body.granularity).toBe('day');
-    const a = await request(app).get('/api/attendance/tenant-a/settings');
+    const a = await request(app).get('/api/attendance/tenant-a/settings').set(staff('school_admin'));
     expect(a.body.granularity).toBe('session');
   });
 });

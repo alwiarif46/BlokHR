@@ -4,6 +4,10 @@ import type { ExportService } from '../services/export-service';
 import type { ApaarService } from '../services/apaar-service';
 import type { DsrService } from '../services/dsr-service';
 import type { ComplianceStatusState } from '../types';
+import { resolveInternalSecret } from '../internal-auth';
+import { guardRoutes } from '../role-guard';
+import { COMPLIANCE_ROUTE_POLICIES } from '../route-policies';
+
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -18,9 +22,11 @@ export function createComplianceRouter(
   exports: ExportService,
   apaar: ApaarService,
   dsr: DsrService,
+  opts: { internalSecret?: string } = {},
 ): Router {
   const router = Router({ mergeParams: true });
-
+  const internalSecret = opts.internalSecret ?? resolveInternalSecret();
+  guardRoutes(router, COMPLIANCE_ROUTE_POLICIES, { internalSecret });
   router.get(
     '/:tenantId/calendar',
     asyncHandler(async (req, res) => {
@@ -144,7 +150,7 @@ export function createComplianceRouter(
   );
 
   router.get(
-    '/:tenantId/apaar/fix-list',
+    '/:tenantId/apaar/form-list',
     asyncHandler(async (req, res) => {
       const session =
         typeof req.query.session === 'string' ? req.query.session : '';

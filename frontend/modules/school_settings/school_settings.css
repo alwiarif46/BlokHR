@@ -1,3 +1,491 @@
-.mod-coming[data-school-placeholder] {
-  padding: 2rem;
+/**
+ * modules/school_settings/school_settings.css
+ * School Settings: Data Import | Academic Sessions | State Pack | Consent |
+ * Syllabus Packs | Attendance Policy | Eligibility | Nudge.
+ * Colours: CSS custom properties only (4 themes). Prefix scs- (ss-* vocabulary).
+ *
+ * Boundaries:
+ * - Attendance policy / eligibility / nudge live here; Registers + Unexplained
+ *   stay in school_attendance_admin.
+ * - HR tenant settings → settings module.
+ */
+
+.scs-wrap {
+  padding: 20px 24px 60px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.scs-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 10px;
+}
+
+.scs-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 14px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.scs-tab {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--tx3);
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: capitalize;
+}
+
+.scs-tab.active {
+  background: var(--accent);
+  color: #000;
+}
+
+.theme-clean .scs-tab.active {
+  color: #fff;
+}
+
+.scs-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.scs-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  font-size: 11px;
+  color: var(--tx2);
+}
+
+.scs-pill strong {
+  color: var(--tx);
+  font-weight: 800;
+}
+
+.scs-pill.current {
+  border-color: var(--accent);
+  color: var(--tx);
+}
+
+.scs-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.scs-spacer {
+  flex: 1;
+}
+
+.scs-btn {
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--accent);
+  color: var(--tx-on-accent, #000);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.theme-clean .scs-btn {
+  color: #fff;
+  border-radius: 10px;
+}
+
+.scs-btn.ghost {
+  background: transparent;
+  color: var(--tx2);
+  border-color: var(--bd);
+}
+
+.scs-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.scs-drop {
+  border: 1px dashed var(--bd);
+  border-radius: var(--r);
+  background: var(--bg0);
+  padding: 28px 18px;
+  text-align: center;
+  color: var(--tx3);
+  font-size: 13px;
+  margin-bottom: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.scs-drop.drag {
+  border-color: var(--accent);
+  background: var(--bg1);
+  color: var(--tx2);
+}
+
+.scs-drop strong {
+  color: var(--tx);
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.scs-panel-note {
+  font-size: 12px;
+  color: var(--tx2);
+  padding: 10px 12px;
+  border: 1px dashed var(--bd);
+  border-radius: var(--r);
+  margin-bottom: 12px;
+  background: var(--bg0);
+}
+
+.scs-result {
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  padding: 14px 16px;
+  margin-bottom: 14px;
+}
+
+.scs-result-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 10px;
+}
+
+.scs-result-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.scs-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.scs-table th,
+.scs-table td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--bd);
+  color: var(--tx2);
+}
+
+.scs-table th {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--tx3);
+  font-weight: 700;
+}
+
+.scs-table tr:hover td {
+  background: var(--bg0);
+}
+
+.scs-name {
+  color: var(--tx);
+  font-weight: 600;
+}
+
+.scs-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--bd);
+  text-transform: capitalize;
+}
+
+.scs-badge.current {
+  border-color: var(--status-in, var(--accent));
+  color: var(--status-in, var(--accent));
+}
+
+.scs-badge.sample {
+  border-color: var(--accent);
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+.scs-badge.update {
+  cursor: pointer;
+  border-color: var(--accent);
+  color: var(--tx);
+  background: var(--bg0);
+  font-family: inherit;
+}
+
+.scs-badge.eligible {
+  border-color: color-mix(in srgb, #2e7d32 50%, var(--bd));
+  color: #2e7d32;
+}
+
+.scs-badge.ineligible {
+  border-color: color-mix(in srgb, #c62828 50%, var(--bd));
+  color: #c62828;
+}
+
+.scs-input {
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg0);
+  color: var(--tx);
+  min-width: 0;
+}
+
+.scs-report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.scs-report-card {
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  padding: 14px;
+}
+
+.scs-report-card h4 {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--tx);
+}
+
+.scs-metric {
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--tx);
+}
+
+.scs-metric-label {
+  font-size: 11px;
+  color: var(--tx3);
+  margin-bottom: 10px;
+}
+
+.scs-subhead {
+  margin: 18px 0 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--tx);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.scs-check-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+
+.scs-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--tx2);
+  text-transform: none;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.scs-empty,
+.scs-loading {
+  padding: 32px 12px;
+  text-align: center;
+  color: var(--tx3);
+  font-size: 13px;
+}
+
+.scs-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.scs-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.scs-field.full {
+  grid-column: 1 / -1;
+}
+
+.scs-field label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--tx3);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.scs-field input,
+.scs-field select,
+.scs-field textarea {
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: inherit;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg0);
+  color: var(--tx);
+}
+
+.scs-help {
+  font-size: 11px;
+  color: var(--tx3);
+  margin-top: 2px;
+}
+
+.scs-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+.scs-pack-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.scs-pack-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+}
+
+.scs-pack-row.active {
+  border-color: var(--accent);
+}
+
+.scs-pack-meta {
+  min-width: 0;
+}
+
+.scs-pack-detail {
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  padding: 14px 16px;
+}
+
+.scs-pack-detail h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--tx);
+}
+
+.scs-pack-detail ul {
+  margin: 0 0 12px;
+  padding-left: 18px;
+  color: var(--tx2);
+  font-size: 12px;
+}
+
+.scs-link {
+  background: none;
+  border: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.scs-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: color-mix(in srgb, var(--bg0) 55%, transparent);
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.scs-modal.open {
+  display: flex;
+}
+
+.scs-modal-box {
+  width: min(560px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--bg1);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 20px 22px;
+  box-shadow: 0 16px 40px color-mix(in srgb, var(--bg0) 40%, transparent);
+}
+
+.theme-clean .scs-modal-box {
+  border-radius: 14px;
+}
+
+.scs-modal-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 14px;
+}
+
+@media (max-width: 720px) {
+  .scs-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scs-report-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scs-wrap {
+    padding: 14px 12px 48px;
+  }
 }

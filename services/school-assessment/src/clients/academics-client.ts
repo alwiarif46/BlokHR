@@ -33,9 +33,15 @@ export class HttpAcademicsClient implements AcademicsClient {
     }
     const url = `${this.baseUrl.replace(/\/$/, '')}/api/academics/${encodeURIComponent(input.tenantId)}/delivery/infer`;
     try {
+      const headers: Record<string, string> = {
+        'content-type': 'application/json',
+      };
+      // delivery/infer is internal-only (P12-04) — bare posts 401.
+      const secret = (process.env.INTERNAL_SECRET ?? '').trim();
+      if (secret) headers['X-Blok-Internal'] = secret;
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers,
         body: JSON.stringify({
           kind: 'assessment',
           topic_id: input.topicId,

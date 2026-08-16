@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -31,7 +32,7 @@ describe('school-engagement guardian threads (P9-03)', () => {
 
   it('forces guardian_ref from header; blocks other guardian threads', async () => {
     const created = await request(app)
-      .post('/api/engagement/t1/threads')
+      .post('/api/engagement/t1/threads').set(staff('school_admin'))
       .set('X-Blok-Internal', SECRET)
       .set('X-Blok-Principal', 'guardian')
       .set('X-Blok-Guardian', 'g-real')
@@ -47,21 +48,21 @@ describe('school-engagement guardian threads (P9-03)', () => {
     const id = created.body.thread.id as string;
 
     const other = await request(app)
-      .get(`/api/engagement/t1/threads/${id}`)
+      .get(`/api/engagement/t1/threads/${id}`).set(staff('school_admin'))
       .set('X-Blok-Internal', SECRET)
       .set('X-Blok-Principal', 'guardian')
       .set('X-Blok-Guardian', 'g-other');
     expect(other.status).toBe(403);
 
     const own = await request(app)
-      .get(`/api/engagement/t1/threads/${id}`)
+      .get(`/api/engagement/t1/threads/${id}`).set(staff('school_admin'))
       .set('X-Blok-Internal', SECRET)
       .set('X-Blok-Principal', 'guardian')
       .set('X-Blok-Guardian', 'g-real');
     expect(own.status).toBe(200);
 
     const replySpoof = await request(app)
-      .post(`/api/engagement/t1/threads/${id}/reply`)
+      .post(`/api/engagement/t1/threads/${id}/reply`).set(staff('school_admin'))
       .set('X-Blok-Internal', SECRET)
       .set('X-Blok-Principal', 'guardian')
       .set('X-Blok-Guardian', 'g-real')
@@ -86,18 +87,29 @@ describe('school-engagement guardian threads (P9-03)', () => {
       });
     expect(noSecret.status).toBe(401);
 
-    const staff = await request(app).post('/api/engagement/t1/threads').send({
-      guardian_ref: 'g-staff',
-      student_ref: 's2',
-      subject: 'Staff',
-      body: 'Body',
-      author: 'office',
-    });
-    expect(staff.status).toBe(201);
-    expect(staff.body.thread.guardianRef).toBe('g-staff');
+    const staffCreate = await request(app)
+      .post('/api/engagement/t1/threads').set(staff('school_admin'))
+      .set({
+        'X-Blok-Internal': SECRET,
+        'X-Blok-Principal': 'staff',
+        'X-Blok-Role': 'office',
+        'X-Blok-Admin': '0',
+        'X-Blok-Email': 'office@school.test',
+        'X-Blok-Member': 'member-office',
+        'X-Blok-Tenant': 't1',
+      })
+      .send({
+        guardian_ref: 'g-staff',
+        student_ref: 's2',
+        subject: 'Staff',
+        body: 'Body',
+        author: 'office',
+      });
+    expect(staffCreate.status).toBe(201);
+    expect(staffCreate.body.thread.guardianRef).toBe('g-staff');
 
     const cross = await request(app)
-      .get(`/api/engagement/t2/threads/${id}`)
+      .get(`/api/engagement/t2/threads/${id}`).set(staff('school_admin'))
       .set('X-Blok-Internal', SECRET)
       .set('X-Blok-Principal', 'guardian')
       .set('X-Blok-Guardian', 'g-real');

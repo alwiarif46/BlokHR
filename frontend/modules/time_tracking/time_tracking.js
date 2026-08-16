@@ -7,6 +7,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { registerModule } from '../../shared/router.js';
 
 let _container = null;
@@ -94,7 +95,7 @@ export function ttShowForm(item) {
 }
 
 export async function ttDelete(idx) {
-  if (!confirm('Delete this item?')) return;
+  if (!(await confirmDialog({ message: 'Delete this item?', confirmLabel: 'Delete', danger: true }))) return;
   const item = _data[idx];
   if (!item) return;
   const result = await api.delete('/api/time-tracking/' + (item.id || idx));

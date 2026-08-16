@@ -498,6 +498,15 @@ export class AttendanceService {
     return { records, replayed: false };
   }
 
+  async getRecord(
+    tenantId: string,
+    id: string,
+  ): Promise<{ record?: AttendanceRecord; error?: ServiceError }> {
+    const record = await this.repo.getRecord(tenantId, id);
+    if (!record) return { error: { error: 'Record not found', status: 404 } };
+    return { record };
+  }
+
   async patchRecord(
     tenantId: string,
     id: string,

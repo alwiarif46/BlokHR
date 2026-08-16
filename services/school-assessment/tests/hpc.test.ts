@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -48,7 +49,7 @@ describe('school-assessment HPC (P4-04)', () => {
     app = created.app;
     db = created.db;
 
-    const comps = await request(app).get('/api/assessment/t1/hpc/competencies');
+    const comps = await request(app).get('/api/assessment/t1/hpc/competencies').set(staff('school_admin'));
     expect(comps.body.competencies).toHaveLength(SAMPLE_HPC_COMPETENCY_COUNT);
     middleId = comps.body.competencies.find(
       (c: { stage: string }) => c.stage === 'middle',
@@ -66,7 +67,7 @@ describe('school-assessment HPC (P4-04)', () => {
   });
 
   it('middle circled→level derivation; both fields → 400', async () => {
-    const both = await request(app).post('/api/assessment/t1/hpc/inputs').send({
+    const both = await request(app).post('/api/assessment/t1/hpc/inputs').set(staff('school_admin')).send({
       student_id: 's1',
       competency_id: middleId,
       source: 'teacher',
@@ -76,7 +77,7 @@ describe('school-assessment HPC (P4-04)', () => {
     });
     expect(both.status).toBe(400);
 
-    const ok = await request(app).post('/api/assessment/t1/hpc/inputs').send({
+    const ok = await request(app).post('/api/assessment/t1/hpc/inputs').set(staff('school_admin')).send({
       student_id: 's1',
       competency_id: middleId,
       source: 'teacher',
@@ -88,7 +89,7 @@ describe('school-assessment HPC (P4-04)', () => {
     expect(ok.body.statementsCircled).toBe(5);
     expect(ok.body.level).toBe('advanced');
 
-    const direct = await request(app).post('/api/assessment/t1/hpc/inputs').send({
+    const direct = await request(app).post('/api/assessment/t1/hpc/inputs').set(staff('school_admin')).send({
       student_id: 's1',
       competency_id: foundationalId,
       source: 'self',
@@ -107,24 +108,24 @@ describe('school-assessment HPC (P4-04)', () => {
       academic_session_ref: 'ay-2025',
     };
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, source: 'self', level: 'beginner', at: '2025-01-01T00:00:00.000Z' });
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, source: 'self', level: 'advanced', at: '2025-06-01T00:00:00.000Z' });
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, source: 'peer', level: 'proficient', at: '2025-03-01T00:00:00.000Z' });
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, source: 'teacher', level: 'beginner', at: '2025-02-01T00:00:00.000Z' });
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, source: 'parent', level: 'proficient', at: '2025-04-01T00:00:00.000Z' });
 
     const view = await request(app).get(
       '/api/assessment/t1/hpc/students/s1?session=ay-2025',
-    );
+    ).set(staff('school_admin'));
     expect(view.status).toBe(200);
     const row = view.body.competencies.find(
       (c: { competencyId: string }) => c.competencyId === foundationalId,
@@ -145,19 +146,19 @@ describe('school-assessment HPC (P4-04)', () => {
       academic_session_ref: 'ay-2025',
     };
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, level: 'beginner' });
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, level: 'beginner' });
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, level: 'advanced' });
     await request(app)
-      .post('/api/assessment/t1/hpc/inputs')
+      .post('/api/assessment/t1/hpc/inputs').set(staff('school_admin'))
       .send({ ...base, level: 'advanced' });
 
-    const matrix = await request(app).get('/api/assessment/t1/hpc/students/s2/matrix');
+    const matrix = await request(app).get('/api/assessment/t1/hpc/students/s2/matrix').set(staff('school_admin'));
     expect(matrix.status).toBe(200);
     const cell = matrix.body.cells.find(
       (c: { competencyId: string; session: string }) =>
@@ -174,12 +175,12 @@ describe('school-assessment HPC (P4-04)', () => {
       recorded_by: 'batch',
     }));
     const capped = await request(app)
-      .post('/api/assessment/t1/hpc/inputs/bulk')
+      .post('/api/assessment/t1/hpc/inputs/bulk').set(staff('school_admin'))
       .send({ inputs: tooMany });
     expect(capped.status).toBe(400);
 
     const bulk = await request(app)
-      .post('/api/assessment/t1/hpc/inputs/bulk')
+      .post('/api/assessment/t1/hpc/inputs/bulk').set(staff('school_admin'))
       .send({
         inputs: [
           {
@@ -198,11 +199,11 @@ describe('school-assessment HPC (P4-04)', () => {
   it('coverage math; tenant isolation', async () => {
     const stageComps = await request(app).get(
       '/api/assessment/t1/hpc/competencies?stage=foundational',
-    );
+    ).set(staff('school_admin'));
     const compId = stageComps.body.competencies[0].id as string;
 
     for (const student of ['a', 'b', 'c']) {
-      await request(app).post('/api/assessment/t1/hpc/inputs').send({
+      await request(app).post('/api/assessment/t1/hpc/inputs').set(staff('school_admin')).send({
         student_id: student,
         competency_id: compId,
         source: 'teacher',
@@ -210,14 +211,14 @@ describe('school-assessment HPC (P4-04)', () => {
         recorded_by: 't',
       });
     }
-    await request(app).post('/api/assessment/t1/hpc/inputs').send({
+    await request(app).post('/api/assessment/t1/hpc/inputs').set(staff('school_admin')).send({
       student_id: 'a',
       competency_id: compId,
       source: 'self',
       level: 'proficient',
       recorded_by: 'a',
     });
-    await request(app).post('/api/assessment/t1/hpc/inputs').send({
+    await request(app).post('/api/assessment/t1/hpc/inputs').set(staff('school_admin')).send({
       student_id: 'b',
       competency_id: compId,
       source: 'self',
@@ -228,7 +229,7 @@ describe('school-assessment HPC (P4-04)', () => {
 
     const cov = await request(app).get(
       '/api/assessment/t1/hpc/coverage?section_students=a,b,c&stage=foundational',
-    );
+    ).set(staff('school_admin'));
     expect(cov.status).toBe(200);
     const row = cov.body.coverage.find(
       (r: { competencyId: string }) => r.competencyId === compId,
@@ -237,14 +238,14 @@ describe('school-assessment HPC (P4-04)', () => {
     expect(row.studentCount).toBe(3);
     expect(row.pct).toBe(66.7);
 
-    await request(app).post('/api/assessment/t1/hpc/inputs').send({
+    await request(app).post('/api/assessment/t1/hpc/inputs').set(staff('school_admin')).send({
       student_id: 'iso',
       competency_id: foundationalId,
       source: 'self',
       level: 'beginner',
       recorded_by: 'iso',
     });
-    const other = await request(app).get('/api/assessment/t2/hpc/students/iso');
+    const other = await request(app).get('/api/assessment/t2/hpc/students/iso').set(staff('school_admin'));
     expect(other.status).toBe(200);
     expect(other.body.competencies).toEqual([]);
   });

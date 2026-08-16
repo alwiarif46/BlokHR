@@ -8,6 +8,10 @@ import { AttendanceRepository } from './repositories/attendance-repository';
 import { AttendanceService, hashCapturePayloadB64 } from './services/attendance-service';
 import { createAttendanceRouter } from './routes/attendance';
 import { resolveInternalSecret } from './internal-auth';
+import {
+  HttpTimetableClient,
+  type TimetableClient,
+} from './clients/timetable-client';
 
 export interface SchoolAttendanceAppOptions {
   dbPath: string;
@@ -15,6 +19,7 @@ export interface SchoolAttendanceAppOptions {
   logger: Logger;
   eventPublisher?: EventPublisher;
   internalSecret?: string;
+  timetableClient?: TimetableClient;
 }
 
 export async function createSchoolAttendanceApp(
@@ -30,6 +35,8 @@ export async function createSchoolAttendanceApp(
   const service = new AttendanceService(repo, events);
   const internalSecret =
     options.internalSecret ?? resolveInternalSecret(process.env);
+  const timetable =
+    options.timetableClient ?? new HttpTimetableClient(undefined, internalSecret);
 
   const app = express();
   app.use(cors());
@@ -39,7 +46,10 @@ export async function createSchoolAttendanceApp(
     res.json({ ok: true });
   });
 
-  app.use('/api/attendance', createAttendanceRouter(service, { internalSecret }));
+  app.use(
+    '/api/attendance',
+    createAttendanceRouter(service, { internalSecret, timetable }),
+  );
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     options.logger.error({ err }, 'School attendance error');
@@ -66,3 +76,6 @@ export {
 export { assignCohort, studentHoldoutBucket, classifyNudgeTier } from './services/nudge-math';
 export * from './types';
 export * from './events';
+export { asRole, guardRoutes, staffFromHeaders } from './role-guard';
+export type { Role, RoutePolicy } from './role-guard';
+export { ATTENDANCE_ROUTE_POLICIES } from './route-policies';

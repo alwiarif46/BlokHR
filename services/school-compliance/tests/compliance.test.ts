@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -43,10 +44,10 @@ describe('school-compliance calendar (P8-01)', () => {
   });
 
   it('health + seed visibility', async () => {
-    expect((await request(app).get('/health')).body.ok).toBe(true);
+    expect((await request(app).get('/health').set(staff('school_admin'))).body.ok).toBe(true);
     const cal = await request(app).get(
       '/api/compliance/t1/calendar?session=2025-26&today=2025-09-01',
-    );
+    ).set(staff('school_admin'));
     expect(cal.status).toBe(200);
     expect(cal.body.entries.length).toBe(SAMPLE_COMPLIANCE_ITEM_COUNT);
     const udise = cal.body.entries.find(
@@ -57,7 +58,7 @@ describe('school-compliance calendar (P8-01)', () => {
   });
 
   it('status transitions forward and backward-with-note', async () => {
-    const fwd = await request(app).put('/api/compliance/t1/status').send({
+    const fwd = await request(app).put('/api/compliance/t1/status').set(staff('school_admin')).send({
       item_key: 'udise_freeze',
       academic_session_ref: '2025-26',
       state: 'in_progress',
@@ -66,7 +67,7 @@ describe('school-compliance calendar (P8-01)', () => {
     expect(fwd.status).toBe(200);
     expect(fwd.body.state).toBe('in_progress');
 
-    const backNoNote = await request(app).put('/api/compliance/t1/status').send({
+    const backNoNote = await request(app).put('/api/compliance/t1/status').set(staff('school_admin')).send({
       item_key: 'udise_freeze',
       academic_session_ref: '2025-26',
       state: 'not_started',
@@ -74,7 +75,7 @@ describe('school-compliance calendar (P8-01)', () => {
     });
     expect(backNoNote.status).toBe(400);
 
-    const back = await request(app).put('/api/compliance/t1/status').send({
+    const back = await request(app).put('/api/compliance/t1/status').set(staff('school_admin')).send({
       item_key: 'udise_freeze',
       academic_session_ref: '2025-26',
       state: 'not_started',
@@ -87,7 +88,7 @@ describe('school-compliance calendar (P8-01)', () => {
   });
 
   it('overdue list excludes submitted/closed', async () => {
-    await request(app).put('/api/compliance/t1/status').send({
+    await request(app).put('/api/compliance/t1/status').set(staff('school_admin')).send({
       item_key: 'udise_freeze',
       academic_session_ref: '2025-26',
       state: 'submitted',
@@ -95,7 +96,7 @@ describe('school-compliance calendar (P8-01)', () => {
     });
     const overdue = await request(app).get(
       '/api/compliance/t1/overdue?session=2025-26&today=2025-10-15',
-    );
+    ).set(staff('school_admin'));
     expect(overdue.status).toBe(200);
     expect(
       overdue.body.entries.every(
@@ -106,7 +107,7 @@ describe('school-compliance calendar (P8-01)', () => {
   });
 
   it('tenant isolation', async () => {
-    await request(app).put('/api/compliance/t1/status').send({
+    await request(app).put('/api/compliance/t1/status').set(staff('school_admin')).send({
       item_key: 'cbse_loc',
       academic_session_ref: '2025-26',
       state: 'ready',
@@ -114,7 +115,7 @@ describe('school-compliance calendar (P8-01)', () => {
     });
     const other = await request(app).get(
       '/api/compliance/t2/calendar?session=2025-26&today=2025-09-01',
-    );
+    ).set(staff('school_admin'));
     const loc = other.body.entries.find(
       (e: { item: { key: string } }) => e.item.key === 'cbse_loc',
     );

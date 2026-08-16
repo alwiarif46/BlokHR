@@ -7,8 +7,7 @@ import {
   createSchoolAttendanceApp,
   type SchoolAttendanceSqlite,
 } from '../src/index';
-
-const SECRET = 'test-internal-secret';
+import { staff as asStaff, guardian, internalOnly, SECRET } from './helpers/auth';
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
@@ -43,7 +42,7 @@ describe('school-attendance guardian scope (P9-03)', () => {
   });
 
   async function sickCode() {
-    const codes = await request(app).get('/api/attendance/t1/reason-codes');
+    const codes = await request(app).get('/api/attendance/t1/reason-codes').set(asStaff('school_admin'));
     return codes.body.reasonCodes.find((c: { code: string }) => c.code === 'SICK')
       .id as string;
   }
@@ -96,15 +95,18 @@ describe('school-attendance guardian scope (P9-03)', () => {
       });
     expect(noSecret.status).toBe(401);
 
-    const staff = await request(app).post('/api/attendance/t1/reported-absences').send({
-      student_id: 's2',
-      reported_by_guardian_id: 'office-g',
-      dates: [addDaysUtc(today, 3)],
-      reason_code_id: reason,
-      channel: 'app',
-    });
-    expect(staff.status).toBe(201);
-    expect(staff.body.reportedByGuardianId).toBe('office-g');
+    const officeReport = await request(app)
+      .post('/api/attendance/t1/reported-absences')
+      .set(asStaff('office'))
+      .send({
+        student_id: 's2',
+        reported_by_guardian_id: 'office-g',
+        dates: [addDaysUtc(today, 3)],
+        reason_code_id: reason,
+        channel: 'app',
+      });
+    expect(officeReport.status).toBe(201);
+    expect(officeReport.body.reportedByGuardianId).toBe('office-g');
   });
 
   it('summary requires linked student and returns shape', async () => {

@@ -2,6 +2,8 @@ import { Router, Request, Response, NextFunction } from 'express';
 import type { EngagementService } from '../services/engagement-service';
 import type { MessageService } from '../services/message-service';
 import type { ThreadService } from '../services/thread-service';
+import type { DiaryService } from '../services/diary-service';
+import type { DiaryEntry } from '../types';
 import type {
   ChannelInput,
   ChannelKind,
@@ -13,7 +15,12 @@ import type {
   ThreadDirection,
   ThreadState,
 } from '../types';
-import { enforceGuardianPrincipal } from '../internal-auth';
+import {
+  enforceGuardianPrincipal,
+  parseStudentsHeader,
+} from '../internal-auth';
+import { guardRoutes, assertTeacherMemberMatch } from '../role-guard';
+import { ENGAGEMENT_ROUTE_POLICIES } from '../route-policies';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -23,14 +30,41 @@ function asyncHandler(
   };
 }
 
+function staffOf(req: Request) {
+  return (req as Request & { staff?: { ok: true; role: import('../role-guard').Role; memberId: string } })
+    .staff;
+}
+
+/** Ack summary: guardians_total is null — engagement doesn't know counts; BFF/frontend composes. */
+function diaryEntryJson(e: DiaryEntry) {
+  return {
+    id: e.id,
+    tenantId: e.tenantId,
+    sectionRef: e.sectionRef,
+    studentRef: e.studentRef,
+    entryDate: e.entryDate,
+    kind: e.kind,
+    body: e.body,
+    attachmentRefs: e.attachmentRefs,
+    authorMemberId: e.authorMemberId,
+    createdAt: e.createdAt,
+    updatedAt: e.updatedAt,
+    acks: e.acks ?? 0,
+    guardians_total: null as null,
+  };
+}
+
 export function createEngagementRouter(
   service: EngagementService,
   messages: MessageService,
   threads: ThreadService,
+  diary: DiaryService,
   opts: { internalSecret?: string } = {},
 ): Router {
   const internalSecret = opts.internalSecret ?? '';
   const router = Router({ mergeParams: true });
+
+  guardRoutes(router, ENGAGEMENT_ROUTE_POLICIES, { internalSecret });
 
   router.get(
     '/:tenantId/guardians/:guardianRef/channels',
@@ -395,6 +429,22 @@ export function createEngagementRouter(
           res.status(403).json({ error: 'forbidden' });
           return;
         }
+      } else {
+        // Teacher school-side reply only on threads assigned to them (P12-04).
+        const staff = staffOf(req);
+        if (staff?.ok && staff.role === 'teacher') {
+          const existing = await threads.get(req.params.tenantId, req.params.id);
+          if (existing.error) {
+            res.status(existing.error.status).json({ error: existing.error.error });
+            return;
+          }
+          const assigned = existing.thread!.assignedTo ?? '';
+          const match = assertTeacherMemberMatch(req, assigned);
+          if (!('ok' in match)) {
+            res.status(match.status).json({ error: match.error });
+            return;
+          }
+        }
       }
       const body = req.body as Record<string, unknown>;
       const result = await threads.reply(req.params.tenantId, req.params.id, {
@@ -456,5 +506,209 @@ export function createEngagementRouter(
     }),
   );
 
+  router.post(
+    '/:tenantId/diary',
+    asyncHandler(async (req, res) => {
+      const staff = staffOf(req);
+      if (!staff?.ok) {
+        res.status(403).json({ error: 'role_denied' });
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const result = await diary.createEntry(
+        req.params.tenantId,
+        {
+          sectionRef: String(body.section_ref ?? body.sectionRef ?? ''),
+          studentRef:
+            body.student_ref !== undefined || body.studentRef !== undefined
+              ? body.student_ref == null && body.studentRef == null
+                ? null
+                : String(body.student_ref ?? body.studentRef)
+              : null,
+          entryDate: String(body.entry_date ?? body.entryDate ?? ''),
+          kind: String(body.kind ?? ''),
+          body: String(body.body ?? ''),
+          attachmentRefs: Array.isArray(body.attachment_refs)
+            ? (body.attachment_refs as unknown[]).map(String)
+            : Array.isArray(body.attachmentRefs)
+              ? (body.attachmentRefs as unknown[]).map(String)
+              : null,
+        },
+        { role: staff.role, memberId: staff.memberId },
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(diaryEntryJson(result.entry!));
+    }),
+  );
+
+  router.get(
+    '/:tenantId/diary',
+    asyncHandler(async (req, res) => {
+      const staff = staffOf(req);
+      if (!staff?.ok) {
+        res.status(403).json({ error: 'role_denied' });
+        return;
+      }
+      const result = await diary.listStaff(
+        req.params.tenantId,
+        {
+          sectionRef:
+            typeof req.query.section_ref === 'string'
+              ? req.query.section_ref
+              : typeof req.query.sectionRef === 'string'
+                ? req.query.sectionRef
+                : undefined,
+          date: typeof req.query.date === 'string' ? req.query.date : undefined,
+          studentRef:
+            typeof req.query.student_ref === 'string'
+              ? req.query.student_ref
+              : typeof req.query.studentRef === 'string'
+                ? req.query.studentRef
+                : undefined,
+        },
+        { role: staff.role, memberId: staff.memberId },
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ entries: (result.entries ?? []).map(diaryEntryJson) });
+    }),
+  );
+
+  router.patch(
+    '/:tenantId/diary/:id',
+    asyncHandler(async (req, res) => {
+      const staff = staffOf(req);
+      if (!staff?.ok) {
+        res.status(403).json({ error: 'role_denied' });
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      if (
+        'section_ref' in body ||
+        'sectionRef' in body ||
+        'student_ref' in body ||
+        'studentRef' in body ||
+        'entry_date' in body ||
+        'entryDate' in body
+      ) {
+        res.status(400).json({
+          error: 'section_ref, student_ref, and entry_date are immutable',
+        });
+        return;
+      }
+      const result = await diary.patchEntry(
+        req.params.tenantId,
+        req.params.id,
+        {
+          kind: body.kind !== undefined ? String(body.kind) : undefined,
+          body: body.body !== undefined ? String(body.body) : undefined,
+          attachmentRefs: Array.isArray(body.attachment_refs)
+            ? (body.attachment_refs as unknown[]).map(String)
+            : Array.isArray(body.attachmentRefs)
+              ? (body.attachmentRefs as unknown[]).map(String)
+              : body.attachment_refs === null || body.attachmentRefs === null
+                ? null
+                : undefined,
+        },
+        { role: staff.role, memberId: staff.memberId },
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(diaryEntryJson(result.entry!));
+    }),
+  );
+
+  router.delete(
+    '/:tenantId/diary/:id',
+    asyncHandler(async (req, res) => {
+      const staff = staffOf(req);
+      if (!staff?.ok) {
+        res.status(403).json({ error: 'role_denied' });
+        return;
+      }
+      const result = await diary.deleteEntry(
+        req.params.tenantId,
+        req.params.id,
+        { role: staff.role, memberId: staff.memberId },
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(204).send();
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/diary',
+    asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      if (!gate.guardianId) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+      const studentRef =
+        typeof req.query.student_ref === 'string'
+          ? req.query.student_ref
+          : typeof req.query.studentRef === 'string'
+            ? req.query.studentRef
+            : '';
+      const result = await diary.listGuardian(req.params.tenantId, {
+        studentRef,
+        from: typeof req.query.from === 'string' ? req.query.from : undefined,
+        to: typeof req.query.to === 'string' ? req.query.to : undefined,
+        limit: req.query.limit ? Number(req.query.limit) : undefined,
+        offset: req.query.offset ? Number(req.query.offset) : undefined,
+        allowedStudents: parseStudentsHeader(req),
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ entries: (result.entries ?? []).map(diaryEntryJson) });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/guardian/diary/:id/ack',
+    asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      if (!gate.guardianId) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+      const body = (req.body ?? {}) as Record<string, unknown>;
+      const result = await diary.ack(
+        req.params.tenantId,
+        req.params.id,
+        String(body.student_ref ?? body.studentRef ?? ''),
+        gate.guardianId,
+        parseStudentsHeader(req),
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ ack: result.ack });
+    }),
+  );
+
   return router;
 }
+
+export { ENGAGEMENT_ROUTE_POLICIES };

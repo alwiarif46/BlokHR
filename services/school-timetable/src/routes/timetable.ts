@@ -1,5 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import type { TimetableService } from '../services/timetable-service';
+import { resolveInternalSecret } from '../internal-auth';
+import { assertTeacherMemberMatch, guardRoutes } from '../role-guard';
+import { TIMETABLE_ROUTE_POLICIES } from '../route-policies';
+
+import {
+  decodeTimetableImportBase64,
+  importTimetableFromWorkbook,
+} from '../services/timetable-import';
 import type {
   CreateAbsenceInput,
   CreateAllocationInput,
@@ -50,8 +58,39 @@ function pickPeriods(raw: unknown): PeriodDef[] {
   });
 }
 
-export function createTimetableRouter(service: TimetableService): Router {
+export function createTimetableRouter(service: TimetableService, opts: { internalSecret?: string } = {}): Router {
   const router = Router({ mergeParams: true });
+
+
+  const internalSecret = opts?.internalSecret ?? resolveInternalSecret();
+  guardRoutes(router, TIMETABLE_ROUTE_POLICIES, { internalSecret });
+  router.post(
+    '/:tenantId/import',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const filename = String(body.filename ?? '');
+      const contentBase64 = String(body.contentBase64 ?? body.content_base64 ?? '');
+      const academicSessionId = String(
+        body.academic_session_id ?? body.academicSessionId ?? '',
+      );
+      if (!/\.(xlsx|xls|csv)$/i.test(filename)) {
+        res.status(400).json({ error: 'filename must end with .xlsx, .xls, or .csv' });
+        return;
+      }
+      const decoded = decodeTimetableImportBase64(contentBase64);
+      if ('error' in decoded) {
+        res.status(400).json({ error: decoded.error });
+        return;
+      }
+      const result = await importTimetableFromWorkbook(
+        service,
+        req.params.tenantId,
+        decoded,
+        academicSessionId,
+      );
+      res.json({ success: true, ...result });
+    }),
+  );
 
   router.get(
     '/:tenantId/terms',
@@ -443,6 +482,11 @@ export function createTimetableRouter(service: TimetableService): Router {
   router.get(
     '/:tenantId/teachers/:memberId/slots',
     asyncHandler(async (req, res) => {
+      const match = assertTeacherMemberMatch(req, req.params.memberId);
+      if (!('ok' in match)) {
+        res.status(match.status).json({ error: match.error });
+        return;
+      }
       const result = await service.getTeacherSlots(
         req.params.tenantId,
         req.params.memberId,
@@ -652,8 +696,16 @@ export function createTimetableRouter(service: TimetableService): Router {
         const raw = body.period_indexes ?? body.periodIndexes;
         periodIndexes = raw == null ? null : (raw as number[]);
       }
+      const teacherMemberId = String(
+        body.teacher_member_id ?? body.teacherMemberId ?? '',
+      );
+      const match = assertTeacherMemberMatch(req, teacherMemberId);
+      if (!('ok' in match)) {
+        res.status(match.status).json({ error: match.error });
+        return;
+      }
       const input: CreateAbsenceInput = {
-        teacherMemberId: String(body.teacher_member_id ?? body.teacherMemberId ?? ''),
+        teacherMemberId,
         date: String(body.date ?? ''),
         periodIndexes,
         reason: String(body.reason ?? ''),
@@ -720,6 +772,17 @@ export function createTimetableRouter(service: TimetableService): Router {
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
       const accept = body.accept === true;
+      const existing = await service.getCover(req.params.tenantId, req.params.id);
+      if (existing.error) {
+        res.status(existing.error.status).json({ error: existing.error.error });
+        return;
+      }
+      const offered = existing.cover!.coverTeacherMemberId ?? '';
+      const match = assertTeacherMemberMatch(req, offered);
+      if (!('ok' in match)) {
+        res.status(match.status).json({ error: match.error });
+        return;
+      }
       const result = await service.respondCover(req.params.tenantId, req.params.id, accept);
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
@@ -738,6 +801,32 @@ export function createTimetableRouter(service: TimetableService): Router {
         return;
       }
       res.json({ cover: result.cover, instance: result.instance });
+    }),
+  );
+
+  /** Service→service L5 scope check (P12-05). Internal secret only. */
+  router.post(
+    '/:tenantId/internal/verify-teacher',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await service.verifyTeacher(req.params.tenantId, {
+        teacherMemberId: String(
+          body.teacher_member_id ?? body.teacherMemberId ?? '',
+        ),
+        periodInstanceId:
+          body.period_instance_id != null || body.periodInstanceId != null
+            ? String(body.period_instance_id ?? body.periodInstanceId)
+            : null,
+        sectionRef:
+          body.section_ref != null || body.sectionRef != null
+            ? String(body.section_ref ?? body.sectionRef)
+            : null,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ allowed: result.allowed });
     }),
   );
 

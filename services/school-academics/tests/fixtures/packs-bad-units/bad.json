@@ -1,0 +1,23 @@
+{
+  "id": "cbse-2026-27",
+  "family": "cbse",
+  "board": "cbse",
+  "academic_year": "2026-27",
+  "label": "cbse-2026-27",
+  "status": "sample",
+  "source_note": "SAMPLE fixture",
+  "courses": [
+    {
+      "subject_code": "Sc",
+      "class_label": "8",
+      "label": "Sc 8",
+      "units": [
+        {
+          "label": "",
+          "planned_weeks": 0,
+          "topics": []
+        }
+      ]
+    }
+  ]
+}

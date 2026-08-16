@@ -9,6 +9,7 @@ import {
   deriveDayPresent,
   type AttendanceRecord,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolAttendanceSqlite } from '../src/db';
 
 function rec(
@@ -120,7 +121,7 @@ describe('school-attendance rollups API (P2-07)', () => {
     extra: Record<string, unknown> = {},
   ) {
     return request(app)
-      .post(`/api/attendance/${tenant}/mark`)
+      .post(`/api/attendance/${tenant}/mark`).set(staff('school_admin'))
       .send({
         context: { date },
         marks: [{ student_id: studentId, status, ...extra }],
@@ -134,7 +135,7 @@ describe('school-attendance rollups API (P2-07)', () => {
     await mark('t1', '2025-08-05', 's1', 'absent', 'r2');
     await mark('t1', '2025-08-04', 's2', 'present', 'r3');
 
-    const first = await request(app).post('/api/attendance/t1/rollups/compute').send({
+    const first = await request(app).post('/api/attendance/t1/rollups/compute').set(staff('school_admin')).send({
       month: '2025-08',
       working_days: 20,
     });
@@ -145,7 +146,7 @@ describe('school-attendance rollups API (P2-07)', () => {
     expect(s1.absentDays).toBe(19);
     expect(s1.pct).toBe(5);
 
-    const second = await request(app).post('/api/attendance/t1/rollups/compute').send({
+    const second = await request(app).post('/api/attendance/t1/rollups/compute').set(staff('school_admin')).send({
       month: '2025-08',
       working_days: 20,
     });
@@ -157,21 +158,21 @@ describe('school-attendance rollups API (P2-07)', () => {
     );
     expect(Number(count?.c)).toBe(2);
 
-    const listed = await request(app).get('/api/attendance/t1/rollups?month=2025-08');
+    const listed = await request(app).get('/api/attendance/t1/rollups?month=2025-08').set(staff('school_admin'));
     expect(listed.body.rollups).toHaveLength(2);
 
-    const student = await request(app).get('/api/attendance/t1/students/s1/rollups');
+    const student = await request(app).get('/api/attendance/t1/students/s1/rollups').set(staff('school_admin'));
     expect(student.body.rollups).toHaveLength(1);
     expect(student.body.rollups[0].month).toBe('2025-08');
   });
 
   it('respects day_derivation setting for rollups', async () => {
-    await request(app).put('/api/attendance/t1/settings').send({
+    await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       granularity: 'period',
       day_derivation: 'any_absent',
     });
     await request(app)
-      .post('/api/attendance/t1/mark')
+      .post('/api/attendance/t1/mark').set(staff('school_admin'))
       .send({
         context: { date: '2025-08-11', period_instance_id: 'p1' },
         marks: [{ student_id: 's1', status: 'present' }],
@@ -179,7 +180,7 @@ describe('school-attendance rollups API (P2-07)', () => {
         idempotency_key: 'p-a',
       });
     await request(app)
-      .post('/api/attendance/t1/mark')
+      .post('/api/attendance/t1/mark').set(staff('school_admin'))
       .send({
         context: { date: '2025-08-11', period_instance_id: 'p2' },
         marks: [{ student_id: 's1', status: 'absent' }],
@@ -187,16 +188,16 @@ describe('school-attendance rollups API (P2-07)', () => {
         idempotency_key: 'p-b',
       });
 
-    const anyAbsent = await request(app).post('/api/attendance/t1/rollups/compute').send({
+    const anyAbsent = await request(app).post('/api/attendance/t1/rollups/compute').set(staff('school_admin')).send({
       month: '2025-08',
       working_days: 10,
     });
     expect(anyAbsent.body.rollups[0].presentDays).toBe(0);
 
-    await request(app).put('/api/attendance/t1/settings').send({
+    await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       day_derivation: 'majority',
     });
-    const majority = await request(app).post('/api/attendance/t1/rollups/compute').send({
+    const majority = await request(app).post('/api/attendance/t1/rollups/compute').set(staff('school_admin')).send({
       month: '2025-08',
       working_days: 10,
     });
@@ -211,8 +212,8 @@ describe('school-attendance rollups API (P2-07)', () => {
     await mark('t2', '2025-08-04', 's1', 'absent', 'e4');
 
     const elig = await request(app).get(
-      '/api/attendance/t1/students/s1/eligibility?session_from=2025-08-04&session_to=2025-08-08&threshold=75',
-    );
+      '/api/attendance/t1/students/s1/eligibility?session_from=2025-08-04&session_to=2025-08-08&threshold=75'
+    ).set(staff('school_admin'));
     expect(elig.status).toBe(200);
     expect(elig.body.pct).toBe(40);
     expect(elig.body.eligible).toBe(false);
@@ -225,20 +226,20 @@ describe('school-attendance rollups API (P2-07)', () => {
     const to = '2026-08-21'; // Fri
     await mark('t1', from, 's9', 'present', 'fut-1');
     const proj = await request(app).get(
-      `/api/attendance/t1/students/s9/eligibility?session_from=${from}&session_to=${to}&threshold=75`,
-    );
+      `/api/attendance/t1/students/s9/eligibility?session_from=${from}&session_to=${to}&threshold=75`
+    ).set(staff('school_admin'));
     expect(proj.status).toBe(200);
     expect(proj.body.pct).toBe(20);
     expect(proj.body.projected_pct_if_no_more_absences).toBe(100);
     expect(proj.body.eligible).toBe(false);
 
     const t2 = await request(app).get(
-      '/api/attendance/t2/students/s1/eligibility?session_from=2025-08-04&session_to=2025-08-08&threshold=75',
-    );
+      '/api/attendance/t2/students/s1/eligibility?session_from=2025-08-04&session_to=2025-08-08&threshold=75'
+    ).set(staff('school_admin'));
     expect(t2.body.pct).toBe(0);
     expect(t2.body.eligible).toBe(false);
 
-    const settings = await request(app).get('/api/attendance/t1/settings');
+    const settings = await request(app).get('/api/attendance/t1/settings').set(staff('school_admin'));
     expect(settings.body.dayDerivation).toBe('majority');
   });
 });

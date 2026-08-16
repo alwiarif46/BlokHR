@@ -16,6 +16,7 @@ import {
 } from './proxy-headers';
 import { applySsePassthroughHeaders, clearSseSocketTimeouts, isSseStreamPath } from './sse-proxy';
 import {
+  isGuardianStudentRefAllowed,
   isGuardianSurfacePath,
   resolveGuardianAllowlist,
 } from './guards/guardian-allowlist';
@@ -26,12 +27,20 @@ import {
   safeIntrospect,
   type IntrospectFn,
 } from './guards/guardian-introspect';
+import {
+  CachedStaffIntrospect,
+  createHttpStaffIntrospect,
+  safeStaffIntrospect,
+  staffBlokHeaders,
+  type StaffIntrospectFn,
+} from './guards/staff-introspect';
+import { isPublicSvcPath } from './guards/public-paths';
 
 const PROXY_TIMEOUT_MS = 30_000;
 /** 0 = no timeout kill (SSE must stay open). */
 const SSE_NO_TIMEOUT = 0;
 
-type GuardianProxyRequest = Request & {
+type BlokProxyRequest = Request & {
   _blokExtraHeaders?: Record<string, string>;
 };
 
@@ -40,6 +49,8 @@ export interface GatewayAppOptions {
   logger: Logger;
   /** Override identity introspect (tests). */
   introspect?: IntrospectFn;
+  /** Override staff introspect (tests). */
+  staffIntrospect?: StaffIntrospectFn;
 }
 
 function buildProxyHooks(
@@ -52,7 +63,7 @@ function buildProxyHooks(
   return {
     proxyReq: (proxyReq, req) => {
       markProxyStart(req);
-      const extra = (req as GuardianProxyRequest)._blokExtraHeaders;
+      const extra = (req as BlokProxyRequest)._blokExtraHeaders;
       applyProxyHeaderHygiene(proxyReq, internalSecret, extra);
       if (opts.ssePassthrough || isSseStreamPath(req)) {
         req.socket?.setTimeout(0);
@@ -93,6 +104,7 @@ function guardianBlokHeaders(
 export function createGatewayApp(options: GatewayAppOptions): {
   app: Express;
   introspectCache: CachedIntrospect;
+  staffIntrospectCache: CachedStaffIntrospect;
 } {
   const { config, logger } = options;
   const app = express();
@@ -106,8 +118,45 @@ export function createGatewayApp(options: GatewayAppOptions): {
     });
   const introspectCache = new CachedIntrospect(introspectFn);
 
+  const staffIntrospectFn =
+    options.staffIntrospect ??
+    createHttpStaffIntrospect({
+      monolithUrl: config.monolithUrl,
+      directoryUrl: config.directoryUrl,
+      internalSecret: config.internalSecret,
+    });
+  const staffIntrospectCache = new CachedStaffIntrospect(staffIntrospectFn);
+
   app.get('/healthz', (_req: Request, res: Response) => {
     res.json({ ok: true, services: [...SERVICE_NAMES] });
+  });
+
+  /**
+   * Staff whoami (P12-02). Guardian tokens → anonymous (portal has its own surface).
+   */
+  app.get('/whoami', async (req: Request, res: Response) => {
+    const token = parseBearer(
+      typeof req.headers.authorization === 'string'
+        ? req.headers.authorization
+        : undefined,
+    );
+    if (!token) {
+      res.json({ principal: 'anonymous' });
+      return;
+    }
+    const result = await safeStaffIntrospect(staffIntrospectCache, token, logger);
+    if (result === 'down' || !result.active) {
+      res.json({ principal: 'anonymous' });
+      return;
+    }
+    res.json({
+      principal: 'staff',
+      email: result.email,
+      role: result.role,
+      isAdmin: result.isAdmin || result.role === 'admin',
+      tenantId: result.tenantId,
+      memberId: result.memberId,
+    });
   });
 
   const serviceProxies = new Map<
@@ -227,13 +276,22 @@ export function createGatewayApp(options: GatewayAppOptions): {
       return;
     }
 
+    const linked = result.studentIds ?? [];
+    if (
+      surfacePath === '/guardian/diary' &&
+      !isGuardianStudentRefAllowed(pathWithQuery, linked)
+    ) {
+      res.status(403).json({ error: 'forbidden' });
+      return;
+    }
+
     const proxy = serviceProxies.get(match.service);
     if (!proxy) {
       res.status(502).json({ error: 'upstream_unavailable', service: match.service });
       return;
     }
 
-    const gReq = req as GuardianProxyRequest;
+    const gReq = req as BlokProxyRequest;
     gReq._blokExtraHeaders = guardianBlokHeaders(
       result.tenantId,
       result.guardianId,
@@ -244,7 +302,7 @@ export function createGatewayApp(options: GatewayAppOptions): {
     proxy(req, res, next);
   });
 
-  app.use('/svc/:service', (req: Request, res: Response, next: NextFunction) => {
+  app.use('/svc/:service', async (req: Request, res: Response, next: NextFunction) => {
     const service = req.params.service;
     if (!isKnownService(service)) {
       res.status(404).json({ error: 'unknown_service' });
@@ -255,6 +313,37 @@ export function createGatewayApp(options: GatewayAppOptions): {
       res.status(404).json({ error: 'unknown_service' });
       return;
     }
+
+    // Upstream path is whatever remains after /svc/:service (Express strips the mount).
+    const upstreamPath = req.url && req.url.length > 0 ? req.url : '/';
+    if (isPublicSvcPath(service, req.method, upstreamPath)) {
+      proxy(req, res, next);
+      return;
+    }
+
+    const token = parseBearer(
+      typeof req.headers.authorization === 'string'
+        ? req.headers.authorization
+        : undefined,
+    );
+    if (!token) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    // Fail-closed for school data (unlike monolith staff fail-open).
+    const result = await safeStaffIntrospect(staffIntrospectCache, token, logger);
+    if (result === 'down') {
+      res.status(503).json({ error: 'introspect_unavailable' });
+      return;
+    }
+    if (!result.active) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const sReq = req as BlokProxyRequest;
+    sReq._blokExtraHeaders = staffBlokHeaders(result);
     proxy(req, res, next);
   });
 
@@ -271,6 +360,11 @@ export function createGatewayApp(options: GatewayAppOptions): {
   }) as (req: Request, res: Response, next: NextFunction) => void;
 
   app.use('/api/sse', sseProxy);
+
+  // P12-02: never let a browser reach introspect via gateway (would attach X-Blok-Internal).
+  app.all('/api/auth/introspect', (_req: Request, res: Response) => {
+    res.status(404).json({ error: 'not_found' });
+  });
 
   const monolithProxy = createProxyMiddleware({
     target: config.monolithUrl,
@@ -320,7 +414,7 @@ export function createGatewayApp(options: GatewayAppOptions): {
     }
   });
 
-  return { app, introspectCache };
+  return { app, introspectCache, staffIntrospectCache };
 }
 
 export {
@@ -333,3 +427,10 @@ export {
   hashBearerToken,
   parseBearer,
 } from './guards/guardian-introspect';
+export {
+  CachedStaffIntrospect,
+  createHttpStaffIntrospect,
+  resolveStaffRole,
+  staffBlokHeaders,
+} from './guards/staff-introspect';
+export { PUBLIC_PATHS, isPublicSvcPath } from './guards/public-paths';

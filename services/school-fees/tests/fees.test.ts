@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -24,13 +25,13 @@ describe('school-fees structures (P6-01)', () => {
   });
 
   it('health ok', async () => {
-    const res = await request(app).get('/health');
+    const res = await request(app).get('/health').set(staff('school_admin'));
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
   });
 
   it('fee heads CRUD + unique code', async () => {
-    const created = await request(app).post('/api/fees/t1/heads').send({
+    const created = await request(app).post('/api/fees/t1/heads').set(staff('school_admin')).send({
       code: 'TUITION',
       label: 'Tuition',
       kind: 'tuition',
@@ -40,35 +41,35 @@ describe('school-fees structures (P6-01)', () => {
     expect(created.body.code).toBe('TUITION');
     const id = created.body.id as string;
 
-    const dup = await request(app).post('/api/fees/t1/heads').send({
+    const dup = await request(app).post('/api/fees/t1/heads').set(staff('school_admin')).send({
       code: 'TUITION',
       label: 'Dup',
       kind: 'tuition',
     });
     expect(dup.status).toBe(409);
 
-    const patched = await request(app).patch(`/api/fees/t1/heads/${id}`).send({
+    const patched = await request(app).patch(`/api/fees/t1/heads/${id}`).set(staff('school_admin')).send({
       label: 'Tuition Fee',
     });
     expect(patched.body.label).toBe('Tuition Fee');
 
-    const listed = await request(app).get('/api/fees/t1/heads');
+    const listed = await request(app).get('/api/fees/t1/heads').set(staff('school_admin'));
     expect(listed.body.heads).toHaveLength(1);
 
-    const del = await request(app).delete(`/api/fees/t1/heads/${id}`);
+    const del = await request(app).delete(`/api/fees/t1/heads/${id}`).set(staff('school_admin'));
     expect(del.status).toBe(200);
-    expect((await request(app).get('/api/fees/t1/heads')).body.heads).toEqual([]);
+    expect((await request(app).get('/api/fees/t1/heads').set(staff('school_admin'))).body.heads).toEqual([]);
   });
 
   it('structures validate amounts and head refs', async () => {
-    const head = await request(app).post('/api/fees/t1/heads').send({
+    const head = await request(app).post('/api/fees/t1/heads').set(staff('school_admin')).send({
       code: 'LAB',
       label: 'Lab',
       kind: 'lab',
     });
     const headId = head.body.id as string;
 
-    const badAmt = await request(app).post('/api/fees/t1/structures').send({
+    const badAmt = await request(app).post('/api/fees/t1/structures').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       class_label: '5-A',
       label: 'Class 5',
@@ -76,7 +77,7 @@ describe('school-fees structures (P6-01)', () => {
     });
     expect(badAmt.status).toBe(400);
 
-    const badHead = await request(app).post('/api/fees/t1/structures').send({
+    const badHead = await request(app).post('/api/fees/t1/structures').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       class_label: '5-A',
       label: 'Class 5',
@@ -84,7 +85,7 @@ describe('school-fees structures (P6-01)', () => {
     });
     expect(badHead.status).toBe(400);
 
-    const ok = await request(app).post('/api/fees/t1/structures').send({
+    const ok = await request(app).post('/api/fees/t1/structures').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       class_label: '5-A',
       label: 'Class 5 fees',
@@ -96,14 +97,14 @@ describe('school-fees structures (P6-01)', () => {
   });
 
   it('concessions pct/flat validation + CRUD', async () => {
-    const head = await request(app).post('/api/fees/t1/heads').send({
+    const head = await request(app).post('/api/fees/t1/heads').set(staff('school_admin')).send({
       code: 'TUITION',
       label: 'Tuition',
       kind: 'tuition',
     });
     const headId = head.body.id as string;
 
-    const badPct = await request(app).post('/api/fees/t1/concessions').send({
+    const badPct = await request(app).post('/api/fees/t1/concessions').set(staff('school_admin')).send({
       code: 'SIB',
       label: 'Sibling',
       kind: 'pct',
@@ -111,7 +112,7 @@ describe('school-fees structures (P6-01)', () => {
     });
     expect(badPct.status).toBe(400);
 
-    const pct = await request(app).post('/api/fees/t1/concessions').send({
+    const pct = await request(app).post('/api/fees/t1/concessions').set(staff('school_admin')).send({
       code: 'SIB',
       label: 'Sibling',
       kind: 'pct',
@@ -121,7 +122,7 @@ describe('school-fees structures (P6-01)', () => {
     expect(pct.status).toBe(201);
     expect(pct.body.appliesToHeads).toEqual([headId]);
 
-    const flat = await request(app).post('/api/fees/t1/concessions').send({
+    const flat = await request(app).post('/api/fees/t1/concessions').set(staff('school_admin')).send({
       code: 'STAFF',
       label: 'Staff',
       kind: 'flat',
@@ -130,18 +131,18 @@ describe('school-fees structures (P6-01)', () => {
     expect(flat.status).toBe(201);
     expect(flat.body.appliesToHeads).toBeNull();
 
-    const listed = await request(app).get('/api/fees/t1/concessions');
+    const listed = await request(app).get('/api/fees/t1/concessions').set(staff('school_admin'));
     expect(listed.body.concessions).toHaveLength(2);
   });
 
   it('tenant isolation', async () => {
-    const head = await request(app).post('/api/fees/t1/heads').send({
+    const head = await request(app).post('/api/fees/t1/heads').set(staff('school_admin')).send({
       code: 'EXAM',
       label: 'Exam',
       kind: 'exam',
     });
-    const other = await request(app).get(`/api/fees/t2/heads/${head.body.id}`);
+    const other = await request(app).get(`/api/fees/t2/heads/${head.body.id}`).set(staff('school_admin'));
     expect(other.status).toBe(404);
-    expect((await request(app).get('/api/fees/t2/heads')).body.heads).toEqual([]);
+    expect((await request(app).get('/api/fees/t2/heads').set(staff('school_admin'))).body.heads).toEqual([]);
   });
 });

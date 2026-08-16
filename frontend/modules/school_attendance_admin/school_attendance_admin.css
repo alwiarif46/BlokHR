@@ -1,6 +1,6 @@
 /**
  * modules/school_attendance_admin/school_attendance_admin.css
- * Admin tabs: registers, unexplained, settings, eligibility, nudge.
+ * Ops tabs: registers, unexplained. Policy tabs live in school_settings.
  * CSS custom properties only.
  */
 
@@ -108,6 +108,10 @@
   background: transparent;
   color: var(--tx2);
   border-color: var(--bd);
+}
+
+.aa-policy-links {
+  margin-bottom: 8px;
 }
 
 .aa-table {

@@ -844,6 +844,110 @@ export class AcademicsRepository {
     );
     return row ?? null;
   }
+
+  async findCourseByKey(
+    tenantId: string,
+    academicSessionId: string,
+    board: CourseBoard,
+    subjectCode: string,
+    classLabel: string,
+  ): Promise<Course | null> {
+    const row = await this.db.get<CourseRow>(
+      `SELECT * FROM courses
+       WHERE tenant_id = ? AND academic_session_id = ? AND board = ?
+         AND subject_code = ? AND class_label = ?
+       LIMIT 1`,
+      [tenantId, academicSessionId, board, subjectCode, classLabel],
+    );
+    return row ? mapCourse(row) : null;
+  }
+
+  async insertInstalledPack(row: {
+    id: string;
+    tenantId: string;
+    packId: string;
+    packStatusAtInstall: string;
+    academicSessionId: string;
+    courseIdsJson: string;
+    installedBy: string;
+  }): Promise<InstalledPackRow> {
+    await this.db.run(
+      `INSERT INTO installed_packs (
+         id, tenant_id, pack_id, pack_status_at_install, academic_session_id,
+         course_ids_json, installed_by
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.id,
+        row.tenantId,
+        row.packId,
+        row.packStatusAtInstall,
+        row.academicSessionId,
+        row.courseIdsJson,
+        row.installedBy,
+      ],
+    );
+    const created = await this.getInstalledPack(row.tenantId, row.id);
+    if (!created) throw new Error('Failed to read installed pack');
+    return created;
+  }
+
+  async getInstalledPack(tenantId: string, id: string): Promise<InstalledPackRow | null> {
+    const row = await this.db.get<InstalledPackDbRow>(
+      'SELECT * FROM installed_packs WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
+    return row ? mapInstalledPack(row) : null;
+  }
+
+  async listInstalledPacks(tenantId: string): Promise<InstalledPackRow[]> {
+    const rows = await this.db.all<InstalledPackDbRow>(
+      `SELECT * FROM installed_packs WHERE tenant_id = ? ORDER BY installed_at DESC`,
+      [tenantId],
+    );
+    return rows.map(mapInstalledPack);
+  }
+}
+
+export interface InstalledPackRow {
+  id: string;
+  tenantId: string;
+  packId: string;
+  packStatusAtInstall: string;
+  academicSessionId: string;
+  courseIds: string[];
+  installedBy: string;
+  installedAt: string;
+}
+
+interface InstalledPackDbRow extends Record<string, unknown> {
+  id: string;
+  tenant_id: string;
+  pack_id: string;
+  pack_status_at_install: string;
+  academic_session_id: string;
+  course_ids_json: string;
+  installed_by: string;
+  installed_at: string;
+}
+
+function mapInstalledPack(row: InstalledPackDbRow): InstalledPackRow {
+  let courseIds: string[] = [];
+  try {
+    const parsed = JSON.parse(row.course_ids_json) as unknown;
+    if (Array.isArray(parsed)) courseIds = parsed.map((x) => String(x));
+  } catch {
+    courseIds = [];
+  }
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    packId: row.pack_id,
+    packStatusAtInstall: row.pack_status_at_install,
+    academicSessionId: row.academic_session_id,
+    courseIds,
+    installedBy: row.installed_by,
+    installedAt: row.installed_at,
+  };
 }
 
 interface AssignmentRow extends Record<string, unknown> {

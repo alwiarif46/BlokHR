@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -20,7 +21,7 @@ describe('school-academics syllabus import/export (P3-07)', () => {
     app = created.app;
     db = created.db;
 
-    const course = await request(app).post('/api/academics/t1/courses').send({
+    const course = await request(app).post('/api/academics/t1/courses').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       board: 'cbse',
       subject_code: 'Sc',
@@ -31,7 +32,7 @@ describe('school-academics syllabus import/export (P3-07)', () => {
 
     const outcomes = await request(app).get(
       '/api/academics/t1/outcomes?class=8&subject=Sc',
-    );
+    ).set(staff('school_admin'));
     knownCode = outcomes.body.outcomes[0].code as string;
   });
 
@@ -55,7 +56,7 @@ describe('school-academics syllabus import/export (P3-07)', () => {
 
   it('atomic validation failure leaves course empty', async () => {
     const bad = await request(app)
-      .post(`/api/academics/t1/courses/${courseId}/import`)
+      .post(`/api/academics/t1/courses/${courseId}/import`).set(staff('school_admin'))
       .send({
         units: [
           {
@@ -74,13 +75,13 @@ describe('school-academics syllabus import/export (P3-07)', () => {
     expect(Array.isArray(bad.body.errors)).toBe(true);
     expect(bad.body.errors.length).toBeGreaterThan(0);
 
-    const tree = await request(app).get(`/api/academics/t1/courses/${courseId}/tree`);
+    const tree = await request(app).get(`/api/academics/t1/courses/${courseId}/tree`).set(staff('school_admin'));
     expect(tree.body.units).toEqual([]);
   });
 
   it('warnings for unknown codes; errors for invalid rows', async () => {
     const ok = await request(app)
-      .post(`/api/academics/t1/courses/${courseId}/import`)
+      .post(`/api/academics/t1/courses/${courseId}/import`).set(staff('school_admin'))
       .send({ units: validUnits() });
     expect(ok.status).toBe(200);
     expect(ok.body.warnings).toContain('unknown outcome code: NO.SUCH.CODE');
@@ -90,13 +91,13 @@ describe('school-academics syllabus import/export (P3-07)', () => {
 
   it('replace guard when delivery rows exist', async () => {
     await request(app)
-      .post(`/api/academics/t1/courses/${courseId}/import`)
+      .post(`/api/academics/t1/courses/${courseId}/import`).set(staff('school_admin'))
       .send({ units: validUnits() });
 
-    const tree = await request(app).get(`/api/academics/t1/courses/${courseId}/tree`);
+    const tree = await request(app).get(`/api/academics/t1/courses/${courseId}/tree`).set(staff('school_admin'));
     const topicId = tree.body.units[0].topics[0].id as string;
 
-    await request(app).post('/api/academics/t1/delivery').send({
+    await request(app).post('/api/academics/t1/delivery').set(staff('school_admin')).send({
       topic_id: topicId,
       period_instance_id: 'pi-1',
       section_ref: '8A',
@@ -105,14 +106,14 @@ describe('school-academics syllabus import/export (P3-07)', () => {
     });
 
     const blocked = await request(app)
-      .post(`/api/academics/t1/courses/${courseId}/import`)
+      .post(`/api/academics/t1/courses/${courseId}/import`).set(staff('school_admin'))
       .send({ mode: 'replace', units: validUnits() });
     expect(blocked.status).toBe(409);
   });
 
   it('round-trip import(export(x)) is identity', async () => {
     await request(app)
-      .post(`/api/academics/t1/courses/${courseId}/import`)
+      .post(`/api/academics/t1/courses/${courseId}/import`).set(staff('school_admin'))
       .send({
         units: [
           {
@@ -131,10 +132,10 @@ describe('school-academics syllabus import/export (P3-07)', () => {
 
     const exported = await request(app).get(
       `/api/academics/t1/courses/${courseId}/export`,
-    );
+    ).set(staff('school_admin'));
     expect(exported.status).toBe(200);
 
-    const course2 = await request(app).post('/api/academics/t1/courses').send({
+    const course2 = await request(app).post('/api/academics/t1/courses').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       board: 'cbse',
       subject_code: 'Sc',
@@ -142,28 +143,28 @@ describe('school-academics syllabus import/export (P3-07)', () => {
       label: 'Science 8 copy',
     });
     await request(app)
-      .post(`/api/academics/t1/courses/${course2.body.id}/import`)
+      .post(`/api/academics/t1/courses/${course2.body.id}/import`).set(staff('school_admin'))
       .send(exported.body);
     const again = await request(app).get(
       `/api/academics/t1/courses/${course2.body.id}/export`,
-    );
+    ).set(staff('school_admin'));
     expect(again.body).toEqual(exported.body);
 
     // Same-course replace round-trip
     await request(app)
-      .post(`/api/academics/t1/courses/${courseId}/import`)
+      .post(`/api/academics/t1/courses/${courseId}/import`).set(staff('school_admin'))
       .send({ mode: 'replace', ...exported.body });
     const replaced = await request(app).get(
       `/api/academics/t1/courses/${courseId}/export`,
-    );
+    ).set(staff('school_admin'));
     expect(replaced.body).toEqual(exported.body);
   });
 
   it('tenant isolation', async () => {
     await request(app)
-      .post(`/api/academics/t1/courses/${courseId}/import`)
+      .post(`/api/academics/t1/courses/${courseId}/import`).set(staff('school_admin'))
       .send({ units: validUnits() });
-    const other = await request(app).get(`/api/academics/t2/courses/${courseId}/export`);
+    const other = await request(app).get(`/api/academics/t2/courses/${courseId}/export`).set(staff('school_admin'));
     expect(other.status).toBe(404);
   });
 });

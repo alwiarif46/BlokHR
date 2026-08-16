@@ -126,3 +126,7 @@ export type {
   UdisePreflightResult,
   UdisePreflightRow,
 } from './clients/identity-client';
+
+export { asRole, guardRoutes } from './role-guard';
+export type { Role, RoutePolicy } from './role-guard';
+export { COMPLIANCE_ROUTE_POLICIES } from './route-policies';

@@ -5,6 +5,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { registerModule } from '../../shared/router.js';
 
 let _container = null;
@@ -198,7 +199,7 @@ function _bind(container) {
         await ssvLoad();
       } else toast((res && (res.error || res.message)) || 'Failed', 'error');
     } else if (action === 'delete') {
-      if (!confirm('Delete draft?')) return;
+      if (!(await confirmDialog({ message: 'Delete draft?', confirmLabel: 'Delete', danger: true }))) return;
       const res = await _svc().del('/' + item.id);
       if (res && !res._error) {
         toast('Deleted', 'success');

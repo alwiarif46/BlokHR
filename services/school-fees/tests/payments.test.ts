@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -29,12 +30,12 @@ describe('school-fees payments (P6-03)', () => {
   let clock: { now: Date };
 
   async function invoiceForStudent(studentRef: string, dueOn = '2025-09-01') {
-    const head = await request(app).post('/api/fees/t1/heads').send({
+    const head = await request(app).post('/api/fees/t1/heads').set(staff('school_admin')).send({
       code: `H-${studentRef}`,
       label: 'Tuition',
       kind: 'tuition',
     });
-    const structure = await request(app).post('/api/fees/t1/structures').send({
+    const structure = await request(app).post('/api/fees/t1/structures').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       class_label: '5-A',
       label: 'Class 5',
@@ -42,12 +43,12 @@ describe('school-fees payments (P6-03)', () => {
         { fee_head_id: head.body.id, amount_paise: 100000, schedule: 'term' },
       ],
     });
-    await request(app).post('/api/fees/t1/assignments').send({
+    await request(app).post('/api/fees/t1/assignments').set(staff('school_admin')).send({
       student_ref: studentRef,
       fee_structure_id: structure.body.id,
       payer: 'guardian',
     });
-    const gen = await request(app).post('/api/fees/t1/invoices/generate').send({
+    const gen = await request(app).post('/api/fees/t1/invoices/generate').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       period_label: `P-${studentRef}`,
       class_label: '5-A',
@@ -82,7 +83,7 @@ describe('school-fees payments (P6-03)', () => {
   it('overpay guard; UTR required; duplicate UTR; part_paid/paid', async () => {
     const inv = await invoiceForStudent('s1');
 
-    const noUtr = await request(app).post('/api/fees/t1/payments').send({
+    const noUtr = await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 10000,
       method: 'upi_direct',
@@ -90,7 +91,7 @@ describe('school-fees payments (P6-03)', () => {
     });
     expect(noUtr.status).toBe(400);
 
-    const partial = await request(app).post('/api/fees/t1/payments').send({
+    const partial = await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 40000,
       method: 'upi_direct',
@@ -101,7 +102,7 @@ describe('school-fees payments (P6-03)', () => {
     expect(partial.status).toBe(201);
     expect(partial.body.invoice.status).toBe('part_paid');
 
-    const over = await request(app).post('/api/fees/t1/payments').send({
+    const over = await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 70000,
       method: 'cash',
@@ -109,7 +110,7 @@ describe('school-fees payments (P6-03)', () => {
     });
     expect(over.status).toBe(400);
 
-    const dup = await request(app).post('/api/fees/t1/payments').send({
+    const dup = await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 10000,
       method: 'bank_transfer',
@@ -118,7 +119,7 @@ describe('school-fees payments (P6-03)', () => {
     });
     expect(dup.status).toBe(409);
 
-    const rest = await request(app).post('/api/fees/t1/payments').send({
+    const rest = await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 60000,
       method: 'cash',
@@ -129,14 +130,14 @@ describe('school-fees payments (P6-03)', () => {
 
   it('reconcile match / unmatch / mismatch', async () => {
     const inv = await invoiceForStudent('s2');
-    await request(app).post('/api/fees/t1/payments').send({
+    await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 50000,
       method: 'upi_direct',
       utr: 'MATCH',
       recorded_by: 'c',
     });
-    await request(app).post('/api/fees/t1/payments').send({
+    await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 20000,
       method: 'bank_transfer',
@@ -144,7 +145,7 @@ describe('school-fees payments (P6-03)', () => {
       recorded_by: 'c',
     });
 
-    const rec = await request(app).post('/api/fees/t1/payments/reconcile').send({
+    const rec = await request(app).post('/api/fees/t1/payments/reconcile').set(staff('school_admin')).send({
       rows: [
         { utr: 'MATCH', amount_paise: 50000, date: '2025-09-20' },
         { utr: 'MISMATCH', amount_paise: 19999, date: '2025-09-21' },
@@ -163,7 +164,7 @@ describe('school-fees payments (P6-03)', () => {
 
   it('bounce recomputes invoice and emits event', async () => {
     const inv = await invoiceForStudent('s3');
-    const pay = await request(app).post('/api/fees/t1/payments').send({
+    const pay = await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 100000,
       method: 'cheque',
@@ -174,7 +175,7 @@ describe('school-fees payments (P6-03)', () => {
 
     const bounce = await request(app).post(
       `/api/fees/t1/payments/${pay.body.payment.id}/bounce`,
-    );
+    ).set(staff('school_admin'));
     expect(bounce.status).toBe(200);
     expect(bounce.body.payment.status).toBe('bounced');
     expect(bounce.body.invoice.status).toBe('issued');
@@ -183,7 +184,7 @@ describe('school-fees payments (P6-03)', () => {
 
   it('outstanding ageing + ledger ordering + tenant isolation', async () => {
     const inv = await invoiceForStudent('s4', '2025-09-01');
-    await request(app).post('/api/fees/t1/payments').send({
+    await request(app).post('/api/fees/t1/payments').set(staff('school_admin')).send({
       invoice_id: inv.id,
       amount_paise: 10000,
       method: 'cash',
@@ -193,19 +194,19 @@ describe('school-fees payments (P6-03)', () => {
 
     const outstanding = await request(app).get(
       '/api/fees/t1/outstanding?class=5-A&min_days_overdue=30',
-    );
+    ).set(staff('school_admin'));
     expect(outstanding.status).toBe(200);
     expect(outstanding.body.outstanding).toHaveLength(1);
     expect(outstanding.body.outstanding[0].daysOverdue).toBe(61);
     expect(outstanding.body.outstanding[0].ageingBucket).toBe('61+');
     expect(outstanding.body.outstanding[0].outstandingPaise).toBe(90000);
 
-    const ledger = await request(app).get('/api/fees/t1/students/s4/ledger');
+    const ledger = await request(app).get('/api/fees/t1/students/s4/ledger').set(staff('school_admin'));
     expect(ledger.body.entries).toHaveLength(2);
     expect(ledger.body.entries[0].kind).toBe('invoice');
     expect(ledger.body.entries[1].kind).toBe('payment');
 
-    const other = await request(app).get('/api/fees/t2/outstanding');
+    const other = await request(app).get('/api/fees/t2/outstanding').set(staff('school_admin'));
     expect(other.body.outstanding).toEqual([]);
   });
 });

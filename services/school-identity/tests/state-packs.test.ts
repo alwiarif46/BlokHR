@@ -10,6 +10,7 @@ import {
   type EventPublisher,
   type DomainEvent,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolIdentitySqlite } from '../src/db';
 
 class RecordingPublisher implements EventPublisher {
@@ -93,7 +94,7 @@ describe('school-identity state packs', () => {
   });
 
   it('lists and fetches packs via API; sets tenant pack', async () => {
-    const list = await request(app).get('/api/identity/state-packs');
+    const list = await request(app).get('/api/identity/state-packs').set(staff('admin'));
     expect(list.status).toBe(200);
     expect(list.body.packs).toEqual(
       expect.arrayContaining([
@@ -103,27 +104,27 @@ describe('school-identity state packs', () => {
       ]),
     );
 
-    const detail = await request(app).get('/api/identity/state-packs/TN');
+    const detail = await request(app).get('/api/identity/state-packs/TN').set(staff('admin'));
     expect(detail.status).toBe(200);
     expect(detail.body.code).toBe('TN');
     expect(detail.body.studentIdField.label).toBe('EMIS');
 
     const set = await request(app)
-      .put('/api/identity/t1/state-pack')
+      .put('/api/identity/t1/state-pack').set(staff('school_admin'))
       .send({ pack_code: 'TN' });
     expect(set.status).toBe(200);
     expect(set.body.packCode).toBe('TN');
 
-    const got = await request(app).get('/api/identity/t1/state-pack');
+    const got = await request(app).get('/api/identity/t1/state-pack').set(staff('admin'));
     expect(got.status).toBe(200);
     expect(got.body.packCode).toBe('TN');
   });
 
   it('enforces TN EMIS pattern and category codes when pack is set', async () => {
-    await request(app).put('/api/identity/t1/state-pack').send({ pack_code: 'TN' });
+    await request(app).put('/api/identity/t1/state-pack').set(staff('school_admin')).send({ pack_code: 'TN' });
 
     const badId = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(
         studentPayload({
           state_student_id: '123',
@@ -134,7 +135,7 @@ describe('school-identity state packs', () => {
     expect(badId.body.error).toMatch(/EMIS/);
 
     const badCat = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(
         studentPayload({
           admission_number: 'ADM-002',
@@ -146,7 +147,7 @@ describe('school-identity state packs', () => {
     expect(badCat.body.error).toMatch(/state_category_code/);
 
     const ok = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(
         studentPayload({
           admission_number: 'ADM-003',
@@ -161,7 +162,7 @@ describe('school-identity state packs', () => {
 
   it('skips pack validation when tenant has no state pack', async () => {
     const res = await request(app)
-      .post('/api/identity/t2/students')
+      .post('/api/identity/t2/students').set(staff('admin'))
       .send(
         studentPayload({
           state_student_id: 'not-an-emis',

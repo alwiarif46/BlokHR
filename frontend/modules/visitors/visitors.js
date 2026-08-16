@@ -6,6 +6,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog, confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -503,7 +504,13 @@ export async function visCheckIn(id) {
     toast('Admin only', 'error');
     return;
   }
-  const notes = window.prompt('Reception notes (optional)', '') || '';
+  const notes = await promptDialog({
+    title: 'Check in visitor',
+    label: 'Reception notes (optional)',
+    placeholder: 'Anything to record at reception?',
+    confirmLabel: 'Check in',
+  });
+  if (notes === null) return;
   const result = await api.post('/api/visitors/' + id + '/check-in', {
     receptionNotes: notes,
   });
@@ -534,7 +541,7 @@ export async function visCancel(id) {
     toast('Admin only', 'error');
     return;
   }
-  if (!confirm('Cancel this visit?')) return;
+  if (!(await confirmDialog({ message: 'Cancel this visit?', confirmLabel: 'Cancel visit', cancelLabel: 'Keep', danger: true }))) return;
   const result = await api.post('/api/visitors/' + id + '/cancel', {});
   if (result && !result._error) {
     toast('Cancelled', 'success');
@@ -549,7 +556,7 @@ export async function visMarkNoShow(id) {
     toast('Admin only', 'error');
     return;
   }
-  if (!confirm('Mark this visitor as no-show?')) return;
+  if (!(await confirmDialog({ message: 'Mark this visitor as no-show?', confirmLabel: 'Mark no-show', danger: true }))) return;
   const result = await api.post('/api/visitors/' + id + '/no-show', {});
   if (result && !result._error) {
     toast('Marked no-show', 'success');

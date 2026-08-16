@@ -38,7 +38,8 @@ export function setTenantId(tenantId) {
  * Save session to memory + localStorage.
  * @param {{ name?: string, email: string, source?: string,
  *           sessionToken?: string, mustChangePassword?: boolean,
- *           vertical?: string, is_admin?: boolean, role?: string }} user
+ *           vertical?: string, is_admin?: boolean, role?: string,
+ *           schoolRole?: string }} user
  */
 export function saveSession(user) {
   _session = {
@@ -51,6 +52,7 @@ export function saveSession(user) {
     role: user.role || 'employee',
     vertical: user.vertical === 'school' ? 'school' : user.vertical === 'hr' ? 'hr' : undefined,
   };
+  if (user.schoolRole) _session.schoolRole = user.schoolRole;
   try {
     localStorage.setItem(_storageKey, JSON.stringify(_session));
   } catch (_e) {

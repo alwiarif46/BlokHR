@@ -34,6 +34,57 @@ describe('Setup wizard — vertical step 0', () => {
     expect(document.getElementById('wzCardSchool').classList.contains('selected')).toBe(true);
   });
 
+  it('switches wizard copy to campus wording when School is selected', () => {
+    wizard.initWizard({ setupComplete: false, currentStep: 1, branding: {} });
+    document.getElementById('wzCardSchool').click();
+
+    expect(document.getElementById('wzSecIdentity').textContent).toBe('Campus Identity');
+    expect(document.getElementById('wzLblOrgName').textContent).toBe('Campus Name');
+    expect(document.getElementById('wzErrName').textContent).toBe('Campus name is required');
+    expect(document.getElementById('wzSecAuth').textContent).toBe('How your staff signs in');
+    expect(document.getElementById('wzCompanyName').getAttribute('placeholder')).toBe(
+      'Greenwood High School',
+    );
+    expect(document.getElementById('wzEmailName').getAttribute('placeholder')).toBe(
+      'Defaults to campus name',
+    );
+  });
+
+  it('keeps company wording for the HR vertical', () => {
+    wizard.initWizard({ setupComplete: false, currentStep: 1, branding: {} });
+    document.getElementById('wzCardHr').click();
+
+    expect(document.getElementById('wzSecIdentity').textContent).toBe('Company Identity');
+    expect(document.getElementById('wzLblOrgName').textContent).toBe('Company Name');
+    expect(document.getElementById('wzSecAuth').textContent).toBe('How your team signs in');
+    expect(document.getElementById('wzCompanyName').getAttribute('placeholder')).toBe(
+      'Acme Corporation',
+    );
+  });
+
+  it('reverts to company wording when switching back from School', () => {
+    wizard.initWizard({ setupComplete: false, currentStep: 1, branding: {} });
+    document.getElementById('wzCardSchool').click();
+    document.getElementById('wzCardHr').click();
+
+    expect(document.getElementById('wzLblOrgName').textContent).toBe('Company Name');
+    expect(document.getElementById('wzCompanyName').getAttribute('placeholder')).toBe(
+      'Acme Corporation',
+    );
+  });
+
+  it('applies campus wording on reload of a locked school workspace', () => {
+    wizard.initWizard({
+      setupComplete: false,
+      currentStep: 2,
+      vertical: 'school',
+      branding: {},
+    });
+
+    expect(document.getElementById('wzLblOrgName').textContent).toBe('Campus Name');
+    expect(document.getElementById('wzSecIdentity').textContent).toBe('Campus Identity');
+  });
+
   it('gates advance behind the confirm dialog', async () => {
     wizard.initWizard({ setupComplete: false, currentStep: 1, branding: {} });
     document.getElementById('wzCardHr').click();

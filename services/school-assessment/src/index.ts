@@ -12,6 +12,11 @@ import {
 import { AssessmentRepository } from './repositories/assessment-repository';
 import { AssessmentService } from './services/assessment-service';
 import { createAssessmentRouter } from './routes/assessment';
+import {
+  HttpTimetableClient,
+  type TimetableClient,
+} from './clients/timetable-client';
+import { resolveInternalSecret } from './internal-auth';
 
 export interface SchoolAssessmentAppOptions {
   dbPath: string;
@@ -20,6 +25,8 @@ export interface SchoolAssessmentAppOptions {
   eventPublisher?: EventPublisher;
   academicsClient?: AcademicsClient;
   academicsUrl?: string;
+  timetableClient?: TimetableClient;
+  internalSecret?: string;
 }
 
 export async function createSchoolAssessmentApp(
@@ -50,7 +57,19 @@ export async function createSchoolAssessmentApp(
     res.json({ ok: true });
   });
 
-  app.use('/api/assessment', createAssessmentRouter(service));
+  app.use(
+    '/api/assessment',
+    createAssessmentRouter(service, {
+      internalSecret:
+        options.internalSecret ?? resolveInternalSecret(process.env),
+      timetable:
+        options.timetableClient ??
+        new HttpTimetableClient(
+          undefined,
+          options.internalSecret ?? resolveInternalSecret(process.env),
+        ),
+    }),
+  );
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     options.logger.error({ err }, 'School assessment error');
@@ -82,3 +101,7 @@ export { SAMPLE_HPC_COMPETENCY_COUNT, seedSampleHpcCompetencies } from './seed-h
 export * from './types';
 export * from './events';
 export type { AcademicsClient, InferAssessmentDeliveryInput } from './clients/academics-client';
+
+export { asRole, guardRoutes } from './role-guard';
+export type { Role, RoutePolicy } from './role-guard';
+export { ASSESSMENT_ROUTE_POLICIES } from './route-policies';

@@ -1,14 +1,16 @@
 /**
  * modules/school_academics/school_academics.js
  *
- * Academics admin: Curriculum | Coverage | Variance | Lessons.
+ * Academics: Curriculum | Coverage | Variance | Lessons.
+ * Courses come from School Settings → Syllabus Packs (install/upload), not this module.
  * Pattern: render… → sacLoadData() → sacRender() → tab actions.
  */
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
 import { getSession } from '../../shared/session.js';
-import { registerModule } from '../../shared/router.js';
+import { navigateToModule, registerModule } from '../../shared/router.js';
+import { canAcademicsCourseWrite } from '../../shared/school-roles.js';
 
 const TABS = ['curriculum', 'coverage', 'variance', 'lessons'];
 const FIELD_BADGE = { activity: 'A', assessment: 'AS', resource: 'R' };
@@ -30,6 +32,8 @@ let _reviewQueue = [];
 let _editLesson = null;
 let _tagError = '';
 let _dragUnitId = null;
+/** @type {string|null} set when GET /courses fails (service down / 502) */
+let _loadError = null;
 
 function _esc(s) {
   const d = document.createElement('div');
@@ -48,6 +52,40 @@ function _ac() {
 
 function _tt() {
   return api.school('school-timetable');
+}
+
+function _isAdmin() {
+  const session = getSession() || {};
+  const roles =
+    typeof window !== 'undefined' && window.BlokHR && window.BlokHR.userRoles
+      ? window.BlokHR.userRoles
+      : null;
+  return !!(
+    (roles && roles.isAdmin) ||
+    session.is_admin ||
+    session.role === 'admin'
+  );
+}
+
+/** L6 cosmetic — enforced server-side by P12-04/05 */
+function _canCourseWrite() {
+  const session = getSession() || {};
+  return canAcademicsCourseWrite(session.schoolRole, _isAdmin());
+}
+
+/** L6 cosmetic — enforced server-side by P12-04 */
+function _canReviewLessons() {
+  return _canCourseWrite();
+}
+
+/** Open School Settings on Syllabus Packs (one-shot sessionStorage handoff). */
+function _openSyllabusSettings() {
+  try {
+    sessionStorage.setItem('scs_open_tab', 'syllabus');
+  } catch (_) {
+    /* ignore */
+  }
+  navigateToModule('school_settings');
 }
 
 /**
@@ -139,6 +177,7 @@ export function buildOutcomeGrid(coverage) {
 export function renderSchoolAcademicsPage(container) {
   _container = container;
   _tab = 'curriculum';
+  _courses = [];
   _courseId = '';
   _tree = null;
   _coverage = null;
@@ -147,6 +186,7 @@ export function renderSchoolAcademicsPage(container) {
   _tagError = '';
   _sectionRef = '';
   _targetDate = '';
+  _loadError = null;
 
   container.innerHTML =
     '<div class="sac-wrap" id="sacWrap">' +
@@ -189,11 +229,24 @@ export function sacSwitchTab(tab) {
 }
 
 export async function sacLoadData() {
-  if (!_courses.length) {
+  if (!_courses.length || _loadError) {
     const res = await _ac().get('/courses');
-    _courses = res && !res._error ? res.courses || [] : [];
-    if (res && res._error) toast(res.message || 'Could not load courses', 'error');
-    if (!_courseId && _courses.length) _courseId = _courses[0].id;
+    if (res && !res._error) {
+      _courses = res.courses || [];
+      _loadError = null;
+      if (!_courseId && _courses.length) _courseId = _courses[0].id;
+    } else {
+      _courses = [];
+      _loadError =
+        (res && (res.message || res.error)) ||
+        'Academics service unavailable. Start school-academics or check the gateway.';
+      toast(res && res.message ? res.message : 'Could not load courses', 'error');
+    }
+  }
+
+  if (_loadError) {
+    sacRender();
+    return;
   }
 
   if (_tab === 'curriculum') await _loadCurriculum();
@@ -311,6 +364,9 @@ async function _loadVariance() {
 async function _loadLessons() {
   const week = _weekStart();
   const teacher = _actor();
+  const reviewPromise = _canReviewLessons()
+    ? _ac().get('/lessons?state=submitted')
+    : Promise.resolve({ lessons: [] });
   const [mine, queue] = await Promise.all([
     _ac().get(
       '/lessons?teacher_member_id=' +
@@ -318,7 +374,7 @@ async function _loadLessons() {
         '&week_start=' +
         encodeURIComponent(week),
     ),
-    _ac().get('/lessons?state=submitted'),
+    reviewPromise,
   ]);
   _lessons = mine && !mine._error ? mine.lessons || [] : [];
   if (mine && mine._error) toast(mine.message || 'Could not load lessons', 'error');
@@ -335,10 +391,59 @@ function _weekStart() {
 export function sacRender() {
   const content = _container && _container.querySelector('#sacContent');
   if (!content) return;
+
+  if (_loadError) {
+    _renderServiceUnavailable(content);
+    return;
+  }
+  if (!_courses.length) {
+    _renderNoCourses(content);
+    return;
+  }
+
   if (_tab === 'curriculum') _renderCurriculum(content);
   else if (_tab === 'coverage') _renderCoverage(content);
   else if (_tab === 'variance') _renderVariance(content);
   else if (_tab === 'lessons') _renderLessons(content);
+}
+
+function _renderServiceUnavailable(content) {
+  content.innerHTML =
+    '<div class="sac-panel sac-state" id="sacUnavailable">' +
+    '<h4>Academics service unavailable</h4>' +
+    '<p class="sac-help">' +
+    _esc(_loadError) +
+    '</p>' +
+    '<p class="sac-help">Ensure <code>school-academics</code> is running (port 3014) via <code>npm run dev:school</code>.</p>' +
+    '<button type="button" class="sac-btn" id="sacRetryBtn">Retry</button>' +
+    '</div>';
+  content.querySelector('#sacRetryBtn').addEventListener('click', function () {
+    _loadError = null;
+    _courses = [];
+    sacLoadData();
+  });
+}
+
+function _renderNoCourses(content) {
+  const admin = _isAdmin();
+  content.innerHTML =
+    '<div class="sac-panel sac-state" id="sacNoCourses">' +
+    '<h4>No syllabus yet</h4>' +
+    '<p class="sac-help">' +
+    (admin
+      ? 'Install a board pack or upload a custom syllabus in School Settings, then return here.'
+      : 'Ask an admin to install a syllabus pack in School Settings.') +
+    '</p>' +
+    (admin
+      ? '<button type="button" class="sac-btn ghost" id="sacInstallSyllabusBtn">Install syllabus…</button>'
+      : '') +
+    '</div>';
+  const btn = content.querySelector('#sacInstallSyllabusBtn');
+  if (btn) {
+    btn.addEventListener('click', function () {
+      _openSyllabusSettings();
+    });
+  }
 }
 
 function _coursePickerHtml() {
@@ -377,62 +482,79 @@ function _bindCoursePicker(content) {
 
 function _renderCurriculum(content) {
   const units = (_tree && _tree.units) || [];
+  const canWrite = _canCourseWrite();
+  let body;
+  if (!_courseId) {
+    body = '<div class="sac-empty">Select a course.</div>';
+  } else if (!units.length) {
+    body =
+      '<div class="sac-empty" id="sacEmptyUnits">No units in this course yet.</div>';
+  } else {
+    body =
+      '<div id="sacTree">' +
+      units
+        .map(function (u) {
+          const chips = (u.outcomes || [])
+            .map(function (t) {
+              const b = outcomeTagBadges(t.field, t.depth);
+              return (
+                '<span class="sac-chip" data-outcome="' +
+                _esc(t.outcomeId) +
+                '" title="' +
+                _esc(t.outcomeId) +
+                '"><span class="sac-field">' +
+                _esc(b.fieldBadge) +
+                '</span>/<span class="sac-depth">' +
+                _esc(b.depthBadge) +
+                '</span></span>'
+              );
+            })
+            .join('');
+          const topics = (u.topics || [])
+            .map(function (t) {
+              return '<div class="sac-topic">' + _esc(t.label) + '</div>';
+            })
+            .join('');
+          return (
+            '<div class="sac-tree-unit"' +
+            (canWrite ? ' draggable="true"' : '') +
+            ' data-unit-id="' +
+            _esc(u.id) +
+            '">' +
+            '<div class="sac-unit-head">' +
+            '<span class="sac-unit-label">' +
+            _esc(u.label) +
+            '</span>' +
+            (canWrite
+              ? '<button type="button" class="sac-btn ghost" data-tag-unit="' +
+                _esc(u.id) +
+                '">Tag outcome</button>'
+              : '') +
+            '</div>' +
+            topics +
+            '<div class="sac-chips">' +
+            chips +
+            '</div></div>'
+          );
+        })
+        .join('') +
+      '</div>';
+  }
+
   content.innerHTML =
     '<div class="sac-toolbar">' +
     _coursePickerHtml() +
-    '<span class="sac-help">Drag units to reorder</span>' +
+    (canWrite ? '<span class="sac-help">Drag units to reorder</span>' : '') +
     '</div>' +
     (_tagError ? '<div class="sac-inline-err" id="sacTagErr">' + _esc(_tagError) + '</div>' : '') +
-    (!_courseId
-      ? '<div class="sac-empty">Select a course.</div>'
-      : '<div id="sacTree">' +
-        units
-          .map(function (u) {
-            const chips = (u.outcomes || [])
-              .map(function (t) {
-                const b = outcomeTagBadges(t.field, t.depth);
-                return (
-                  '<span class="sac-chip" data-outcome="' +
-                  _esc(t.outcomeId) +
-                  '" title="' +
-                  _esc(t.outcomeId) +
-                  '"><span class="sac-field">' +
-                  _esc(b.fieldBadge) +
-                  '</span>/<span class="sac-depth">' +
-                  _esc(b.depthBadge) +
-                  '</span></span>'
-                );
-              })
-              .join('');
-            const topics = (u.topics || [])
-              .map(function (t) {
-                return '<div class="sac-topic">' + _esc(t.label) + '</div>';
-              })
-              .join('');
-            return (
-              '<div class="sac-tree-unit" draggable="true" data-unit-id="' +
-              _esc(u.id) +
-              '">' +
-              '<div class="sac-unit-head">' +
-              '<span class="sac-unit-label">' +
-              _esc(u.label) +
-              '</span>' +
-              '<button type="button" class="sac-btn ghost" data-tag-unit="' +
-              _esc(u.id) +
-              '">Tag outcome</button>' +
-              '</div>' +
-              topics +
-              '<div class="sac-chips">' +
-              chips +
-              '</div></div>'
-            );
-          })
-          .join('') +
-        '</div>');
+    body;
 
   _bindCoursePicker(content);
   const tree = content.querySelector('#sacTree');
   if (!tree) return;
+
+  /* L6 cosmetic — enforced server-side by P12-04; course writes school_admin+ */
+  if (!canWrite) return;
 
   tree.querySelectorAll('.sac-tree-unit').forEach(function (el) {
     const id = el.getAttribute('data-unit-id');
@@ -785,6 +907,7 @@ function _renderVariance(content) {
 }
 
 function _renderLessons(content) {
+  const showReview = _canReviewLessons();
   content.innerHTML =
     '<div class="sac-toolbar">' +
     '<button type="button" class="sac-btn" id="sacNewLesson">+ Draft</button>' +
@@ -792,7 +915,10 @@ function _renderLessons(content) {
     '</div>' +
     '<div class="sac-layout">' +
     '<div><h4 class="sac-help">My week</h4><div id="sacLessonList"></div>' +
-    '<h4 class="sac-help">Reviewer queue</h4><div id="sacReviewList"></div></div>' +
+    (showReview
+      ? '<h4 class="sac-help">Reviewer queue</h4><div id="sacReviewList"></div>'
+      : '') +
+    '</div>' +
     '<div id="sacLessonEditor"></div></div>';
 
   content.querySelector('#sacNewLesson').addEventListener('click', function () {
@@ -834,61 +960,64 @@ function _renderLessons(content) {
     });
   });
 
-  const rev = content.querySelector('#sacReviewList');
-  rev.innerHTML = _reviewQueue.length
-    ? _reviewQueue
-        .map(function (l) {
-          return (
-            '<div class="sac-panel" data-review-id="' +
-            _esc(l.id) +
-            '"><strong>' +
-            _esc(l.title) +
-            '</strong> · <span class="sac-provenance ' +
-            _esc(l.provenance || '') +
-            '">' +
-            _esc(l.provenance || 'human') +
-            '</span>' +
-            '<div class="sac-form-actions">' +
-            '<button type="button" class="sac-btn ghost" data-approve="' +
-            _esc(l.id) +
-            '">Approve</button>' +
-            '<button type="button" class="sac-btn ghost" data-changes="' +
-            _esc(l.id) +
-            '">Changes</button>' +
-            '</div>' +
-            '<div class="sac-field" hidden data-note-wrap="' +
-            _esc(l.id) +
-            '"><label>Review note *</label><textarea data-note="' +
-            _esc(l.id) +
-            '"></textarea>' +
-            '<button type="button" class="sac-btn" data-send-changes="' +
-            _esc(l.id) +
-            '">Request changes</button></div></div>'
-          );
-        })
-        .join('')
-    : '<div class="sac-empty">Queue empty.</div>';
+  /* L6 cosmetic — enforced server-side by P12-04 */
+  if (showReview) {
+    const rev = content.querySelector('#sacReviewList');
+    rev.innerHTML = _reviewQueue.length
+      ? _reviewQueue
+          .map(function (l) {
+            return (
+              '<div class="sac-panel" data-review-id="' +
+              _esc(l.id) +
+              '"><strong>' +
+              _esc(l.title) +
+              '</strong> · <span class="sac-provenance ' +
+              _esc(l.provenance || '') +
+              '">' +
+              _esc(l.provenance || 'human') +
+              '</span>' +
+              '<div class="sac-form-actions">' +
+              '<button type="button" class="sac-btn ghost" data-approve="' +
+              _esc(l.id) +
+              '">Approve</button>' +
+              '<button type="button" class="sac-btn ghost" data-changes="' +
+              _esc(l.id) +
+              '">Changes</button>' +
+              '</div>' +
+              '<div class="sac-field" hidden data-note-wrap="' +
+              _esc(l.id) +
+              '"><label>Review note *</label><textarea data-note="' +
+              _esc(l.id) +
+              '"></textarea>' +
+              '<button type="button" class="sac-btn" data-send-changes="' +
+              _esc(l.id) +
+              '">Request changes</button></div></div>'
+            );
+          })
+          .join('')
+      : '<div class="sac-empty">Queue empty.</div>';
 
-  rev.querySelectorAll('[data-approve]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      sacReviewLesson(btn.getAttribute('data-approve'), 'approved', null);
+    rev.querySelectorAll('[data-approve]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        sacReviewLesson(btn.getAttribute('data-approve'), 'approved', null);
+      });
     });
-  });
-  rev.querySelectorAll('[data-changes]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      const id = btn.getAttribute('data-changes');
-      const wrap = rev.querySelector('[data-note-wrap="' + id + '"]');
-      if (wrap) wrap.hidden = false;
+    rev.querySelectorAll('[data-changes]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const id = btn.getAttribute('data-changes');
+        const wrap = rev.querySelector('[data-note-wrap="' + id + '"]');
+        if (wrap) wrap.hidden = false;
+      });
     });
-  });
-  rev.querySelectorAll('[data-send-changes]').forEach(function (btn) {
-    btn.addEventListener('click', function () {
-      const id = btn.getAttribute('data-send-changes');
-      const noteEl = rev.querySelector('[data-note="' + id + '"]');
-      const note = noteEl ? (noteEl.value || '').trim() : '';
-      sacReviewLesson(id, 'changes_requested', note);
+    rev.querySelectorAll('[data-send-changes]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const id = btn.getAttribute('data-send-changes');
+        const noteEl = rev.querySelector('[data-note="' + id + '"]');
+        const note = noteEl ? (noteEl.value || '').trim() : '';
+        sacReviewLesson(id, 'changes_requested', note);
+      });
     });
-  });
+  }
 
   if (_editLesson !== undefined && _editLesson !== null) {
     sacOpenLessonEditor(_editLesson);
@@ -1036,6 +1165,7 @@ export function sacGetState() {
   return {
     tab: _tab,
     courseId: _courseId,
+    courses: _courses.slice(),
     tree: _tree,
     coverage: _coverage,
     variance: _variance,
@@ -1043,6 +1173,7 @@ export function sacGetState() {
     reviewQueue: _reviewQueue.slice(),
     tagError: _tagError,
     sectionRef: _sectionRef,
+    loadError: _loadError,
   };
 }
 
@@ -1057,6 +1188,7 @@ export function sacSetState(partial) {
   if (partial.lessons) _lessons = partial.lessons;
   if (partial.reviewQueue) _reviewQueue = partial.reviewQueue;
   if (partial.outcomes) _outcomes = partial.outcomes;
+  if (partial.loadError !== undefined) _loadError = partial.loadError;
   if (partial.sectionRef != null) _sectionRef = partial.sectionRef;
   if (partial.tagError != null) _tagError = partial.tagError;
   if (_container) {

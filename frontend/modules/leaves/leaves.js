@@ -10,6 +10,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog, confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -312,7 +313,14 @@ export async function lvApprove(id) {
 }
 
 export async function lvReject(id) {
-  const reason = prompt('Rejection reason:');
+  const reason = await promptDialog({
+    title: 'Reject leave request',
+    label: 'Rejection reason',
+    placeholder: 'Why is this being rejected?',
+    confirmLabel: 'Reject',
+    required: true,
+    danger: true,
+  });
   if (reason === null) return;
 
   const result = await api.post('/api/leave-reject', { leaveId: id, reason: reason });
@@ -325,7 +333,7 @@ export async function lvReject(id) {
 }
 
 export async function lvCancel(id) {
-  if (!confirm('Cancel this leave application?')) return;
+  if (!(await confirmDialog({ message: 'Cancel this leave application?', confirmLabel: 'Cancel application', cancelLabel: 'Keep', danger: true }))) return;
 
   const session = getSession() || {};
   const result = await api.post('/api/leave-delete', {

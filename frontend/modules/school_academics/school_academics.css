@@ -209,6 +209,19 @@
   font-size: 13px;
 }
 
+.sac-state {
+  max-width: 420px;
+}
+
+.sac-state .sac-help {
+  margin: 0 0 10px;
+}
+
+.sac-state code {
+  font-size: 11px;
+  color: var(--tx2);
+}
+
 .sac-bar-row {
   margin-bottom: 12px;
 }

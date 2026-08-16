@@ -29,6 +29,16 @@ let _activeThreadId = null;
 /** @type {Array<any>} */
 let _messages = [];
 let _viewMonth = '';
+/** @type {Array<any>} */
+let _diaryEntries = [];
+/** @type {string} */
+let _diaryFrom = '';
+/** @type {string} */
+let _diaryTo = '';
+/** @type {Set<string>} */
+let _diarySeenIds = new Set();
+/** @type {Set<string>} */
+let _diaryAckPending = new Set();
 
 function todayIso() {
   return new Date().toISOString().slice(0, 10);
@@ -38,9 +48,21 @@ function monthKey(d = new Date()) {
   return d.toISOString().slice(0, 7);
 }
 
+function daysAgoIso(n, from = new Date()) {
+  const d = new Date(from.getTime());
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 function daysInMonth(ym) {
   const [y, m] = ym.split('-').map(Number);
   return new Date(Date.UTC(y, m, 0)).getUTCDate();
+}
+
+function resetDiaryRange() {
+  _diaryTo = todayIso();
+  _diaryFrom = daysAgoIso(14);
+  _diarySeenIds = new Set();
 }
 
 function expandDateRange(from, to) {
@@ -184,6 +206,7 @@ async function onLoginSubmit(ev) {
 async function enterApp() {
   setLogoutVisible(true);
   _viewMonth = monthKey();
+  resetDiaryRange();
   await Promise.all([loadStudents(), loadReasonCodes()]);
   if (!_selectedStudentId && _students[0]) {
     _selectedStudentId = _students[0].id;
@@ -218,6 +241,7 @@ export async function selectStudent(studentId) {
   _selectedStudentId = studentId;
   _activeThreadId = null;
   _messages = [];
+  resetDiaryRange();
   await refreshAllPanes();
 }
 
@@ -228,6 +252,7 @@ export async function refreshAllPanes() {
     <div class="gp-siblings" id="gpSiblings" data-pane="children"></div>
     <div class="gp-panes">
       <section class="gp-pane" data-pane="attendance" id="gpAttendance"></section>
+      <section class="gp-pane" data-pane="diary" id="gpDiary"></section>
       <section class="gp-pane" data-pane="absence" id="gpAbsence"></section>
       <section class="gp-pane" data-pane="messages" id="gpMessages"></section>
       <section class="gp-pane" data-pane="surveys" id="gpSurveys"></section>
@@ -236,6 +261,7 @@ export async function refreshAllPanes() {
   renderSiblings();
   await Promise.all([
     renderAttendance(),
+    renderDiary(),
     renderAbsenceForm(),
     renderMessages(),
     renderSurveys(),
@@ -329,6 +355,160 @@ async function renderAttendance() {
     _viewMonth = d.toISOString().slice(0, 7);
     await renderAttendance();
   });
+}
+
+const DIARY_KIND_LABELS = {
+  homework: 'Homework',
+  note: 'Note',
+  remark: 'Remark',
+  reminder: 'Reminder',
+};
+
+function diaryKindLabel(kind) {
+  return DIARY_KIND_LABELS[kind] || kind || 'Note';
+}
+
+function groupDiaryByDate(entries) {
+  const map = new Map();
+  for (const e of entries) {
+    const day = e.entryDate || e.entry_date || '';
+    if (!map.has(day)) map.set(day, []);
+    map.get(day).push(e);
+  }
+  return [...map.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
+}
+
+function attachmentHtml(refs) {
+  if (!Array.isArray(refs) || !refs.length) return '';
+  const links = refs
+    .map((ref) => {
+      const s = String(ref);
+      const label = escapeHtml(s.length > 48 ? s.slice(0, 45) + '…' : s);
+      if (/^https?:\/\//i.test(s)) {
+        return `<a class="gp-diary-att" href="${escapeHtml(s)}" target="_blank" rel="noopener">${label}</a>`;
+      }
+      return `<span class="gp-diary-att">${label}</span>`;
+    })
+    .join('');
+  return `<div class="gp-diary-atts">${links}</div>`;
+}
+
+async function renderDiary() {
+  const el = document.getElementById('gpDiary');
+  if (!el) return;
+  el.innerHTML = '<h2>Diary</h2><p>Loading…</p>';
+  if (!_selectedStudentId) {
+    el.innerHTML = '<h2>Diary</h2><p>Select a child.</p>';
+    return;
+  }
+  if (!_diaryFrom || !_diaryTo) resetDiaryRange();
+  const qs = new URLSearchParams({
+    student_ref: _selectedStudentId,
+    from: _diaryFrom,
+    to: _diaryTo,
+  });
+  const res = await guardianApi.get(`/guardian/diary?${qs.toString()}`);
+  if (res && res._error) {
+    el.innerHTML = `<h2>Diary</h2><p class="gp-error">${escapeHtml(res.message)}</p>`;
+    return;
+  }
+  _diaryEntries = res.entries || [];
+  paintDiaryPane(el);
+}
+
+function paintDiaryPane(el) {
+  const groups = groupDiaryByDate(_diaryEntries);
+  const blocks = groups
+    .map(([day, items]) => {
+      const rows = items
+        .map((e) => {
+          const id = e.id;
+          const seen = _diarySeenIds.has(id);
+          const pending = _diaryAckPending.has(id);
+          const kind = e.kind || 'note';
+          const body = e.body || '';
+          const refs = e.attachmentRefs || e.attachment_refs || null;
+          const unread = seen ? '' : ' unread';
+          const seenBtn = seen
+            ? `<span class="gp-diary-seen">Seen ✓</span>`
+            : `<button type="button" class="gp-btn secondary gp-diary-ack" data-ack-id="${escapeHtml(id)}" ${pending ? 'disabled' : ''}>${pending ? '…' : 'Seen ✓'}</button>`;
+          return `<article class="gp-diary-entry${unread}" data-entry-id="${escapeHtml(id)}">
+            <div class="gp-diary-entry-head">
+              <span class="gp-diary-dot" aria-hidden="true"></span>
+              <span class="gp-chip gp-diary-kind">${escapeHtml(diaryKindLabel(kind))}</span>
+              ${seenBtn}
+            </div>
+            <p class="gp-diary-body">${escapeHtml(body)}</p>
+            ${attachmentHtml(refs)}
+          </article>`;
+        })
+        .join('');
+      return `<div class="gp-diary-day" data-date="${escapeHtml(day)}">
+        <h3 class="gp-diary-day-label">${escapeHtml(day)}</h3>
+        ${rows}
+      </div>`;
+    })
+    .join('');
+  el.innerHTML = `
+    <h2>Diary</h2>
+    <p class="gp-sib-meta">${escapeHtml(_diaryFrom)} → ${escapeHtml(_diaryTo)}</p>
+    <div id="gpDiaryFeed">${blocks || '<p>No diary entries in this range.</p>'}</div>
+    <button type="button" class="gp-btn ghost" id="gpDiaryEarlier">Load earlier</button>
+  `;
+  el.querySelectorAll('[data-ack-id]').forEach((btn) => {
+    btn.addEventListener('click', () => onDiaryAck(btn.getAttribute('data-ack-id')));
+  });
+  const earlier = el.querySelector('#gpDiaryEarlier');
+  if (earlier) earlier.addEventListener('click', onDiaryLoadEarlier);
+}
+
+/**
+ * Optimistic ack — marks Seen immediately; re-tap is idempotent (server + local).
+ * @param {string} entryId
+ */
+export async function onDiaryAck(entryId) {
+  if (!_selectedStudentId || !entryId) return;
+  if (_diarySeenIds.has(entryId)) return;
+  _diarySeenIds.add(entryId);
+  _diaryAckPending.add(entryId);
+  const el = document.getElementById('gpDiary');
+  if (el) paintDiaryPane(el);
+
+  const res = await guardianApi.post(
+    `/guardian/diary/${encodeURIComponent(entryId)}/ack`,
+    { student_ref: _selectedStudentId },
+  );
+  _diaryAckPending.delete(entryId);
+  if (res && res._error) {
+    _diarySeenIds.delete(entryId);
+    toast(res.message || 'Could not mark seen', 'error');
+    if (el) paintDiaryPane(el);
+    return;
+  }
+  if (el) paintDiaryPane(el);
+}
+
+async function onDiaryLoadEarlier() {
+  const prevFrom = _diaryFrom;
+  _diaryFrom = daysAgoIso(14, new Date(_diaryFrom + 'T00:00:00.000Z'));
+  const qs = new URLSearchParams({
+    student_ref: _selectedStudentId,
+    from: _diaryFrom,
+    to: prevFrom,
+  });
+  const res = await guardianApi.get(`/guardian/diary?${qs.toString()}`);
+  if (res && res._error) {
+    _diaryFrom = prevFrom;
+    toast(res.message || 'Could not load earlier entries', 'error');
+    return;
+  }
+  const older = res.entries || [];
+  const seen = new Set(_diaryEntries.map((e) => e.id));
+  for (const e of older) {
+    if (!seen.has(e.id)) _diaryEntries.push(e);
+  }
+  const el = document.getElementById('gpDiary');
+  if (el) paintDiaryPane(el);
 }
 
 export function validateAbsenceForm(from, to) {
@@ -637,6 +817,10 @@ export function __testState() {
     selectedStudentId: _selectedStudentId,
     threads: _threads,
     activeThreadId: _activeThreadId,
+    diaryEntries: _diaryEntries,
+    diaryFrom: _diaryFrom,
+    diaryTo: _diaryTo,
+    diarySeenIds: [..._diarySeenIds],
   };
 }
 
@@ -647,6 +831,10 @@ export function __setTestState(partial) {
   }
   if (partial.reasonCodes) _reasonCodes = partial.reasonCodes;
   if (partial.threads) _threads = partial.threads;
+  if (partial.diaryEntries) _diaryEntries = partial.diaryEntries;
+  if (partial.diaryFrom) _diaryFrom = partial.diaryFrom;
+  if (partial.diaryTo) _diaryTo = partial.diaryTo;
+  if (partial.diarySeenIds) _diarySeenIds = new Set(partial.diarySeenIds);
 }
 
 // Ensure initApi is available when tests import the module without guardian.html

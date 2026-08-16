@@ -324,6 +324,46 @@ export class MessageService {
       return { message: result.message };
     }
 
+    if (type === 'school.diary.created') {
+      const studentRef = str(data.student_ref ?? data.studentRef) ?? null;
+      const sectionRef = str(data.section_ref ?? data.sectionRef);
+      // Class-wide: no guardian enumeration without a second identity call (P13-01 documented no-op).
+      if (!studentRef) {
+        this.logger?.info(
+          { tenantId, type, sectionRef, kind: data.kind },
+          'engagement.ingest.diary_classwide_noop',
+        );
+        return { dropped: true };
+      }
+      // Same recipient path as marked_absent — requires guardian_ref on the event.
+      const guardianRef = str(data.guardian_ref ?? data.guardianRef);
+      if (!guardianRef) {
+        this.logger?.info(
+          { tenantId, type, studentRef, sectionRef },
+          'engagement.ingest.diary_no_guardian_noop',
+        );
+        return { dropped: true };
+      }
+      const lang = str(data.lang ?? data.locale) ?? 'en';
+      const vars: Record<string, string> = {
+        student_name: String(
+          data.student_name ?? data.studentName ?? studentRef,
+        ),
+        date: String(data.entry_date ?? data.entryDate ?? dayKey(this.clock())),
+      };
+      const result = await this.queueMessage({
+        tenantId,
+        guardianRef,
+        studentRef,
+        templateKey: 'attendance_nudge',
+        lang,
+        vars,
+        urgency: 'digest', // diary is never interrupt
+      });
+      if (result.error) return { error: result.error };
+      return { message: result.message };
+    }
+
     this.logger?.info({ tenantId, type }, 'engagement.ingest.unknown_event');
     return { dropped: true };
   }

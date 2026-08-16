@@ -206,22 +206,23 @@ body {
    THEME: CLEAN
    ══════════════════════════════════════════════════════════════ */
 .theme-clean {
-  --bg0: #fafbfc;
-  --bg1: #ffffff;
-  --bg2: #ffffff;
-  --bg3: #f0f2f5;
-  --bg4: #e5e7eb;
+  /* Soft paper gray — still light, but less glare than pure white */
+  --bg0: #e8eaee;
+  --bg1: #f0f1f4;
+  --bg2: #f5f6f8;
+  --bg3: #e2e5ea;
+  --bg4: #d4d8de;
   --accent: #6366f1;
-  --accent-dim: rgba(99, 102, 241, 0.06);
-  --accent-glow: rgba(99, 102, 241, 0.15);
+  --accent-dim: rgba(99, 102, 241, 0.08);
+  --accent-glow: rgba(99, 102, 241, 0.18);
   --tx: #0f172a;
-  --tx2: #475569;
-  --tx3: #94a3b8;
-  --tx4: #cbd5e1;
-  --bd: rgba(0, 0, 0, 0.06);
-  --bd2: rgba(0, 0, 0, 0.1);
-  --metal1: #e5e7eb;
-  --metal2: #d1d5db;
+  --tx2: #3f4f63;
+  --tx3: #64748b;
+  --tx4: #94a3b8;
+  --bd: rgba(0, 0, 0, 0.09);
+  --bd2: rgba(0, 0, 0, 0.14);
+  --metal1: #d4d8de;
+  --metal2: #c5cad3;
   --r: 14px;
   --status-in: #2563eb;
   --status-break: #d97706;
@@ -1667,6 +1668,93 @@ input[type='week']::-webkit-calendar-picker-indicator {
 }
 .crud-modal-body {
   padding: 20px;
+}
+
+/* Confirm / prompt dialogs (modal.js confirmDialog + promptDialog) */
+.crud-confirm-msg {
+  margin: 0 0 18px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--tx2);
+}
+.crud-prompt-field {
+  margin-bottom: 18px;
+}
+.crud-prompt-field label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--tx3);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.crud-prompt-field input,
+.crud-prompt-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg3);
+  color: var(--tx);
+  font-family: inherit;
+  font-size: 12px;
+  outline: none;
+  resize: vertical;
+  transition: all 0.25s ease;
+}
+.theme-clean .crud-prompt-field input,
+.theme-clean .crud-prompt-field textarea {
+  border-radius: 10px;
+}
+.crud-prompt-field input:focus,
+.crud-prompt-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.crud-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.crud-confirm-cancel,
+.crud-confirm-ok {
+  padding: 8px 16px;
+  border-radius: var(--r);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.theme-clean .crud-confirm-cancel,
+.theme-clean .crud-confirm-ok {
+  border-radius: 10px;
+}
+.crud-confirm-cancel {
+  background: transparent;
+  border: 1px solid var(--bd);
+  color: var(--tx2);
+}
+.crud-confirm-ok {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  color: #000;
+}
+.theme-clean .crud-confirm-ok {
+  color: #fff;
+}
+.crud-confirm-ok.danger {
+  background: var(--status-absent);
+  border-color: var(--status-absent);
+  color: #fff;
+}
+.crud-confirm-cancel:hover,
+.crud-confirm-ok:hover:not(:disabled) {
+  opacity: 0.92;
+}
+.crud-confirm-ok:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* ══════════════════════════════════════════════════════════════

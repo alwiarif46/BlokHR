@@ -8,6 +8,7 @@ import {
   type DomainEvent,
   type EventPublisher,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolAttendanceSqlite } from '../src/db';
 
 class RecordingPublisher implements EventPublisher {
@@ -33,7 +34,7 @@ describe('school-attendance staff (P2-05)', () => {
     app = created.app;
     db = created.db;
     await request(app)
-      .put('/api/attendance/t1/settings')
+      .put('/api/attendance/t1/settings').set(staff('school_admin'))
       .send({ half_day_min_minutes: 180 });
   });
 
@@ -42,7 +43,7 @@ describe('school-attendance staff (P2-05)', () => {
   });
 
   it('check in/out derives minutes and status; rejects out-before-in', async () => {
-    const outFirst = await request(app).post('/api/attendance/t1/staff/check').send({
+    const outFirst = await request(app).post('/api/attendance/t1/staff/check').set(staff('school_admin')).send({
       member_id: 'm1',
       direction: 'out',
       at: '2025-08-11T17:00:00.000Z',
@@ -51,7 +52,7 @@ describe('school-attendance staff (P2-05)', () => {
     });
     expect(outFirst.status).toBe(400);
 
-    const checkIn = await request(app).post('/api/attendance/t1/staff/check').send({
+    const checkIn = await request(app).post('/api/attendance/t1/staff/check').set(staff('school_admin')).send({
       member_id: 'm1',
       direction: 'in',
       at: '2025-08-11T09:00:00.000Z',
@@ -62,7 +63,7 @@ describe('school-attendance staff (P2-05)', () => {
     expect(checkIn.body.checkInAt).toBe('2025-08-11T09:00:00.000Z');
     expect(checkIn.body.status).toBe('present');
 
-    const shortOut = await request(app).post('/api/attendance/t1/staff/check').send({
+    const shortOut = await request(app).post('/api/attendance/t1/staff/check').set(staff('school_admin')).send({
       member_id: 'm1',
       direction: 'out',
       at: '2025-08-11T11:00:00.000Z',
@@ -72,13 +73,13 @@ describe('school-attendance staff (P2-05)', () => {
     expect(shortOut.body.minutesOnPremises).toBe(120);
     expect(shortOut.body.status).toBe('half_day');
 
-    await request(app).post('/api/attendance/t1/staff/check').send({
+    await request(app).post('/api/attendance/t1/staff/check').set(staff('school_admin')).send({
       member_id: 'm2',
       direction: 'in',
       at: '2025-08-12T08:00:00.000Z',
       source: 'qr',
     });
-    const fullOut = await request(app).post('/api/attendance/t1/staff/check').send({
+    const fullOut = await request(app).post('/api/attendance/t1/staff/check').set(staff('school_admin')).send({
       member_id: 'm2',
       direction: 'out',
       at: '2025-08-12T14:00:00.000Z',
@@ -89,7 +90,7 @@ describe('school-attendance staff (P2-05)', () => {
   });
 
   it('bulk mark and monthly totals', async () => {
-    const mark = await request(app).post('/api/attendance/t1/staff/mark').send({
+    const mark = await request(app).post('/api/attendance/t1/staff/mark').set(staff('school_admin')).send({
       date: '2025-08-15',
       marked_by: 'admin-1',
       marks: [
@@ -102,20 +103,20 @@ describe('school-attendance staff (P2-05)', () => {
     expect(mark.status).toBe(200);
     expect(mark.body.records).toHaveLength(4);
 
-    await request(app).post('/api/attendance/t1/staff/check').send({
+    await request(app).post('/api/attendance/t1/staff/check').set(staff('school_admin')).send({
       member_id: 'm5',
       direction: 'in',
       at: '2025-08-16T09:00:00.000Z',
       source: 'manual',
     });
-    await request(app).post('/api/attendance/t1/staff/check').send({
+    await request(app).post('/api/attendance/t1/staff/check').set(staff('school_admin')).send({
       member_id: 'm5',
       direction: 'out',
       at: '2025-08-16T11:00:00.000Z',
       source: 'manual',
     });
 
-    const month = await request(app).get('/api/attendance/t1/staff?month=2025-08');
+    const month = await request(app).get('/api/attendance/t1/staff?month=2025-08').set(staff('school_admin'));
     expect(month.status).toBe(200);
     expect(month.body.totals).toEqual({
       present: 1,
@@ -127,20 +128,20 @@ describe('school-attendance staff (P2-05)', () => {
     expect(month.body.records.length).toBeGreaterThanOrEqual(5);
 
     const filtered = await request(app).get(
-      '/api/attendance/t1/staff?month=2025-08&member_id=m2',
-    );
+      '/api/attendance/t1/staff?month=2025-08&member_id=m2'
+    ).set(staff('school_admin'));
     expect(filtered.body.records).toHaveLength(1);
     expect(filtered.body.records[0].memberId).toBe('m2');
   });
 
   it('finalize locks the month and emits event', async () => {
-    await request(app).post('/api/attendance/t1/staff/mark').send({
+    await request(app).post('/api/attendance/t1/staff/mark').set(staff('school_admin')).send({
       date: '2025-09-01',
       marked_by: 'admin',
       marks: [{ member_id: 'm1', status: 'present' }],
     });
 
-    const fin = await request(app).post('/api/attendance/t1/staff/finalize').send({
+    const fin = await request(app).post('/api/attendance/t1/staff/finalize').set(staff('school_admin')).send({
       month: '2025-09',
       finalized_by: 'payroll',
     });
@@ -150,14 +151,14 @@ describe('school-attendance staff (P2-05)', () => {
       publisher.events.some((e) => e.type === 'school.staff.attendance_finalized'),
     ).toBe(true);
 
-    const blocked = await request(app).post('/api/attendance/t1/staff/mark').send({
+    const blocked = await request(app).post('/api/attendance/t1/staff/mark').set(staff('school_admin')).send({
       date: '2025-09-02',
       marked_by: 'admin',
       marks: [{ member_id: 'm1', status: 'absent' }],
     });
     expect(blocked.status).toBe(409);
 
-    const checkBlocked = await request(app).post('/api/attendance/t1/staff/check').send({
+    const checkBlocked = await request(app).post('/api/attendance/t1/staff/check').set(staff('school_admin')).send({
       member_id: 'm9',
       direction: 'in',
       at: '2025-09-03T09:00:00.000Z',
@@ -165,26 +166,26 @@ describe('school-attendance staff (P2-05)', () => {
     });
     expect(checkBlocked.status).toBe(409);
 
-    const again = await request(app).post('/api/attendance/t1/staff/finalize').send({
+    const again = await request(app).post('/api/attendance/t1/staff/finalize').set(staff('school_admin')).send({
       month: '2025-09',
     });
     expect(again.status).toBe(409);
   });
 
   it('isolates staff attendance by tenant', async () => {
-    await request(app).post('/api/attendance/t1/staff/mark').send({
+    await request(app).post('/api/attendance/t1/staff/mark').set(staff('school_admin')).send({
       date: '2025-10-01',
       marked_by: 'a',
       marks: [{ member_id: 'm1', status: 'present' }],
     });
-    await request(app).post('/api/attendance/t2/staff/mark').send({
+    await request(app).post('/api/attendance/t2/staff/mark').set(staff('school_admin')).send({
       date: '2025-10-01',
       marked_by: 'a',
       marks: [{ member_id: 'm1', status: 'absent' }],
     });
 
-    const t1 = await request(app).get('/api/attendance/t1/staff?month=2025-10');
-    const t2 = await request(app).get('/api/attendance/t2/staff?month=2025-10');
+    const t1 = await request(app).get('/api/attendance/t1/staff?month=2025-10').set(staff('school_admin'));
+    const t2 = await request(app).get('/api/attendance/t2/staff?month=2025-10').set(staff('school_admin'));
     expect(t1.body.records[0].status).toBe('present');
     expect(t2.body.records[0].status).toBe('absent');
     expect(t1.body.totals.present).toBe(1);

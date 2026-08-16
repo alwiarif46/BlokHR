@@ -3,6 +3,9 @@ import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import { AppError, asyncHandler } from '../app';
 import { MultiAuthService } from '../services/multi-auth-service';
+import { SettingsRepository } from '../repositories/settings-repository';
+import { SettingsService } from '../services/settings-service';
+import { requireInternalMatch, resolveInternalSecret } from '../internal-auth';
 
 /**
  * Multi-provider auth routes:
@@ -20,10 +23,23 @@ import { MultiAuthService } from '../services/multi-auth-service';
  *   GET    /api/auth/saml/login                — get SAML login redirect URL
  *   POST   /api/auth/saml/callback             — process SAML assertion
  *   POST   /api/auth/ldap                      — LDAP/AD authentication
+ *   POST   /api/auth/introspect                — gateway staff session introspect (P12-01)
+ *
+ * Long-term owner of session introspect is a future auth service; this router
+ * extends the monolith auth domain until extraction.
  */
 export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Router {
   const router = Router();
-  const authService = new MultiAuthService(db, logger);
+  const settingsService = new SettingsService(
+    new SettingsRepository(db),
+    null,
+    null,
+    null,
+    null,
+    logger,
+  );
+  const authService = new MultiAuthService(db, logger, settingsService);
+  const internalSecret = resolveInternalSecret();
 
   /** GET /api/auth/providers — list enabled auth providers for login screen. */
   router.get(
@@ -224,6 +240,40 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
       const result = await authService.authenticateLdap(email.toLowerCase().trim(), password);
       if (!result.success) throw new AppError(result.error ?? 'LDAP auth failed', 401);
       res.json(result);
+    }),
+  );
+
+  /**
+   * POST /api/auth/introspect — staff session claims for the gateway (P12-01).
+   * Requires X-Blok-Internal === INTERNAL_SECRET. Never for browsers: gateway strips
+   * inbound X-Blok-*, so only the gateway can call this. P12-02 returns 404 for any
+   * external hit on this path through the gateway (closes secret-injection exposure).
+   */
+  router.post(
+    '/auth/introspect',
+    asyncHandler(async (req: Request, res: Response) => {
+      const gate = requireInternalMatch(req, internalSecret);
+      if (!('ok' in gate)) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const { token } = req.body as { token?: string };
+      const result = await authService.introspect(token ?? '');
+      if (!result.active) {
+        res.json({ active: false });
+        return;
+      }
+      res.json({
+        active: true,
+        email: result.email,
+        name: result.name,
+        tenantId: result.tenantId,
+        isAdmin: result.isAdmin,
+        isGlobalManager: result.isGlobalManager,
+        isGlobalHR: result.isGlobalHR,
+        managerOf: result.managerOf,
+        hrOf: result.hrOf,
+      });
     }),
   );
 

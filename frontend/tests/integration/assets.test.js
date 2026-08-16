@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { answerPrompt } from '../helpers/dialog.js';
 
 describe('assets module', () => {
   /** @type {typeof import('../../modules/assets/assets.js')} */
@@ -187,8 +188,8 @@ describe('assets module', () => {
       expect(document.body.textContent).toContain('Dell Monitor');
     });
 
-    window.prompt = vi.fn(() => 'good');
     document.querySelector('[data-action="return"]').click();
+    await answerPrompt('good');
     await vi.waitFor(() => {
       expect(apiPost).toHaveBeenCalledWith(
         '/api/assets/assignments/asg1/return',

@@ -6,6 +6,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -849,7 +850,7 @@ async function _runGenerate(previewOnly) {
 async function docDeleteDoc(idx) {
   const item = _docs[idx];
   if (!item) return;
-  if (!confirm('Delete this draft document?')) return;
+  if (!(await confirmDialog({ message: 'Delete this draft document?', confirmLabel: 'Delete', danger: true }))) return;
   const result = await api.delete('/api/documents/' + item.id);
   if (result && !result._error) {
     toast('Deleted', 'success');
@@ -862,7 +863,7 @@ async function docDeleteDoc(idx) {
 async function docDeleteTpl(idx) {
   const item = _templates[idx];
   if (!item) return;
-  if (!confirm('Delete this template?')) return;
+  if (!(await confirmDialog({ message: 'Delete this template?', confirmLabel: 'Delete', danger: true }))) return;
   const result = await api.delete('/api/document-templates/' + item.id);
   if (result && !result._error) {
     toast('Deleted', 'success');

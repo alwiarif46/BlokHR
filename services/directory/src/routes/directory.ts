@@ -1,5 +1,8 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import type { DirectoryService } from '../directory-service';
+import { resolveInternalSecret } from '../internal-auth';
+import { guardRoutes } from '../role-guard';
+import { DIRECTORY_ROUTE_POLICIES } from '../route-policies';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -11,48 +14,63 @@ function asyncHandler(
 
 export interface DirectoryRouterOptions {
   tenantId?: string;
-  /** When set, mutating routes require an admin identity header. */
-  isAdmin?: (email: string) => Promise<boolean>;
+  internalSecret?: string;
 }
 
-function callerEmail(req: Request): string {
-  const raw =
-    (req.headers['x-user-email'] as string | undefined) ||
-    (req as Request & { identity?: { email?: string } }).identity?.email ||
-    '';
-  return raw.toLowerCase().trim();
-}
-
+/**
+ * Directory HTTP routes (P12-04).
+ * Admin gating uses gateway X-Blok-* role headers via role-guard —
+ * the spoofable X-User-Email requireAdmin path was removed (security fix).
+ */
 export function createDirectoryRouter(
   service: DirectoryService,
   options: DirectoryRouterOptions = {},
 ): Router {
   const router = Router();
   const tenantId = options.tenantId ?? 'default';
+  const internalSecret = options.internalSecret ?? resolveInternalSecret();
 
-  async function requireAdmin(req: Request, res: Response): Promise<boolean> {
-    if (!options.isAdmin) return true;
-    const email = callerEmail(req);
-    if (!email) {
-      res.status(401).json({ error: 'Authentication required' });
-      return false;
-    }
-    const ok = await options.isAdmin(email);
-    if (!ok) {
-      res.status(403).json({ error: 'Admin access required' });
-      return false;
-    }
-    return true;
-  }
-
+  // Health is unauthenticated ops probe — registered before deny-by-default guard.
   router.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'directory' });
   });
 
+  guardRoutes(router, DIRECTORY_ROUTE_POLICIES, { internalSecret });
+
+  /**
+   * GET /api/directory/members/lookup?email= — gateway staff role resolution (P12-02).
+   * Internal-only (policy). Inactive / missing → { member: null }.
+   */
+  router.get(
+    '/members/lookup',
+    asyncHandler(async (req, res) => {
+      const email = String(req.query.email ?? '')
+        .toLowerCase()
+        .trim();
+      if (!email) {
+        res.json({ member: null });
+        return;
+      }
+      const found = await service.getMember(email, tenantId);
+      if (!found || !found.active) {
+        res.json({ member: null });
+        return;
+      }
+      res.json({
+        member: {
+          id: found.id,
+          role: found.role,
+          active: found.active,
+        },
+      });
+    }),
+  );
+
   router.get(
     '/members',
     asyncHandler(async (req, res) => {
-      const includeInactive = req.query.includeInactive === '1' || req.query.includeInactive === 'true';
+      const includeInactive =
+        req.query.includeInactive === '1' || req.query.includeInactive === 'true';
       const members = await service.listMembers(tenantId, { includeInactive });
       res.json({ members, count: members.length });
     }),
@@ -73,8 +91,6 @@ export function createDirectoryRouter(
   router.post(
     '/members',
     asyncHandler(async (req, res) => {
-      if (!(await requireAdmin(req, res))) return;
-
       const body = req.body as Record<string, unknown>;
       const result = await service.createMember({
         tenantId,
@@ -115,7 +131,6 @@ export function createDirectoryRouter(
   router.patch(
     '/members/:id',
     asyncHandler(async (req, res) => {
-      if (!(await requireAdmin(req, res))) return;
       const body = req.body as Record<string, unknown>;
       const result = await service.updateMember(
         req.params.id,
@@ -158,7 +173,6 @@ export function createDirectoryRouter(
   router.delete(
     '/members/:id',
     asyncHandler(async (req, res) => {
-      if (!(await requireAdmin(req, res))) return;
       const result = await service.deactivateMember(req.params.id, tenantId);
       if (!result.success) {
         res.status(result.status ?? 400).json({ error: result.error });

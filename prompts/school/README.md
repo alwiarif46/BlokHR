@@ -19,6 +19,8 @@ Execution playbook for building the school vertical. Source plan: `BLOKHR-SCHOOL
 - Students/guardians are `school-identity` data. Never rows in the monolith `members` table.
 - No localStorage in frontend modules except `shared/session.js`. No raw fetch. CSS variables only.
 - No student biometrics, no emotion/engagement detection, no Aadhaar authentication — anywhere, in any prompt.
+- **No real board syllabus content authored by Cursor** — packs ship as marked samples; official content is a human content task (see P11).
+- **RBAC (P12 onward): server-side is the boundary.** Frontend gating is cosmetic; every new route ships with a policy-table entry (deny-by-default) or its prompt is incomplete. No student principal exists — reject any prompt inventing one.
 
 ## Order
 
@@ -40,13 +42,25 @@ Read `RECONCILIATION.md` once before P0-01 (capture vs school-* boundaries). The
 | P9-guardian-auth.md | 4 | guardian credentials + sessions (school-identity), gateway guardian guard + allowlist, guardian-scoped service endpoints, parent portal frontend | ✅ done |
 | F-frontend.md | 6 | frontend modules for the school shell | ✅ done (ends at F-06 HPC) |
 | **P10-library.md** | 4 | `school-library` (port 3020) — catalogue/ISBN, circulation, fines (paise), frontend module | ✅ done |
+| **F07-school-settings.md** | 1 | School Settings real module: sidebar moved to bottom admin block (before Settings, dual-gated admin+flag); Excel/CSV import + template MOVED here from Students (pointer button left behind); tabs: Data Import (with row-level error table), Academic Sessions, State Pack, Consent Overview | ✅ done |
+| **P11-syllabus-packs.md** | 4 | Versioned board syllabus packs in school-academics: pack format + fail-fast registry (IB/Cambridge refused in code), install endpoint reusing the P3-07 import service (skip-existing, atomic, update-available), 3 SAMPLE starter packs (cbse-2026-27, icse-2027, mh-ssc-2026-27) + promotion checklist, School Settings fifth tab "Syllabus Packs" | ✅ done |
+| **P12-rbac.md** | 6 | **Security phase — run before any real deployment.** Staff introspect (monolith auth extension) + `docs/RBAC.md`; gateway staff guard on `/svc/*` with role headers, whoami, introspect blocked from outside, PUBLIC_PATHS device exemptions; role-guard middleware + deny-by-default policy tables in every school service + directory (kills the spoofable X-User-Email admin check); teacher record-scope via timetable verify (fail-closed); frontend role awareness (cosmetic). Roles: employee/manager/hr/teacher/office/school_admin/admin; principals: staff/guardian/internal, no student | ✅ done — P12-01 ✅ · P12-02 ✅ · P12-03 ✅ · P12-04 ✅ · P12-05 ✅ · P12-06 ✅ |
+| **P13-diary.md** | 3 | Daily diary (teacher → guardian): entries in school-engagement (class-wide + per-student; homework/note/remark/reminder; 24h author edit window; teacher limited to today/yesterday; L5 section scope via timetable verify); guardian read + ack via P9 allowlist with **server-side section resolution** (one new identity internal route); parent portal Diary feed with Seen ✓; teacher Diary view inside school_roll_call (online-only — never the IndexedDB queue) | ✅ P13-01 · P13-02 · P13-03 done |
 
-Roughly 72 sessions. Do not reorder phases: P1 needs P0 identity; W needs P0-01; G needs nothing but must precede F-01; P2-00 must precede P2-01; P2 needs P1 period instances; P3 needs P2 period-level attendance; P4 needs P3 outcome tags; P9 needs P5 (threads) + G (gateway) and must precede any parent-facing release; P10 needs F-01 `api.school` + gateway map (both exist).
+Roughly 86 sessions. **Prompt pack complete** (P0–P13, F07, W, G). Ordering notes for history: P12-01→06 sequential; P13 required P12 + P9; P11-04 needed F07.
 
 ## Standing gaps (tracked, not yet prompted)
-- None named. Premium umbrella module id `school_operations` remains in entitlements for future non-library ops — do not implement it without a new prompt file.
+- **Device authentication** for PUBLIC_PATHS (kiosk check-in, capture posts, transport boarding/pings): P12-02 exempts them with a marker comment. Needs per-device keys — new prompt file when hardware rollout starts.
+- Premium umbrella module id `school_operations` remains in entitlements for future non-library ops — do not implement it without a new prompt file.
+- HR tenant settings stay in `settings` (not School Settings). New School Settings sections get their own prompt.
+- **Official pack content**: the three P11 packs ship as `status:'sample'`. Promoting to `official` = a human derives real topic trees from the named official PDFs (cbseacademic.nic.in, CISCE Regulations & Syllabuses, Balbharati/MSBSHSE) per `packs/README.md`. IB/Cambridge are permanently excluded — licensed curricula, school-uploaded only.
+- Diary class-wide **digest** enumeration is a documented no-op in P13-01 (engagement cannot enumerate a section's guardians without a second identity call) — revisit alongside any future guardian-directory sync. Student-specific diary ingest queues `digest` urgency when `guardian_ref` is on the event (same path as `marked_absent`).
 
-## Resolved (2026-08-15)
+## Resolved (2026-08-15/16)
 - Git initialised at root — baseline commit `3091c37` on `main`. Commit after every green prompt session.
 - Teacher leave → **P2-09** (thin, native in school-attendance; monolith `leaves` untouched).
 - Guardian login → **P9** (deferred past P5 by design, prompts ready).
+- School Settings placeholder → **F07** ✅ (import/template relocation + real module; later extended with Syllabus Packs + Attendance Policy / Eligibility / Nudge).
+- Board syllabi seeding → **P11** ✅ (packs = our derived structures, never board PDFs; IB refused in code).
+- Who-sees-what → **P12** ✅ (`docs/RBAC.md` canonical matrix).
+- Daily diary → **P13** ✅ (guardian surface row extended).

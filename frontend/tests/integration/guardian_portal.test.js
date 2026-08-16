@@ -89,6 +89,50 @@ describe('guardian_portal (P9-04)', () => {
           },
         };
       }
+      if (p.startsWith('/guardian/diary')) {
+        const u = new URL(p, 'http://local');
+        const student = u.searchParams.get('student_ref');
+        const to = u.searchParams.get('to') || '';
+        const today = new Date().toISOString().slice(0, 10);
+        // "Load earlier" uses to = previous from (< today)
+        if (to && to < today) {
+          return {
+            entries: [
+              {
+                id: 'd-old',
+                entryDate: '2026-01-20',
+                kind: 'note',
+                body: 'Earlier note',
+                studentRef: student,
+                attachmentRefs: null,
+                acks: 0,
+              },
+            ],
+          };
+        }
+        return {
+          entries: [
+            {
+              id: 'd1',
+              entryDate: '2026-03-10',
+              kind: 'homework',
+              body: student === 's2' ? 'Math for Arun' : 'Read ch 3',
+              studentRef: null,
+              attachmentRefs: ['https://example.com/hw.pdf'],
+              acks: 0,
+            },
+            {
+              id: 'd2',
+              entryDate: '2026-03-10',
+              kind: 'remark',
+              body: 'Great effort',
+              studentRef: student,
+              attachmentRefs: null,
+              acks: 0,
+            },
+          ],
+        };
+      }
       return {};
     });
     guardianPost = vi.fn(async (p, body) => {
@@ -123,6 +167,9 @@ describe('guardian_portal (P9-04)', () => {
       }
       if (p.endsWith('/respond') && p.includes('/guardian/surveys/')) {
         return { response: { id: 'r1' } };
+      }
+      if (p.includes('/guardian/diary/') && p.endsWith('/ack')) {
+        return { ack: { id: 'ack-1', at: '2026-03-10T12:00:00.000Z' } };
       }
       return {};
     });
@@ -239,6 +286,67 @@ describe('guardian_portal (P9-04)', () => {
           student_ref: 's1',
         }),
       );
+    });
+  });
+
+  async function loginAsParent() {
+    document.getElementById('gpPhone').value = '9876543210';
+    document.getElementById('gpPassword').value = 'secret123';
+    document.getElementById('gpLoginForm').dispatchEvent(
+      new Event('submit', { bubbles: true, cancelable: true }),
+    );
+    await vi.waitFor(() => expect(document.getElementById('gpDiary')).toBeTruthy());
+  }
+
+  it('diary pane renders grouped feed and switches with child', async () => {
+    await loginAsParent();
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-entry-id="d1"]')).toBeTruthy();
+      expect(document.getElementById('gpDiary').textContent).toContain('Read ch 3');
+      expect(document.getElementById('gpDiary').textContent).toContain('Homework');
+    });
+    expect(document.querySelector('.gp-diary-entry.unread')).toBeTruthy();
+
+    document.querySelector('[data-student-id="s2"]').click();
+    await vi.waitFor(() => {
+      expect(document.getElementById('gpDiary').textContent).toContain('Math for Arun');
+    });
+    expect(guardianGet.mock.calls.some((c) => String(c[0]).includes('student_ref=s2'))).toBe(
+      true,
+    );
+  });
+
+  it('diary Seen ✓ is optimistic and idempotent on re-tap', async () => {
+    await loginAsParent();
+    await vi.waitFor(() => expect(document.querySelector('[data-ack-id="d1"]')).toBeTruthy());
+    const btn = document.querySelector('[data-ack-id="d1"]');
+    btn.click();
+    await vi.waitFor(() => {
+      expect(guardianPost).toHaveBeenCalledWith(
+        '/guardian/diary/d1/ack',
+        expect.objectContaining({ student_ref: 's1' }),
+      );
+      expect(document.querySelector('[data-entry-id="d1"].unread')).toBeFalsy();
+      expect(document.querySelector('[data-entry-id="d1"] .gp-diary-seen')).toBeTruthy();
+    });
+    const postsBefore = guardianPost.mock.calls.filter((c) =>
+      String(c[0]).includes('/diary/d1/ack'),
+    ).length;
+    const seen = document.querySelector('[data-entry-id="d1"] .gp-diary-seen');
+    expect(seen).toBeTruthy();
+    seen.click();
+    expect(
+      guardianPost.mock.calls.filter((c) => String(c[0]).includes('/diary/d1/ack')).length,
+    ).toBe(postsBefore);
+  });
+
+  it('diary load earlier extends the date range', async () => {
+    await loginAsParent();
+    await vi.waitFor(() => expect(document.getElementById('gpDiaryEarlier')).toBeTruthy());
+    document.getElementById('gpDiaryEarlier').click();
+    await vi.waitFor(() => {
+      expect(document.querySelector('[data-entry-id="d-old"]')).toBeTruthy();
+      expect(document.getElementById('gpDiary').textContent).toContain('Earlier note');
     });
   });
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -260,7 +261,7 @@ describe('school-compliance APAAR readiness (P8-03)', () => {
     ];
 
     const res = await request(app)
-      .get('/api/compliance/t1/apaar/readiness')
+      .get('/api/compliance/t1/apaar/readiness').set(staff('school_admin'))
       .query({ session: '2025-26', limit: 2, offset: 0 });
     expect(res.status).toBe(200);
     expect(res.body.totals).toMatchObject({
@@ -276,13 +277,13 @@ describe('school-compliance APAAR readiness (P8-03)', () => {
     expect(res.body.offset).toBe(0);
 
     const page2 = await request(app)
-      .get('/api/compliance/t1/apaar/readiness')
+      .get('/api/compliance/t1/apaar/readiness').set(staff('school_admin'))
       .query({ session: '2025-26', limit: 2, offset: 2 });
     expect(page2.body.students).toHaveLength(2);
     expect(page2.body.offset).toBe(2);
   });
 
-  it('fix-list returns only needs_fix with issues', async () => {
+  it('form-list returns only needs_fix with issues', async () => {
     bundlesByTenant['t1'] = [
       {
         student: student({ id: '1', admissionNumber: 'OK' }),
@@ -303,7 +304,7 @@ describe('school-compliance APAAR readiness (P8-03)', () => {
     ];
 
     const res = await request(app)
-      .get('/api/compliance/t1/apaar/fix-list')
+      .get('/api/compliance/t1/apaar/form-list').set(staff('school_admin'))
       .query({ session: '2025-26' });
     expect(res.status).toBe(200);
     expect(res.body.total).toBe(1);
@@ -313,7 +314,7 @@ describe('school-compliance APAAR readiness (P8-03)', () => {
   });
 
   it('requires session', async () => {
-    const res = await request(app).get('/api/compliance/t1/apaar/readiness');
+    const res = await request(app).get('/api/compliance/t1/apaar/readiness').set(staff('school_admin'));
     expect(res.status).toBe(400);
   });
 
@@ -336,10 +337,10 @@ describe('school-compliance APAAR readiness (P8-03)', () => {
     ];
 
     const a = await request(app)
-      .get('/api/compliance/t1/apaar/readiness')
+      .get('/api/compliance/t1/apaar/readiness').set(staff('school_admin'))
       .query({ session: '2025-26' });
     const b = await request(app)
-      .get('/api/compliance/t2/apaar/fix-list')
+      .get('/api/compliance/t2/apaar/form-list').set(staff('school_admin'))
       .query({ session: '2025-26' });
 
     expect(a.body.totals.ready).toBe(1);

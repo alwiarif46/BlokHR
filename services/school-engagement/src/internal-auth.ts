@@ -23,6 +23,14 @@ export function guardianIdFromHeader(req: Request): string {
   return String(req.headers['x-blok-guardian'] ?? '').trim();
 }
 
+export function parseStudentsHeader(req: Request): string[] {
+  const raw = String(req.headers['x-blok-students'] ?? '');
+  return raw
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
 export function requireInternalMatch(
   req: Request,
   expectedSecret: string,

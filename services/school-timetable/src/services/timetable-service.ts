@@ -1168,6 +1168,75 @@ export class TimetableService {
     return { cover: updatedCover, instance: updatedInstance ?? undefined };
   }
 
+  async getCover(
+    tenantId: string,
+    coverId: string,
+  ): Promise<{ cover?: CoverAssignment; error?: ServiceError }> {
+    const cover = await this.repo.getCoverAssignment(tenantId, coverId);
+    if (!cover) return { error: { error: 'Cover assignment not found', status: 404 } };
+    return { cover };
+  }
+
+  /**
+   * L5 teacher scope lookup (P12-05). Internal/service use only.
+   * Allowed when the teacher owns the period instance's allocation, or any
+   * allocation in that section (session implied by the section row).
+   */
+  async verifyTeacher(
+    tenantId: string,
+    input: {
+      teacherMemberId: string;
+      periodInstanceId?: string | null;
+      sectionRef?: string | null;
+    },
+  ): Promise<{ allowed: boolean; error?: ServiceError }> {
+    const teacherMemberId = (input.teacherMemberId || '').trim();
+    if (!teacherMemberId) {
+      return { allowed: false, error: { error: 'teacher_member_id is required', status: 400 } };
+    }
+    const periodInstanceId =
+      input.periodInstanceId != null ? String(input.periodInstanceId).trim() : '';
+    const sectionRef =
+      input.sectionRef != null ? String(input.sectionRef).trim() : '';
+
+    if (!periodInstanceId && !sectionRef) {
+      return {
+        allowed: false,
+        error: {
+          error: 'period_instance_id or section_ref is required',
+          status: 400,
+        },
+      };
+    }
+
+    if (periodInstanceId) {
+      const instance = await this.repo.getPeriodInstance(tenantId, periodInstanceId);
+      if (!instance) return { allowed: false };
+      const allocation = await this.repo.getAllocation(tenantId, instance.allocationId);
+      if (allocation && allocation.teacherMemberId === teacherMemberId) {
+        return { allowed: true };
+      }
+      const inSection = await this.repo.listAllocationsForTeacherInSection(
+        tenantId,
+        instance.sectionId,
+        teacherMemberId,
+      );
+      return { allowed: inSection.length > 0 };
+    }
+
+    const sections = await this.repo.findSectionsByRef(tenantId, sectionRef);
+    if (sections.length === 0) return { allowed: false };
+    for (const section of sections) {
+      const inSection = await this.repo.listAllocationsForTeacherInSection(
+        tenantId,
+        section.id,
+        teacherMemberId,
+      );
+      if (inSection.length > 0) return { allowed: true };
+    }
+    return { allowed: false };
+  }
+
   async listCover(
     tenantId: string,
     opts: { date?: string; state?: string },

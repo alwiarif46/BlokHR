@@ -7,6 +7,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -144,7 +145,7 @@ async function holSave(item) {
 
 export async function holDelete(idx) {
   if (!_isAdmin()) return;
-  if (!confirm('Delete this holiday?')) return;
+  if (!(await confirmDialog({ message: 'Delete this holiday?', confirmLabel: 'Delete', danger: true }))) return;
   const item = _data[idx];
   if (!item) return;
   const result = await api.delete('/api/holidays/' + (item.id || idx));

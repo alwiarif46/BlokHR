@@ -104,6 +104,20 @@ const ROUTES: RouteDef[] = [
     upstream: (id, params) =>
       `/api/surveys/${encodeURIComponent(id.tenantId)}/guardian/surveys/${encodeURIComponent(params.id!)}/respond`,
   },
+  {
+    method: 'GET',
+    pattern: '/guardian/diary',
+    service: 'school-engagement',
+    upstream: (id) =>
+      `/api/engagement/${encodeURIComponent(id.tenantId)}/guardian/diary`,
+  },
+  {
+    method: 'POST',
+    pattern: '/guardian/diary/:id/ack',
+    service: 'school-engagement',
+    upstream: (id, params) =>
+      `/api/engagement/${encodeURIComponent(id.tenantId)}/guardian/diary/${encodeURIComponent(params.id!)}/ack`,
+  },
 ];
 
 function matchPattern(
@@ -173,6 +187,23 @@ export function resolveGuardianAllowlist(
     };
   }
   return null;
+}
+
+/**
+ * Diary (and similar) student_ref query must be a linked child.
+ * Returns false when a student_ref is present and not in linkedIds.
+ */
+export function isGuardianStudentRefAllowed(
+  pathWithQuery: string,
+  linkedStudentIds: string[],
+): boolean {
+  const qIdx = pathWithQuery.indexOf('?');
+  const search = qIdx >= 0 ? pathWithQuery.slice(qIdx + 1) : '';
+  if (!search) return true;
+  const params = new URLSearchParams(search);
+  const ref = (params.get('student_ref') || params.get('studentRef') || '').trim();
+  if (!ref) return true;
+  return linkedStudentIds.includes(ref);
 }
 
 export function isGuardianSurfacePath(pathname: string): boolean {

@@ -30,7 +30,12 @@ export class HttpEventPublisher implements EventPublisher {
     try {
       await fetch(this.sinkUrl, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...(process.env.INTERNAL_SECRET
+            ? { 'X-Blok-Internal': process.env.INTERNAL_SECRET }
+            : {}),
+        },
         body: JSON.stringify(e),
       });
     } catch (err) {

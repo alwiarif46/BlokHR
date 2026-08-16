@@ -267,6 +267,78 @@
   flex: 1;
 }
 
+.gp-diary-day {
+  margin-bottom: 1rem;
+}
+
+.gp-diary-day-label {
+  margin: 0 0 0.5rem;
+  font-size: 0.9rem;
+  color: var(--tx-muted, var(--tx2));
+}
+
+.gp-diary-entry {
+  border: 1px solid var(--border, var(--bg2));
+  border-radius: 0.4rem;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: var(--bg0);
+}
+
+.gp-diary-entry-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+
+.gp-diary-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+}
+
+.gp-diary-entry.unread .gp-diary-dot {
+  background: var(--accent);
+}
+
+.gp-diary-kind {
+  text-transform: capitalize;
+}
+
+.gp-diary-body {
+  margin: 0;
+  white-space: pre-wrap;
+  font-size: 0.95rem;
+}
+
+.gp-diary-atts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.gp-diary-att {
+  font-size: 0.85rem;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.gp-diary-seen {
+  margin-left: auto;
+  font-size: 0.85rem;
+  color: var(--tx-muted, var(--tx2));
+}
+
+.gp-diary-ack {
+  margin-left: auto;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 640px) {
   .gp-main {
     padding: 0.85rem;

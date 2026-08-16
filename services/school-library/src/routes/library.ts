@@ -2,6 +2,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import type { CirculationService } from '../services/circulation-service';
 import type { FineService } from '../services/fine-service';
 import type { LibraryService } from '../services/library-service';
+import { resolveInternalSecret } from '../internal-auth';
+import { guardRoutes } from '../role-guard';
+import { LIBRARY_ROUTE_POLICIES } from '../route-policies';
+
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -15,9 +19,11 @@ export function createLibraryRouter(
   service: LibraryService,
   circulation: CirculationService,
   fines: FineService,
+  opts: { internalSecret?: string } = {},
 ): Router {
   const router = Router({ mergeParams: true });
-
+  const internalSecret = opts.internalSecret ?? resolveInternalSecret();
+  guardRoutes(router, LIBRARY_ROUTE_POLICIES, { internalSecret });
   router.post(
     '/:tenantId/titles',
     asyncHandler(async (req, res) => {

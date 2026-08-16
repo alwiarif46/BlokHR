@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -39,7 +40,7 @@ describe('school-timetable allocations', () => {
     app = created.app;
     db = created.db;
 
-    const scheme = await request(app).post('/api/timetable/t1/day-schemes').send({
+    const scheme = await request(app).post('/api/timetable/t1/day-schemes').set(staff('school_admin')).send({
       label: 'Weekly',
       kind: 'weekly',
       periods: periodsOk(),
@@ -53,7 +54,7 @@ describe('school-timetable allocations', () => {
 
   async function createSection(tenant = 't1', overrides: Record<string, unknown> = {}) {
     const res = await request(app)
-      .post(`/api/timetable/${tenant}/sections`)
+      .post(`/api/timetable/${tenant}/sections`).set(staff('school_admin'))
       .send({
         academic_session_id: 'sess-1',
         class_label: '8',
@@ -67,7 +68,7 @@ describe('school-timetable allocations', () => {
 
   async function createSubject(tenant = 't1', overrides: Record<string, unknown> = {}) {
     return request(app)
-      .post(`/api/timetable/${tenant}/subjects`)
+      .post(`/api/timetable/${tenant}/subjects`).set(staff('school_admin'))
       .send({
         code: 'MATH',
         label: 'Mathematics',
@@ -82,11 +83,11 @@ describe('school-timetable allocations', () => {
     expect(section.body.classLabel).toBe('8');
     expect(section.body.section).toBe('A');
 
-    const sectionList = await request(app).get('/api/timetable/t1/sections');
+    const sectionList = await request(app).get('/api/timetable/t1/sections').set(staff('school_admin'));
     expect(sectionList.body.sections).toHaveLength(1);
 
     const patchedSection = await request(app)
-      .patch(`/api/timetable/t1/sections/${section.body.id}`)
+      .patch(`/api/timetable/t1/sections/${section.body.id}`).set(staff('school_admin'))
       .send({ class_teacher_member_id: 'teacher-ct-2' });
     expect(patchedSection.status).toBe(200);
     expect(patchedSection.body.classTeacherMemberId).toBe('teacher-ct-2');
@@ -95,10 +96,10 @@ describe('school-timetable allocations', () => {
     expect(subject.status).toBe(201);
     expect(subject.body.code).toBe('MATH');
 
-    const subjectList = await request(app).get('/api/timetable/t1/subjects');
+    const subjectList = await request(app).get('/api/timetable/t1/subjects').set(staff('school_admin'));
     expect(subjectList.body.subjects).toHaveLength(1);
 
-    const allocation = await request(app).post('/api/timetable/t1/allocations').send({
+    const allocation = await request(app).post('/api/timetable/t1/allocations').set(staff('school_admin')).send({
       section_id: section.body.id,
       subject_id: subject.body.id,
       teacher_member_id: 'teacher-math',
@@ -109,19 +110,19 @@ describe('school-timetable allocations', () => {
     expect(allocation.body.periodsPerWeek).toBe(5);
     expect(allocation.body.room).toBe('R101');
 
-    const allocList = await request(app).get('/api/timetable/t1/allocations');
+    const allocList = await request(app).get('/api/timetable/t1/allocations').set(staff('school_admin'));
     expect(allocList.body.allocations).toHaveLength(1);
 
     const patchedAlloc = await request(app)
-      .patch(`/api/timetable/t1/allocations/${allocation.body.id}`)
+      .patch(`/api/timetable/t1/allocations/${allocation.body.id}`).set(staff('school_admin'))
       .send({ room: 'R102' });
     expect(patchedAlloc.status).toBe(200);
     expect(patchedAlloc.body.room).toBe('R102');
 
-    await request(app).delete(`/api/timetable/t1/allocations/${allocation.body.id}`);
-    await request(app).delete(`/api/timetable/t1/subjects/${subject.body.id}`);
-    await request(app).delete(`/api/timetable/t1/sections/${section.body.id}`);
-    expect((await request(app).get('/api/timetable/t1/sections')).body.sections).toHaveLength(0);
+    await request(app).delete(`/api/timetable/t1/allocations/${allocation.body.id}`).set(staff('school_admin'));
+    await request(app).delete(`/api/timetable/t1/subjects/${subject.body.id}`).set(staff('school_admin'));
+    await request(app).delete(`/api/timetable/t1/sections/${section.body.id}`).set(staff('school_admin'));
+    expect((await request(app).get('/api/timetable/t1/sections').set(staff('school_admin'))).body.sections).toHaveLength(0);
   });
 
   it('enforces subject code uniqueness and section/subject allocation uniqueness', async () => {
@@ -132,7 +133,7 @@ describe('school-timetable allocations', () => {
     expect(dupCode.status).toBe(409);
 
     const section = await createSection();
-    const alloc = await request(app).post('/api/timetable/t1/allocations').send({
+    const alloc = await request(app).post('/api/timetable/t1/allocations').set(staff('school_admin')).send({
       section_id: section.body.id,
       subject_id: subject.body.id,
       teacher_member_id: 't1',
@@ -140,7 +141,7 @@ describe('school-timetable allocations', () => {
     });
     expect(alloc.status).toBe(201);
 
-    const dupAlloc = await request(app).post('/api/timetable/t1/allocations').send({
+    const dupAlloc = await request(app).post('/api/timetable/t1/allocations').set(staff('school_admin')).send({
       section_id: section.body.id,
       subject_id: subject.body.id,
       teacher_member_id: 't2',
@@ -152,25 +153,25 @@ describe('school-timetable allocations', () => {
   it('blocks deleting a subject that has allocations', async () => {
     const section = await createSection();
     const subject = await createSubject();
-    await request(app).post('/api/timetable/t1/allocations').send({
+    await request(app).post('/api/timetable/t1/allocations').set(staff('school_admin')).send({
       section_id: section.body.id,
       subject_id: subject.body.id,
       teacher_member_id: 't1',
       periods_per_week: 2,
     });
 
-    const del = await request(app).delete(`/api/timetable/t1/subjects/${subject.body.id}`);
+    const del = await request(app).delete(`/api/timetable/t1/subjects/${subject.body.id}`).set(staff('school_admin'));
     expect(del.status).toBe(409);
     expect(del.body.error).toMatch(/allocations/i);
   });
 
   it('isolates tenants', async () => {
-    const schemeA = await request(app).post('/api/timetable/tenant-a/day-schemes').send({
+    const schemeA = await request(app).post('/api/timetable/tenant-a/day-schemes').set(staff('school_admin')).send({
       label: 'Weekly A',
       kind: 'weekly',
       periods: periodsOk(),
     });
-    const schemeB = await request(app).post('/api/timetable/tenant-b/day-schemes').send({
+    const schemeB = await request(app).post('/api/timetable/tenant-b/day-schemes').set(staff('school_admin')).send({
       label: 'Weekly B',
       kind: 'weekly',
       periods: periodsOk(),
@@ -179,12 +180,12 @@ describe('school-timetable allocations', () => {
     await createSection('tenant-a', { day_scheme_id: schemeA.body.id });
     await createSubject('tenant-a');
 
-    const bSections = await request(app).get('/api/timetable/tenant-b/sections');
+    const bSections = await request(app).get('/api/timetable/tenant-b/sections').set(staff('school_admin'));
     expect(bSections.body.sections).toHaveLength(0);
-    const bSubjects = await request(app).get('/api/timetable/tenant-b/subjects');
+    const bSubjects = await request(app).get('/api/timetable/tenant-b/subjects').set(staff('school_admin'));
     expect(bSubjects.body.subjects).toHaveLength(0);
 
-    const sectionB = await request(app).post('/api/timetable/tenant-b/sections').send({
+    const sectionB = await request(app).post('/api/timetable/tenant-b/sections').set(staff('school_admin')).send({
       academic_session_id: 'sess-1',
       class_label: '8',
       section: 'A',
@@ -192,7 +193,7 @@ describe('school-timetable allocations', () => {
     });
     expect(sectionB.status).toBe(201);
 
-    const aSections = await request(app).get('/api/timetable/tenant-a/sections');
+    const aSections = await request(app).get('/api/timetable/tenant-a/sections').set(staff('school_admin'));
     expect(aSections.body.sections).toHaveLength(1);
   });
 });

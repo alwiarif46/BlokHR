@@ -7,6 +7,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { registerModule, navigateToModule } from '../../shared/router.js';
 
 let _container = null;
@@ -177,7 +178,7 @@ export async function pplCreate() {
 
 export async function pplDeactivate(id) {
   if (!id) return;
-  if (!confirm('Deactivate this employee? They will leave the attendance roster.')) return;
+  if (!(await confirmDialog({ title: 'Deactivate this employee?', message: 'They will leave the attendance roster.', confirmLabel: 'Deactivate', danger: true }))) return;
   const result = await api.delete('/api/directory/members/' + encodeURIComponent(id));
   if (result && result._error) {
     toast(result.message || 'Failed to deactivate', 'error');
@@ -245,7 +246,7 @@ export async function pplSavePin(email) {
 }
 
 export async function pplClearPin(email) {
-  if (!confirm('Clear kiosk PIN for ' + email + '?')) return;
+  if (!(await confirmDialog({ message: 'Clear kiosk PIN for ' + email + '?', confirmLabel: 'Clear PIN', danger: true }))) return;
   const result = await api.delete('/api/kiosk/pins/' + encodeURIComponent(email));
   if (result && result._error) {
     toast(result.message || 'Failed to clear PIN', 'error');

@@ -33,6 +33,8 @@ export interface GatewayConfig {
   internalSecret: string;
   /** school-identity base URL for guardian token introspection. */
   identityUrl: string;
+  /** Directory base URL for staff member/role lookup (defaults to monolith). */
+  directoryUrl: string;
   /** Absolute upstream base URLs keyed by service name. */
   serviceUrls: Record<ServiceName, string>;
 }
@@ -98,12 +100,18 @@ export function loadGatewayConfig(
     env.IDENTITY_URL ?? serviceUrls['school-identity'],
   );
 
+  const directoryUrl = assertHttpUrl(
+    'DIRECTORY_URL',
+    env.DIRECTORY_URL ?? monolithUrl,
+  );
+
   return {
     port,
     monolithUrl,
     frontendDir,
     internalSecret,
     identityUrl,
+    directoryUrl,
     serviceUrls,
   };
 }

@@ -65,3 +65,7 @@ export {
 };
 export * from './types';
 export { DIRECTORY_DEFAULTS } from './directory-service';
+
+export { asRole, guardRoutes } from './role-guard';
+export type { Role, RoutePolicy } from './role-guard';
+export { DIRECTORY_ROUTE_POLICIES } from './route-policies';

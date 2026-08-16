@@ -6,6 +6,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog, confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -780,7 +781,7 @@ export async function astDelete(id) {
     toast('Admin only', 'error');
     return;
   }
-  if (!confirm('Delete this asset?')) return;
+  if (!(await confirmDialog({ message: 'Delete this asset?', confirmLabel: 'Delete', danger: true }))) return;
   const result = await api.delete('/api/assets/' + id);
   if (result && !result._error) {
     toast('Deleted', 'success');
@@ -791,9 +792,15 @@ export async function astDelete(id) {
 }
 
 export async function astReturn(assignmentId) {
-  const condition = window.prompt('Condition on return', 'good') || 'good';
+  const condition = await promptDialog({
+    title: 'Return asset',
+    label: 'Condition on return',
+    value: 'good',
+    confirmLabel: 'Return',
+  });
+  if (condition === null) return;
   const result = await api.post('/api/assets/assignments/' + assignmentId + '/return', {
-    conditionOnReturn: condition,
+    conditionOnReturn: condition || 'good',
   });
   if (result && !result._error) {
     toast('Returned', 'success');

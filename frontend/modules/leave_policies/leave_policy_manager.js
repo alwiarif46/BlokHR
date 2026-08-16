@@ -6,6 +6,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 
 const METHODS = [
   { v: 'flat', l: 'Flat monthly' },
@@ -470,7 +471,7 @@ async function _save(root) {
 
 async function _deactivate(root, item) {
   if (!item || !item.id) return;
-  if (!confirm('Deactivate policy "' + item.leaveType + '" for ' + (item.memberTypeId || '') + '?')) return;
+  if (!(await confirmDialog({ message: 'Deactivate policy "' + item.leaveType + '" for ' + (item.memberTypeId || '') + '?', confirmLabel: 'Deactivate', danger: true }))) return;
   const result = await api.delete('/api/leave-policies/' + item.id);
   if (result && result._error) {
     toast(result.message || 'Failed to deactivate', 'error');

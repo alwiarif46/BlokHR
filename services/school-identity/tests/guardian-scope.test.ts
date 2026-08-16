@@ -7,8 +7,7 @@ import {
   createSchoolIdentityApp,
   type SchoolIdentitySqlite,
 } from '../src/index';
-
-const SECRET = 'test-internal-secret';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 
 function guardianPayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -60,22 +59,22 @@ describe('school-identity guardian students (P9-03)', () => {
 
   it('enriches students with photo_ref and class/section; guardian header gate', async () => {
     const g = await request(app)
-      .post('/api/identity/t1/guardians')
+      .post('/api/identity/t1/guardians').set(staff('admin'))
       .send(guardianPayload());
     const s = await request(app)
-      .post('/api/identity/t1/students')
+      .post('/api/identity/t1/students').set(staff('admin'))
       .send(studentPayload());
     await request(app)
-      .post(`/api/identity/t1/students/${s.body.id}/guardians`)
+      .post(`/api/identity/t1/students/${s.body.id}/guardians`).set(staff('admin'))
       .send({ guardian_id: g.body.id, is_primary: true });
-    const session = await request(app).post('/api/identity/t1/sessions').send({
+    const session = await request(app).post('/api/identity/t1/sessions').set(staff('school_admin')).send({
       label: '2025-26',
       starts_on: '2025-04-01',
       ends_on: '2026-03-31',
       is_current: true,
     });
     await request(app)
-      .post(`/api/identity/t1/students/${s.body.id}/enrol`)
+      .post(`/api/identity/t1/students/${s.body.id}/enrol`).set(staff('admin'))
       .send({
         academic_session_id: session.body.id,
         class_label: '5',
@@ -84,13 +83,13 @@ describe('school-identity guardian students (P9-03)', () => {
         enrolled_on: '2025-04-01',
       });
 
-    const staff = await request(app).get(
-      `/api/identity/t1/guardians/${g.body.id}/students`,
-    );
-    expect(staff.status).toBe(200);
-    expect(staff.body.students[0].photo_ref).toBe('photos/asha.jpg');
-    expect(staff.body.students[0].class_label).toBe('5');
-    expect(staff.body.students[0].section).toBe('A');
+    const staffList = await request(app)
+      .get(`/api/identity/t1/guardians/${g.body.id}/students`)
+      .set(staff('office'));
+    expect(staffList.status).toBe(200);
+    expect(staffList.body.students[0].photo_ref).toBe('photos/asha.jpg');
+    expect(staffList.body.students[0].class_label).toBe('5');
+    expect(staffList.body.students[0].section).toBe('A');
 
     const noSecret = await request(app)
       .get(`/api/identity/t1/guardians/${g.body.id}/students`)

@@ -6,6 +6,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog } from '../../shared/modal.js';
 import { registerModule } from '../../shared/router.js';
 
 const PENDING_KEY = 'blokhr_school_pending_marks';
@@ -42,6 +43,7 @@ function _esc(s) {
 function idem() {
   return 'mk_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
 }
+
 
 export function renderSchoolRegisterPage(container) {
   _container = container;
@@ -106,7 +108,10 @@ async function refreshClasses() {
   sel.innerHTML = _classes
     .map((c) => '<option value="' + _esc(c.id) + '">' + _esc(c.name) + '</option>')
     .join('');
+  const newPeriodBtn = _container.querySelector('#srNewPeriod');
+  if (newPeriodBtn) newPeriodBtn.disabled = !_classes.length;
   if (!_classes.length) {
+    _classId = '';
     _container.querySelector('#srRoster').innerHTML =
       '<div class="sr-empty">Create a class to start roll call.</div>';
     return;
@@ -290,9 +295,14 @@ function updatePendingBadge() {
 }
 
 async function createClass() {
-  const name = prompt('Class name');
-  if (!name || !name.trim()) return;
-  const res = await api.post('/api/school-attendance/classes', { name: name.trim() });
+  const name = await promptDialog({
+    title: 'New class',
+    label: 'Class name',
+    placeholder: 'e.g. Grade 5A',
+    confirmLabel: 'Create class',
+  });
+  if (!name) return;
+  const res = await api.post('/api/school-attendance/classes', { name });
   if (res && !res._error) {
     toast('Class created', 'success');
     await refreshClasses();
@@ -300,8 +310,16 @@ async function createClass() {
 }
 
 async function createPeriod() {
-  if (!_classId) return;
-  const label = prompt('Period label', 'Period 1');
+  if (!_classId) {
+    toast('Create a class first', 'error');
+    return;
+  }
+  const label = await promptDialog({
+    title: 'New period',
+    label: 'Period label',
+    value: 'Period ' + (_periods.length + 1),
+    confirmLabel: 'Create period',
+  });
   if (!label) return;
   const res = await api.post('/api/school-attendance/classes/' + encodeURIComponent(_classId) + '/periods', {
     label,
@@ -319,7 +337,12 @@ async function scanQrCard() {
     toast('QR not available for this tenant session', 'error');
     return;
   }
-  const raw = prompt('Scan or paste student card QR payload (base64 or raw id)');
+  const raw = await promptDialog({
+    title: 'Scan student card',
+    label: 'QR payload (base64 or raw id)',
+    placeholder: 'Scan or paste the card payload',
+    confirmLabel: 'Submit',
+  });
   if (!raw) return;
   const payloadB64 = /^[A-Za-z0-9+/=]+$/.test(raw.trim()) && raw.length > 8
     ? raw.trim()
@@ -342,8 +365,20 @@ async function scanQrCard() {
     return;
   }
   if (res.decision === 'no_match' || res.decision === 'manual_required') {
-    const subject = prompt('No match — enter subject_ref for manual override (required)');
-    const reason = prompt('Reason for override');
+    const subject = await promptDialog({
+      title: 'No match',
+      label: 'Subject ref for manual override',
+      placeholder: 'Student reference',
+      confirmLabel: 'Continue',
+    });
+    const reason = subject
+      ? await promptDialog({
+          title: 'Manual override',
+          label: 'Reason for override',
+          placeholder: 'Why is this being overridden?',
+          confirmLabel: 'Record override',
+        })
+      : null;
     if (!subject || !reason) {
       toast('Override cancelled — student not marked absent automatically', 'error');
       return;

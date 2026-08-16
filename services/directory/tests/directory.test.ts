@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import { createDirectoryApp } from '../src/index';
@@ -45,9 +46,6 @@ describe('Directory service', () => {
       logger: pino({ level: 'silent' }),
       seatChecker,
       auth,
-      routerOptions: {
-        isAdmin: async (email) => email === 'admin@acme.com',
-      },
     });
     app = created.app;
     db = created.db;
@@ -60,7 +58,7 @@ describe('Directory service', () => {
   it('creates a member with credentials', async () => {
     const res = await request(app)
       .post('/api/directory/members')
-      .set('X-User-Email', 'admin@acme.com')
+      .set(staff('admin'))
       .send({
         email: 'jane@acme.com',
         name: 'Jane Doe',
@@ -77,11 +75,11 @@ describe('Directory service', () => {
   it('rejects duplicate email', async () => {
     await request(app)
       .post('/api/directory/members')
-      .set('X-User-Email', 'admin@acme.com')
+      .set(staff('admin'))
       .send({ email: 'jane@acme.com', name: 'Jane', temporaryPassword: 'TempPass1' });
     const res = await request(app)
       .post('/api/directory/members')
-      .set('X-User-Email', 'admin@acme.com')
+      .set(staff('admin'))
       .send({ email: 'jane@acme.com', name: 'Jane 2', temporaryPassword: 'TempPass2' });
     expect(res.status).toBe(409);
   });
@@ -89,15 +87,15 @@ describe('Directory service', () => {
   it('rejects when seat limit exceeded', async () => {
     await request(app)
       .post('/api/directory/members')
-      .set('X-User-Email', 'admin@acme.com')
+      .set(staff('admin'))
       .send({ email: 'a@acme.com', name: 'A', temporaryPassword: 'TempPass1' });
     await request(app)
       .post('/api/directory/members')
-      .set('X-User-Email', 'admin@acme.com')
+      .set(staff('admin'))
       .send({ email: 'b@acme.com', name: 'B', temporaryPassword: 'TempPass1' });
     const res = await request(app)
       .post('/api/directory/members')
-      .set('X-User-Email', 'admin@acme.com')
+      .set(staff('admin'))
       .send({ email: 'c@acme.com', name: 'C', temporaryPassword: 'TempPass1' });
     expect(res.status).toBe(403);
     expect(res.body.error).toMatch(/Seat limit/i);
@@ -106,9 +104,9 @@ describe('Directory service', () => {
   it('lists active members', async () => {
     await request(app)
       .post('/api/directory/members')
-      .set('X-User-Email', 'admin@acme.com')
+      .set(staff('admin'))
       .send({ email: 'a@acme.com', name: 'Ada', temporaryPassword: 'TempPass1' });
-    const res = await request(app).get('/api/directory/members');
+    const res = await request(app).get('/api/directory/members').set(staff('admin'));
     expect(res.status).toBe(200);
     expect(res.body.count).toBe(1);
     expect(res.body.members[0].name).toBe('Ada');
@@ -117,8 +115,62 @@ describe('Directory service', () => {
   it('requires admin for create', async () => {
     const res = await request(app)
       .post('/api/directory/members')
-      .set('X-User-Email', 'employee@acme.com')
+      .set(staff('employee'))
       .send({ email: 'x@acme.com', name: 'X', temporaryPassword: 'TempPass1' });
     expect(res.status).toBe(403);
+  });
+
+  describe('GET /members/lookup (P12-02)', () => {
+    const INTERNAL = 'test-internal-secret';
+
+    it('returns member id/role/active for case-insensitive email', async () => {
+      await request(app)
+        .post('/api/directory/members')
+        .set(staff('admin'))
+        .send({
+          email: 'teacher@acme.com',
+          name: 'T',
+          role: 'teacher',
+          temporaryPassword: 'TempPass1',
+        });
+
+      const res = await request(app)
+        .get('/api/directory/members/lookup?email=Teacher@Acme.com')
+        .set('X-Blok-Internal', INTERNAL);
+      expect(res.status).toBe(200);
+      expect(res.body.member).toMatchObject({
+        id: 'teacher@acme.com',
+        role: 'teacher',
+        active: true,
+      });
+    });
+
+    it('returns member:null for inactive members', async () => {
+      await request(app)
+        .post('/api/directory/members')
+        .set(staff('admin'))
+        .send({
+          email: 'gone@acme.com',
+          name: 'Gone',
+          temporaryPassword: 'TempPass1',
+        });
+      await request(app)
+        .patch('/api/directory/members/gone@acme.com')
+        .set(staff('admin'))
+        .send({ active: false });
+
+      const res = await request(app)
+        .get('/api/directory/members/lookup?email=gone@acme.com')
+        .set('X-Blok-Internal', INTERNAL);
+      expect(res.status).toBe(200);
+      expect(res.body.member).toBeNull();
+    });
+
+    it('returns 401 without internal secret', async () => {
+      const res = await request(app).get(
+        '/api/directory/members/lookup?email=a@acme.com',
+      );
+      expect(res.status).toBe(401);
+    });
   });
 });

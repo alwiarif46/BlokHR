@@ -10,6 +10,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -258,7 +259,14 @@ export async function regApprove(id, statusHint) {
 }
 
 export async function regReject(id) {
-  const reason = prompt('Rejection reason:');
+  const reason = await promptDialog({
+    title: 'Reject regularization',
+    label: 'Rejection reason',
+    placeholder: 'Why is this being rejected?',
+    confirmLabel: 'Reject',
+    required: true,
+    danger: true,
+  });
   if (reason === null) return;
 
   const result = await api.put('/api/regularizations/' + id + '/reject', { comments: reason });

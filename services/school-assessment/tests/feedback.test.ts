@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import http from 'http';
@@ -37,14 +38,14 @@ describe('school-assessment feedback (P4-06)', () => {
     app = created.app;
     db = created.db;
 
-    const term = await request(app).post('/api/assessment/t1/exam-terms').send({
+    const term = await request(app).post('/api/assessment/t1/exam-terms').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       label: 'PT1',
       starts_on: '2025-07-01',
       ends_on: '2025-07-15',
       weightage_pct: 20,
     });
-    const exam = await request(app).post('/api/assessment/t1/exams').send({
+    const exam = await request(app).post('/api/assessment/t1/exams').set(staff('school_admin')).send({
       exam_term_id: term.body.id,
       course_ref: 'course-1',
       section_ref: '8A',
@@ -56,7 +57,7 @@ describe('school-assessment feedback (P4-06)', () => {
     });
     examId = exam.body.id;
 
-    const bp = await request(app).post('/api/assessment/t1/blueprints').send({
+    const bp = await request(app).post('/api/assessment/t1/blueprints').set(staff('school_admin')).send({
       label: 'PT1 paper',
       class_label: '8',
       subject_code: 'Sc',
@@ -67,7 +68,7 @@ describe('school-assessment feedback (P4-06)', () => {
         { bucket: 'short_long', pct: 40 },
       ],
     });
-    const q1 = await request(app).post('/api/assessment/t1/questions').send({
+    const q1 = await request(app).post('/api/assessment/t1/questions').set(staff('school_admin')).send({
       subject_code: 'Sc',
       class_label: '8',
       kind: 'case_based',
@@ -75,7 +76,7 @@ describe('school-assessment feedback (P4-06)', () => {
       outcome_code: '8.Sc.LO4',
       body: { stem: 'Q1', topic_id: 'topic-lo4' },
     });
-    const q2 = await request(app).post('/api/assessment/t1/questions').send({
+    const q2 = await request(app).post('/api/assessment/t1/questions').set(staff('school_admin')).send({
       subject_code: 'Sc',
       class_label: '8',
       kind: 'mcq',
@@ -83,7 +84,7 @@ describe('school-assessment feedback (P4-06)', () => {
       outcome_code: '8.Sc.LO1',
       body: { stem: 'Q2', topic_id: 'topic-lo1' },
     });
-    const q3 = await request(app).post('/api/assessment/t1/questions').send({
+    const q3 = await request(app).post('/api/assessment/t1/questions').set(staff('school_admin')).send({
       subject_code: 'Sc',
       class_label: '8',
       kind: 'sa',
@@ -91,13 +92,13 @@ describe('school-assessment feedback (P4-06)', () => {
       outcome_code: '8.Sc.LO4',
       body: { stem: 'Q3', topic_id: 'topic-lo4' },
     });
-    await request(app).post('/api/assessment/t1/papers').send({
+    await request(app).post('/api/assessment/t1/papers').set(staff('school_admin')).send({
       blueprint_id: bp.body.id,
       exam_ref: examId,
       question_ids: [q1.body.id, q2.body.id, q3.body.id],
     });
 
-    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).send({
+    await request(app).put(`/api/assessment/t1/exams/${examId}/marks`).set(staff('school_admin')).send({
       entered_by: 'tchr',
       marks: [
         { student_id: 's1', draft_marks: 80 },
@@ -106,7 +107,7 @@ describe('school-assessment feedback (P4-06)', () => {
       ],
     });
     await request(app)
-      .post(`/api/assessment/t1/exams/${examId}/publish`)
+      .post(`/api/assessment/t1/exams/${examId}/publish`).set(staff('school_admin'))
       .send({ published_by: 'coord' });
   });
 
@@ -121,7 +122,7 @@ describe('school-assessment feedback (P4-06)', () => {
   it('computes per-outcome mean pct and calls academics infer for topics', async () => {
     // publish already ran feedback; verify
     const rerun = await request(app)
-      .post('/api/assessment/t1/feedback/run')
+      .post('/api/assessment/t1/feedback/run').set(staff('school_admin'))
       .send({ exam_id: examId });
     expect(rerun.status).toBe(200);
     expect(rerun.body.performances).toHaveLength(2);
@@ -144,7 +145,7 @@ describe('school-assessment feedback (P4-06)', () => {
   it('weak list + idempotent rerun', async () => {
     const weak = await request(app).get(
       '/api/assessment/t1/outcomes/weak?threshold=70&session=ay-2025',
-    );
+    ).set(staff('school_admin'));
     expect(weak.status).toBe(200);
     expect(weak.body.outcomes.length).toBe(2);
     expect(
@@ -156,14 +157,14 @@ describe('school-assessment feedback (P4-06)', () => {
 
     const strong = await request(app).get(
       '/api/assessment/t1/outcomes/weak?threshold=50&session=ay-2025',
-    );
+    ).set(staff('school_admin'));
     expect(strong.body.outcomes).toHaveLength(0);
 
     const first = await request(app)
-      .post('/api/assessment/t1/feedback/run')
+      .post('/api/assessment/t1/feedback/run').set(staff('school_admin'))
       .send({ exam_id: examId });
     const second = await request(app)
-      .post('/api/assessment/t1/feedback/run')
+      .post('/api/assessment/t1/feedback/run').set(staff('school_admin'))
       .send({ exam_id: examId });
     const strip = (rows: Array<Record<string, unknown>>) =>
       rows.map(({ computedAt: _c, ...rest }) => rest);
@@ -203,7 +204,7 @@ describe('school-assessment feedback (P4-06)', () => {
   it('tenant isolation for weak outcomes', async () => {
     const other = await request(app).get(
       '/api/assessment/t2/outcomes/weak?threshold=100',
-    );
+    ).set(staff('school_admin'));
     expect(other.status).toBe(200);
     expect(other.body.outcomes).toEqual([]);
   });

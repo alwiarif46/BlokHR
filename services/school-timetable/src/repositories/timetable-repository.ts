@@ -420,6 +420,38 @@ export class TimetableRepository {
     return rows.map(mapAllocation);
   }
 
+  async listAllocationsForTeacherInSection(
+    tenantId: string,
+    sectionId: string,
+    teacherMemberId: string,
+  ): Promise<Allocation[]> {
+    const rows = await this.db.all<AllocationRow>(
+      `SELECT * FROM allocations
+       WHERE tenant_id = ? AND section_id = ? AND teacher_member_id = ?
+       ORDER BY created_at ASC`,
+      [tenantId, sectionId, teacherMemberId],
+    );
+    return rows.map(mapAllocation);
+  }
+
+  async findSectionsByRef(tenantId: string, sectionRef: string): Promise<Section[]> {
+    const ref = sectionRef.trim();
+    if (!ref) return [];
+    const rows = await this.db.all<SectionRow>(
+      `SELECT * FROM sections
+       WHERE tenant_id = ?
+         AND (
+           id = ?
+           OR (class_label || section) = ?
+           OR lower(class_label || '-' || section) = lower(?)
+           OR lower(class_label || '_' || section) = lower(?)
+         )
+       ORDER BY created_at ASC`,
+      [tenantId, ref, ref, ref, ref],
+    );
+    return rows.map(mapSection);
+  }
+
   async getAllocation(tenantId: string, id: string): Promise<Allocation | null> {
     const row = await this.db.get<AllocationRow>(
       'SELECT * FROM allocations WHERE tenant_id = ? AND id = ?',

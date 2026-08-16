@@ -13,6 +13,8 @@ describe('school_students (F-02)', () => {
   let schoolDel;
   /** @type {ReturnType<typeof vi.fn>} */
   let toastFn;
+  /** @type {ReturnType<typeof vi.fn>} */
+  let navigateToModule;
 
   const sampleStudent = {
     id: 'stu-1',
@@ -130,6 +132,7 @@ describe('school_students (F-02)', () => {
     schoolPatch = vi.fn(async () => ({ ...sampleStudent }));
     schoolDel = vi.fn(async () => ({}));
     toastFn = vi.fn();
+    navigateToModule = vi.fn();
 
     vi.doMock('../../shared/api.js', async () => {
       const actual = await vi.importActual('../../shared/api.js');
@@ -170,6 +173,7 @@ describe('school_students (F-02)', () => {
 
     vi.doMock('../../shared/router.js', () => ({
       registerModule: () => {},
+      navigateToModule,
     }));
 
     mod = await import('../../modules/school_students/school_students.js');
@@ -343,5 +347,15 @@ describe('school_students (F-02)', () => {
     await mod.ssLoadData();
     expect(toastFn).toHaveBeenCalledWith('identity down', 'error');
     expect(document.body.textContent).toMatch(/No students match/);
+  });
+
+  it('shows Import… pointer that navigates to School Settings', () => {
+    expect(document.getElementById('ssImportGoBtn')).toBeTruthy();
+    expect(document.getElementById('ssTemplateBtn')).toBeNull();
+    expect(document.getElementById('ssImportBtn')).toBeNull();
+    expect(document.getElementById('ssImportFile')).toBeNull();
+
+    document.getElementById('ssImportGoBtn').click();
+    expect(navigateToModule).toHaveBeenCalledWith('school_settings');
   });
 });

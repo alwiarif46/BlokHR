@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { answerPrompt } from '../helpers/dialog.js';
 
 function todayStr() {
   const d = new Date();
@@ -161,8 +162,8 @@ describe('visitors module', () => {
     mod.renderVisitorsPage(document.getElementById('root'));
     await vi.waitFor(() => expect(mod._getVisits().length).toBe(2));
 
-    window.prompt = vi.fn(() => 'Has laptop');
     document.querySelector('[data-action="check-in"]').click();
+    await answerPrompt('Has laptop');
     await vi.waitFor(() => {
       expect(apiPost).toHaveBeenCalledWith('/api/visitors/v1/check-in', {
         receptionNotes: 'Has laptop',

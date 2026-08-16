@@ -88,6 +88,32 @@ export class IdentityService {
     return this.repo.listSessions(tenantId);
   }
 
+  async listActiveEnrolments(tenantId: string, studentId: string): Promise<Enrolment[]> {
+    return this.repo.listActiveEnrolments(tenantId, studentId);
+  }
+
+  /**
+   * Internal: active enrolment section for diary/guardian feeds.
+   * section_ref = "<class_label>|<section>"
+   */
+  async getActiveStudentSection(
+    tenantId: string,
+    studentId: string,
+  ): Promise<
+    | { sectionRef: string; academicSessionId: string }
+    | { error: string; status: number }
+  > {
+    const student = await this.repo.getStudent(tenantId, studentId);
+    if (!student) return { error: 'not_found', status: 404 };
+    const enrolments = await this.repo.listActiveEnrolments(tenantId, studentId);
+    const active = enrolments[0];
+    if (!active) return { error: 'not_found', status: 404 };
+    return {
+      sectionRef: `${active.classLabel}|${active.section}`,
+      academicSessionId: active.academicSessionId,
+    };
+  }
+
   async createSession(
     tenantId: string,
     input: CreateAcademicSessionInput,

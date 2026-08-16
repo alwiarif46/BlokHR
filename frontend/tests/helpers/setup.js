@@ -25,10 +25,12 @@ export function mountSetupWizardDom() {
         <div class="wz-panel active" id="wzP0">
           <h3 class="wz-vheading">What are you setting up?</h3>
           <button type="button" class="wz-vcard" id="wzCardHr" data-vertical="hr">
-            <span class="wz-vcard-title">Company</span>
+            <svg class="wz-vcard-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+            <span class="wz-vcard-title">Workforce</span>
           </button>
           <button type="button" class="wz-vcard" id="wzCardSchool" data-vertical="school">
-            <span class="wz-vcard-title">School</span>
+            <svg class="wz-vcard-icon" viewBox="0 0 24 24" aria-hidden="true"></svg>
+            <span class="wz-vcard-title">Campus</span>
           </button>
           <p class="wz-vwarn">This choice is permanent for this workspace and cannot be changed later.</p>
           <button class="wz-btn wz-btn-p" id="wzBtn0" disabled>
@@ -36,7 +38,9 @@ export function mountSetupWizardDom() {
           </button>
         </div>
         <div class="wz-panel" id="wzP1">
-          <input id="wzCompanyName" />
+          <div id="wzSecIdentity">Company Identity</div>
+          <div class="wz-fl"><span class="req">*</span> <span id="wzLblOrgName">Company Name</span></div>
+          <input id="wzCompanyName" placeholder="Acme Corporation" />
           <input id="wzTagline" />
           <input id="wzLogoUrl" />
           <input id="wzTimezone" value="Asia/Kolkata" />
@@ -50,6 +54,8 @@ export function mountSetupWizardDom() {
           <button id="wzBtn1" disabled><span class="btn-text">Next</span></button>
         </div>
         <div class="wz-panel" id="wzP2">
+          <div id="wzSecAuth">How your team signs in</div>
+          <div id="wzLocalHint">Best for small teams — no SSO setup needed</div>
           <div id="wzLocalCard"></div>
           <div id="wzMagicCard"></div>
           <div id="wzMsCard"></div>

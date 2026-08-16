@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { EventPublisher } from '../events';
 import type { AcademicsRepository } from '../repositories/academics-repository';
+import type { SyllabusPackRegistry } from '../packs/registry';
+import type { SyllabusPack } from '../packs/types';
 import type {
   AssertDeliveryInput,
   Assignment,
@@ -39,7 +41,6 @@ import type {
   SubmissionState,
   SyllabusExportPayload,
   SyllabusImportPayload,
-  SyllabusUnitImport,
   TagUnitOutcomeInput,
   Topic,
   TopicDelivery,
@@ -54,6 +55,14 @@ import {
   type VarianceInstanceInput,
   type VarianceReport,
 } from './variance';
+import { validateImportUnits } from './syllabus-import-validate';
+import {
+  ALLOWED_UPLOAD_BOARDS,
+  decodeSyllabusUploadBase64,
+  mondayOfWeek,
+  parseSyllabusWorkbook,
+  type ParsedLessonPlanRow,
+} from './syllabus-upload-parse';
 
 type ServiceError = { error: string; status: number; errors?: string[] };
 
@@ -81,7 +90,458 @@ export class AcademicsService {
   constructor(
     private readonly repo: AcademicsRepository,
     private readonly events: EventPublisher,
+    private readonly packs: SyllabusPackRegistry,
   ) {}
+
+  listPackSummaries() {
+    return this.packs.list();
+  }
+
+  getPack(id: string): SyllabusPack | null {
+    return this.packs.get(id);
+  }
+
+  /**
+   * Install a registry pack for a tenant/session.
+   * Upgrade path: install a newer pack for a new academic session — no in-place mutation of existing courses.
+   */
+  async installPack(
+    tenantId: string,
+    packId: string,
+    input: {
+      academicSessionId: string;
+      installedBy: string;
+      classes?: string[];
+      subjects?: string[];
+    },
+  ): Promise<{
+    courses_created?: number;
+    courses_skipped?: Array<{
+      class_label: string;
+      subject_code: string;
+      existing_course_id: string;
+    }>;
+    installed_pack_id?: string;
+    error?: string;
+    status?: number;
+    errors?: Array<{ class_label: string; subject_code: string; message: string }>;
+  }> {
+    const pack = this.packs.get(packId);
+    if (!pack) return { error: 'pack not found', status: 404 };
+
+    const sessionId = (input.academicSessionId || '').trim();
+    const installedBy = (input.installedBy || '').trim();
+    if (!sessionId) return { error: 'academic_session_id is required', status: 400 };
+    if (!installedBy) return { error: 'installed_by is required', status: 400 };
+
+    const classFilter = (input.classes || []).map((c) => String(c).trim()).filter(Boolean);
+    const subjectFilter = (input.subjects || [])
+      .map((s) => String(s).trim())
+      .filter(Boolean);
+
+    let selected = pack.courses.slice();
+    if (classFilter.length) {
+      const set = new Set(classFilter);
+      selected = selected.filter((c) => set.has(c.class_label));
+    }
+    if (subjectFilter.length) {
+      const set = new Set(subjectFilter);
+      selected = selected.filter((c) => set.has(c.subject_code));
+    }
+    if (!selected.length) {
+      return { error: 'selection_empty', status: 400 };
+    }
+
+    const createdIds: string[] = [];
+    const skipped: Array<{
+      class_label: string;
+      subject_code: string;
+      existing_course_id: string;
+    }> = [];
+    const courseErrors: Array<{
+      class_label: string;
+      subject_code: string;
+      message: string;
+    }> = [];
+
+    for (const courseDef of selected) {
+      const existing = await this.repo.findCourseByKey(
+        tenantId,
+        sessionId,
+        pack.board,
+        courseDef.subject_code,
+        courseDef.class_label,
+      );
+      if (existing) {
+        skipped.push({
+          class_label: courseDef.class_label,
+          subject_code: courseDef.subject_code,
+          existing_course_id: existing.id,
+        });
+        continue;
+      }
+
+      const created = await this.createCourse(tenantId, {
+        academicSessionId: sessionId,
+        board: pack.board,
+        subjectCode: courseDef.subject_code,
+        classLabel: courseDef.class_label,
+        label: courseDef.label,
+      });
+      if (created.error || !created.course) {
+        courseErrors.push({
+          class_label: courseDef.class_label,
+          subject_code: courseDef.subject_code,
+          message: created.error?.error || 'course create failed',
+        });
+        break;
+      }
+
+      const imported = await this.importSyllabus(tenantId, created.course.id, {
+        units: courseDef.units,
+      });
+      if (imported.error) {
+        await this.repo.deleteCourse(tenantId, created.course.id);
+        courseErrors.push({
+          class_label: courseDef.class_label,
+          subject_code: courseDef.subject_code,
+          message:
+            imported.error.error +
+            (imported.error.errors ? ': ' + imported.error.errors.join('; ') : ''),
+        });
+        break;
+      }
+      createdIds.push(created.course.id);
+    }
+
+    if (courseErrors.length) {
+      for (const id of createdIds) {
+        await this.repo.deleteCourse(tenantId, id);
+      }
+      return { error: 'install_failed', status: 400, errors: courseErrors };
+    }
+
+    const installed = await this.repo.insertInstalledPack({
+      id: uuidv4(),
+      tenantId,
+      packId: pack.id,
+      packStatusAtInstall: pack.status,
+      academicSessionId: sessionId,
+      courseIdsJson: JSON.stringify(createdIds),
+      installedBy,
+    });
+
+    await this.events.publish({
+      type: 'school.pack.installed',
+      tenantId,
+      occurredAt: new Date().toISOString(),
+      data: {
+        pack_id: pack.id,
+        courses_created: createdIds.length,
+        courses_skipped: skipped.length,
+      },
+    });
+
+    return {
+      courses_created: createdIds.length,
+      courses_skipped: skipped,
+      installed_pack_id: installed.id,
+    };
+  }
+
+  async listInstalledPacks(tenantId: string) {
+    const rows = await this.repo.listInstalledPacks(tenantId);
+    return rows.map((row) => {
+      const pack = this.packs.get(row.packId);
+      // Upgrade path: install newer pack for a new session — no in-place mutation.
+      const update_available = pack
+        ? this.packs.findUpdateAvailable(pack)
+        : null;
+      return {
+        id: row.id,
+        pack_id: row.packId,
+        pack_status_at_install: row.packStatusAtInstall,
+        academic_session_id: row.academicSessionId,
+        course_ids: row.courseIds,
+        course_count: row.courseIds.length,
+        installed_by: row.installedBy,
+        installed_at: row.installedAt,
+        update_available,
+      };
+    });
+  }
+
+  /**
+   * Upload school-owned syllabus workbook (Excel/CSV) and optionally soft-import lesson plans.
+   */
+  async uploadSyllabus(
+    tenantId: string,
+    input: {
+      contentBase64: string;
+      academicSessionId: string;
+      installedBy: string;
+      board: string;
+      classes?: string[];
+      importLessonPlans?: boolean;
+    },
+  ): Promise<{
+    courses_created?: number;
+    courses_skipped?: Array<{
+      class_label: string;
+      subject_code: string;
+      existing_course_id: string;
+    }>;
+    classes_in_file?: string[];
+    lessons_created?: number;
+    lessons_skipped?: number;
+    lesson_warnings?: Array<{ row: number; message: string }>;
+    error?: string;
+    status?: number;
+    errors?: Array<{ class_label: string; subject_code: string; message: string }>;
+  }> {
+    const sessionId = (input.academicSessionId || '').trim();
+    const installedBy = (input.installedBy || '').trim();
+    const boardRaw = String(input.board || '').trim().toLowerCase();
+    if (!sessionId) return { error: 'academic_session_id is required', status: 400 };
+    if (!installedBy) return { error: 'installed_by is required', status: 400 };
+    if (!ALLOWED_UPLOAD_BOARDS.has(boardRaw as CourseBoard)) {
+      return {
+        error: 'board must be cbse, icse, state, ib, or cambridge',
+        status: 400,
+      };
+    }
+    const board = boardRaw as CourseBoard;
+
+    const decoded = decodeSyllabusUploadBase64(input.contentBase64);
+    if ('error' in decoded) return { error: decoded.error, status: 400 };
+
+    const parsed = parseSyllabusWorkbook(decoded);
+    if (parsed.parseErrors.length && !parsed.courses.length) {
+      return {
+        error: 'validation_failed',
+        status: 400,
+        errors: parsed.parseErrors.map((message) => ({
+          class_label: '',
+          subject_code: '',
+          message,
+        })),
+      };
+    }
+
+    const classFilter = (input.classes || []).map((c) => String(c).trim()).filter(Boolean);
+    let selected = parsed.courses.slice();
+    if (classFilter.length) {
+      const set = new Set(classFilter);
+      selected = selected.filter((c) => set.has(c.classLabel));
+    }
+    if (!selected.length) {
+      return { error: 'selection_empty', status: 400 };
+    }
+
+    const createdIds: string[] = [];
+    const skipped: Array<{
+      class_label: string;
+      subject_code: string;
+      existing_course_id: string;
+    }> = [];
+    const courseErrors: Array<{
+      class_label: string;
+      subject_code: string;
+      message: string;
+    }> = [];
+
+    // Map key class\0subject -> course id for lesson attach
+    const courseIdByKey = new Map<string, string>();
+
+    for (const courseDef of selected) {
+      const key = courseDef.classLabel + '\0' + courseDef.subjectCode;
+      const existing = await this.repo.findCourseByKey(
+        tenantId,
+        sessionId,
+        board,
+        courseDef.subjectCode,
+        courseDef.classLabel,
+      );
+      if (existing) {
+        skipped.push({
+          class_label: courseDef.classLabel,
+          subject_code: courseDef.subjectCode,
+          existing_course_id: existing.id,
+        });
+        courseIdByKey.set(key, existing.id);
+        continue;
+      }
+
+      const created = await this.createCourse(tenantId, {
+        academicSessionId: sessionId,
+        board,
+        subjectCode: courseDef.subjectCode,
+        classLabel: courseDef.classLabel,
+        label: courseDef.label,
+      });
+      if (created.error || !created.course) {
+        courseErrors.push({
+          class_label: courseDef.classLabel,
+          subject_code: courseDef.subjectCode,
+          message: created.error?.error || 'course create failed',
+        });
+        break;
+      }
+
+      const imported = await this.importSyllabus(tenantId, created.course.id, {
+        units: courseDef.units,
+      });
+      if (imported.error) {
+        await this.repo.deleteCourse(tenantId, created.course.id);
+        courseErrors.push({
+          class_label: courseDef.classLabel,
+          subject_code: courseDef.subjectCode,
+          message:
+            imported.error.error +
+            (imported.error.errors ? ': ' + imported.error.errors.join('; ') : ''),
+        });
+        break;
+      }
+      createdIds.push(created.course.id);
+      courseIdByKey.set(key, created.course.id);
+    }
+
+    if (courseErrors.length) {
+      for (const id of createdIds) {
+        await this.repo.deleteCourse(tenantId, id);
+      }
+      return { error: 'upload_failed', status: 400, errors: courseErrors };
+    }
+
+    // Also resolve any filtered-out existing courses needed for lessons in selected classes
+    if (classFilter.length) {
+      const allCourses = await this.repo.listCourses(tenantId);
+      for (const c of allCourses) {
+        if (c.academicSessionId !== sessionId || c.board !== board) continue;
+        if (!classFilter.includes(c.classLabel)) continue;
+        const key = c.classLabel + '\0' + c.subjectCode;
+        if (!courseIdByKey.has(key)) courseIdByKey.set(key, c.id);
+      }
+    } else {
+      const allCourses = await this.repo.listCourses(tenantId);
+      for (const c of allCourses) {
+        if (c.academicSessionId !== sessionId || c.board !== board) continue;
+        const key = c.classLabel + '\0' + c.subjectCode;
+        if (!courseIdByKey.has(key)) courseIdByKey.set(key, c.id);
+      }
+    }
+
+    let lessonsCreated = 0;
+    let lessonsSkipped = 0;
+    const lessonWarnings: Array<{ row: number; message: string }> = [];
+
+    const importLessons = input.importLessonPlans !== false;
+    if (importLessons) {
+      for (const w of parsed.lessonWarnings) {
+        // Soft skips from the Lesson Plans sheet (incomplete optional rows).
+        if (classFilter.length) {
+          // Parse warnings don't carry class — still surface them when importing lessons.
+          lessonWarnings.push({ row: w.row, message: w.message });
+          lessonsSkipped += 1;
+        } else {
+          lessonWarnings.push({ row: w.row, message: w.message });
+          lessonsSkipped += 1;
+        }
+      }
+
+      let lessonRows = parsed.lessonPlans;
+      if (classFilter.length) {
+        const set = new Set(classFilter);
+        lessonRows = lessonRows.filter((r) => set.has(r.classLabel));
+      }
+      for (const row of lessonRows) {
+        const outcome = await this._createLessonFromUploadRow(
+          tenantId,
+          row,
+          courseIdByKey,
+          installedBy,
+        );
+        if (outcome.created) lessonsCreated += 1;
+        else {
+          lessonsSkipped += 1;
+          if (outcome.warning) {
+            lessonWarnings.push({ row: row.row, message: outcome.warning });
+          }
+        }
+      }
+    }
+
+    await this.events.publish({
+      type: 'school.syllabus.uploaded',
+      tenantId,
+      occurredAt: new Date().toISOString(),
+      data: {
+        courses_created: createdIds.length,
+        courses_skipped: skipped.length,
+        lessons_created: lessonsCreated,
+        lessons_skipped: lessonsSkipped,
+      },
+    });
+
+    return {
+      courses_created: createdIds.length,
+      courses_skipped: skipped,
+      classes_in_file: parsed.classesInFile,
+      lessons_created: lessonsCreated,
+      lessons_skipped: lessonsSkipped,
+      lesson_warnings: lessonWarnings,
+    };
+  }
+
+  private async _createLessonFromUploadRow(
+    tenantId: string,
+    row: ParsedLessonPlanRow,
+    courseIdByKey: Map<string, string>,
+    defaultTeacher: string,
+  ): Promise<{ created?: true; warning?: string }> {
+    const key = row.classLabel + '\0' + row.subjectCode;
+    const courseId = courseIdByKey.get(key);
+    if (!courseId) {
+      return {
+        warning: `no course for ${row.subjectCode} ${row.classLabel} — skipped`,
+      };
+    }
+
+    const units = await this.repo.listUnitsForCourse(tenantId, courseId);
+    const unit = units.find(
+      (u) => u.label.trim().toLowerCase() === row.unitLabel.trim().toLowerCase(),
+    );
+    if (!unit) {
+      return { warning: `unit '${row.unitLabel}' not found — skipped` };
+    }
+
+    let topicId: string | null = null;
+    if (row.topicLabel) {
+      const topics = await this.repo.listTopicsForUnit(tenantId, unit.id);
+      const topic = topics.find(
+        (t) => t.label.trim().toLowerCase() === row.topicLabel.trim().toLowerCase(),
+      );
+      if (topic) topicId = topic.id;
+    }
+
+    const weekStart = mondayOfWeek(row.dateIso);
+    const teacher = (row.teacher || defaultTeacher).trim() || defaultTeacher;
+    const created = await this.createLesson(tenantId, {
+      courseId,
+      unitId: unit.id,
+      topicId,
+      teacherMemberId: teacher,
+      weekStart,
+      title: row.title || 'Lesson plan',
+      body: row.body,
+      kind: 'personal',
+      provenance: 'human',
+    });
+    if (created.error || !created.lesson) {
+      return { warning: created.error?.error || 'lesson create failed' };
+    }
+    return { created: true };
+  }
 
   async listOutcomes(
     tenantId: string,
@@ -970,6 +1430,15 @@ export class AcademicsService {
     return { delivery };
   }
 
+  async getDelivery(
+    tenantId: string,
+    id: string,
+  ): Promise<{ delivery?: TopicDelivery; error?: ServiceError }> {
+    const delivery = await this.repo.getDelivery(tenantId, id);
+    if (!delivery) return { error: { error: 'delivery not found', status: 404 } };
+    return { delivery };
+  }
+
   async deleteDelivery(
     tenantId: string,
     id: string,
@@ -1258,6 +1727,15 @@ export class AcademicsService {
     return { assignment };
   }
 
+  async getSubmission(
+    tenantId: string,
+    id: string,
+  ): Promise<{ submission?: Submission; error?: ServiceError }> {
+    const submission = await this.repo.getSubmission(tenantId, id);
+    if (!submission) return { error: { error: 'submission not found', status: 404 } };
+    return { submission };
+  }
+
   async listSubmissions(
     tenantId: string,
     assignmentId: string,
@@ -1488,63 +1966,11 @@ export class AcademicsService {
       return { error: { error: 'units array required', status: 400, errors: ['units'] } };
     }
 
-    const unitsIn: SyllabusUnitImport[] = [];
-    const errors: string[] = [];
-    unitsRaw.forEach((row, ui) => {
-      if (!row || typeof row !== 'object') {
-        errors.push(`units[${ui}]: invalid`);
-        return;
-      }
-      const u = row as Record<string, unknown>;
-      const label = String(u.label ?? '').trim();
-      if (!label) errors.push(`units[${ui}].label required`);
-      const weeks = Number(u.planned_weeks ?? u.plannedWeeks);
-      if (!Number.isFinite(weeks) || weeks <= 0) {
-        errors.push(`units[${ui}].planned_weeks must be positive`);
-      }
-      const topicsRaw = Array.isArray(u.topics) ? u.topics : null;
-      if (!topicsRaw || topicsRaw.length === 0) {
-        errors.push(`units[${ui}].topics required`);
-      }
-      const topics: SyllabusUnitImport['topics'] = [];
-      if (topicsRaw) {
-        topicsRaw.forEach((tRow, ti) => {
-          const t = (tRow ?? {}) as Record<string, unknown>;
-          const tLabel = String(t.label ?? '').trim();
-          if (!tLabel) errors.push(`units[${ui}].topics[${ti}].label required`);
-          let estimatedPeriods: number | undefined;
-          if (t.estimated_periods !== undefined || t.estimatedPeriods !== undefined) {
-            const p = Number(t.estimated_periods ?? t.estimatedPeriods);
-            if (!Number.isInteger(p) || p < 1) {
-              errors.push(`units[${ui}].topics[${ti}].estimated_periods invalid`);
-            } else {
-              estimatedPeriods = p;
-            }
-          }
-          topics.push({ label: tLabel, estimatedPeriods });
-        });
-      }
-      let plannedStartWeek: number | null | undefined;
-      if (u.planned_start_week !== undefined || u.plannedStartWeek !== undefined) {
-        const rawStart = u.planned_start_week ?? u.plannedStartWeek;
-        plannedStartWeek = rawStart === null ? null : Number(rawStart);
-      }
-      const codesRaw = (u.outcome_codes ?? u.outcomeCodes) as unknown;
-      const outcomeCodes = Array.isArray(codesRaw)
-        ? codesRaw.map((c) => String(c).trim()).filter(Boolean)
-        : undefined;
-      unitsIn.push({
-        label,
-        plannedWeeks: weeks,
-        plannedStartWeek,
-        summary: u.summary != null ? String(u.summary) : null,
-        topics,
-        outcomeCodes,
-      });
-    });
-    if (errors.length > 0) {
-      return { error: { error: 'validation_failed', status: 400, errors } };
+    const parsed = validateImportUnits(unitsRaw);
+    if (parsed.errors.length > 0) {
+      return { error: { error: 'validation_failed', status: 400, errors: parsed.errors } };
     }
+    const unitsIn = parsed.units;
 
     const existingUnits = await this.repo.listUnitsForCourse(tenantId, courseId);
     const mode = raw.mode === 'replace' ? 'replace' : 'append';

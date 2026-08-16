@@ -1,28 +1,20 @@
 /**
  * modules/school_attendance_admin/school_attendance_admin.js
  *
- * Office attendance admin: Registers | Unexplained | Settings | Eligibility | Nudge.
+ * Office attendance ops: Registers | Unexplained.
+ * Attendance policy (thresholds/granularity), Eligibility, and Nudge live in
+ * school_settings — use the toolbar pointers (sessionStorage scs_open_tab).
+ *
  * Pattern: render… → aaLoadData() → aaRenderStats() → aaRender() → CRUD / dialogs.
  */
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
 import { getSession } from '../../shared/session.js';
-import { registerModule } from '../../shared/router.js';
+import { navigateToModule, registerModule } from '../../shared/router.js';
+import { canSchoolAdminOps } from '../../shared/school-roles.js';
 
-const TABS = ['registers', 'unexplained', 'settings', 'eligibility', 'nudge'];
-
-const GRANULARITY_HELP = {
-  day: 'One mark covers the whole school day (simplest office workflow).',
-  session: 'Separate AM/PM marks — use when morning and afternoon differ.',
-  period: 'Mark per timetable period — required for period-level roll call.',
-};
-
-const DERIVATION_HELP = {
-  any_absent: 'A day counts absent if any period that day is absent.',
-  majority: 'A day counts present only when a majority of marked periods are present/late.',
-  half_day_minutes: 'Day status derives from minutes on campus vs the half-day threshold.',
-};
+const TABS = ['registers', 'unexplained'];
 
 let _container = null;
 let _tab = 'registers';
@@ -35,13 +27,6 @@ let _unexplained = [];
 let _acked = new Set();
 let _callNotes = {};
 let _detailRow = null;
-let _settings = null;
-let _eligibility = [];
-let _eligThreshold = 75;
-let _eligFrom = '';
-let _eligTo = '';
-let _nudgeConfig = null;
-let _nudgeReport = null;
 let _regularizeTarget = null;
 let _reasonCodes = [];
 
@@ -53,6 +38,12 @@ function _esc(s) {
 
 function _today() {
   return new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+}
+
+/** L6 cosmetic — enforced server-side by P12-04/05 */
+function _canRegularizeAndSettings() {
+  const s = getSession() || {};
+  return canSchoolAdminOps(s.schoolRole, !!(s.is_admin || s.role === 'admin'));
 }
 
 function _actor() {
@@ -73,31 +64,16 @@ function _eng() {
 }
 
 /**
- * Client-side settings validation mirroring school-attendance rules.
- * @param {object} fields
- * @returns {string|null}
+ * Open School Settings on a policy tab (one-shot sessionStorage handoff).
+ * @param {'attendance_policy'|'eligibility'|'nudge'} tab
  */
-export function validateSettingsFields(fields) {
-  const g = fields.granularity;
-  if (!['day', 'session', 'period'].includes(g)) {
-    return 'granularity must be day, session, or period';
+function _openSchoolSettingsTab(tab) {
+  try {
+    sessionStorage.setItem('scs_open_tab', tab);
+  } catch (_) {
+    /* ignore quota / private mode */
   }
-  const edit = Number(fields.edit_window_minutes);
-  if (!Number.isInteger(edit) || edit < 0 || edit > 1440) {
-    return 'edit_window_minutes must be an integer between 0 and 1440';
-  }
-  const late = Number(fields.late_threshold_minutes);
-  if (!Number.isInteger(late) || late < 5 || late > 120) {
-    return 'late_threshold_minutes must be an integer between 5 and 120';
-  }
-  const half = Number(fields.half_day_min_minutes);
-  if (!Number.isInteger(half) || half < 60 || half > 360) {
-    return 'half_day_min_minutes must be an integer between 60 and 360';
-  }
-  if (!['any_absent', 'majority', 'half_day_minutes'].includes(fields.day_derivation)) {
-    return 'day_derivation must be any_absent, majority, or half_day_minutes';
-  }
-  return null;
+  navigateToModule('school_settings');
 }
 
 /**
@@ -111,11 +87,6 @@ export function renderSchoolAttendanceAdminPage(container) {
   _callNotes = {};
   _detailRow = null;
   _regularizeTarget = null;
-
-  const sessionYear = new Date().getFullYear();
-  _eligFrom = sessionYear + '-04-01';
-  _eligTo = sessionYear + 1 + '-03-31';
-  _eligThreshold = 75;
 
   container.innerHTML =
     '<div class="aa-wrap" id="aaWrap">' +
@@ -170,9 +141,6 @@ export function aaSwitchTab(tab) {
 export async function aaLoadData() {
   if (_tab === 'registers') await _loadRegisters();
   else if (_tab === 'unexplained') await _loadUnexplained();
-  else if (_tab === 'settings') await _loadSettings();
-  else if (_tab === 'eligibility') await _loadEligibility();
-  else if (_tab === 'nudge') await _loadNudge();
   else {
     const _exhaustive = _tab;
     void _exhaustive;
@@ -226,64 +194,6 @@ async function _loadUnexplained() {
   }
 }
 
-async function _loadSettings() {
-  const res = await _att().get('/settings');
-  if (res && !res._error) {
-    _settings = res.settings || res;
-  } else {
-    _settings = null;
-    if (res && res._error) toast(res.message || 'Could not load settings', 'error');
-  }
-}
-
-async function _loadEligibility() {
-  const list = await _id().get('/students?status=active&limit=100&offset=0');
-  const students = list && !list._error ? list.items || [] : [];
-  if (list && list._error) toast(list.message || 'Could not load students', 'error');
-
-  const rows = await Promise.all(
-    students.map(async function (s) {
-      const path =
-        '/students/' +
-        encodeURIComponent(s.id) +
-        '/eligibility?session_from=' +
-        encodeURIComponent(_eligFrom) +
-        '&session_to=' +
-        encodeURIComponent(_eligTo) +
-        '&threshold=' +
-        encodeURIComponent(String(_eligThreshold));
-      const elig = await _att().get(path);
-      if (!elig || elig._error) {
-        return {
-          studentId: s.id,
-          name: (s.firstName || '') + ' ' + (s.lastName || ''),
-          error: (elig && elig.message) || 'unavailable',
-        };
-      }
-      return {
-        studentId: s.id,
-        name: (s.firstName || '') + ' ' + (s.lastName || ''),
-        pct: elig.pct,
-        threshold: elig.threshold,
-        eligible: elig.eligible,
-        projected: elig.projected_pct_if_no_more_absences,
-      };
-    }),
-  );
-  _eligibility = rows;
-}
-
-async function _loadNudge() {
-  const [cfg, report] = await Promise.all([
-    _att().get('/nudge/config'),
-    _att().get('/nudge/report'),
-  ]);
-  _nudgeConfig = cfg && !cfg._error ? cfg : null;
-  if (cfg && cfg._error) toast(cfg.message || 'Could not load nudge config', 'error');
-  _nudgeReport = report && !report._error ? report : null;
-  if (report && report._error) toast(report.message || 'Could not load nudge report', 'error');
-}
-
 /**
  * Stats bar for the active tab.
  */
@@ -331,46 +241,6 @@ export function aaRenderStats() {
       '</strong></div>';
     return;
   }
-
-  if (_tab === 'settings') {
-    el.innerHTML =
-      '<div class="aa-pill">Granularity <strong>' +
-      _esc((_settings && _settings.granularity) || '—') +
-      '</strong></div>' +
-      '<div class="aa-pill">Edit window <strong>' +
-      _esc(String((_settings && _settings.editWindowMinutes) || '—')) +
-      'm</strong></div>';
-    return;
-  }
-
-  if (_tab === 'eligibility') {
-    const ok = _eligibility.filter(function (r) {
-      return r.eligible === true;
-    }).length;
-    el.innerHTML =
-      '<div class="aa-pill">Checked <strong>' +
-      _eligibility.length +
-      '</strong></div>' +
-      '<div class="aa-pill">Eligible ≥' +
-      _esc(String(_eligThreshold)) +
-      '% <strong>' +
-      ok +
-      '</strong></div>';
-    return;
-  }
-
-  if (_tab === 'nudge') {
-    const t = (_nudgeReport && _nudgeReport.treatment) || {};
-    const h = (_nudgeReport && _nudgeReport.holdout) || {};
-    el.innerHTML =
-      '<div class="aa-pill">Treatment n <strong>' +
-      _esc(String(t.student_count != null ? t.student_count : 0)) +
-      '</strong></div>' +
-      '<div class="aa-pill">Holdout n <strong>' +
-      _esc(String(h.student_count != null ? h.student_count : 0)) +
-      '</strong></div>';
-    return;
-  }
 }
 
 /**
@@ -382,13 +252,44 @@ export function aaRender() {
 
   if (_tab === 'registers') _renderRegisters(content);
   else if (_tab === 'unexplained') _renderUnexplained(content);
-  else if (_tab === 'settings') _renderSettings(content);
-  else if (_tab === 'eligibility') _renderEligibility(content);
-  else if (_tab === 'nudge') _renderNudge(content);
+}
+
+function _policyToolbar() {
+  /* L6 cosmetic — enforced server-side by P12-04; Settings/Nudge are school_admin+ */
+  if (!_canRegularizeAndSettings()) return '';
+  return (
+    '<div class="aa-toolbar aa-policy-links">' +
+    '<button type="button" class="aa-btn ghost" id="aaPolicyLink" title="Open School Settings → Attendance Policy">Attendance policy…</button>' +
+    '<button type="button" class="aa-btn ghost" id="aaEligLink" title="Open School Settings → Eligibility">Eligibility…</button>' +
+    '<button type="button" class="aa-btn ghost" id="aaNudgeLink" title="Open School Settings → Nudge">Nudge…</button>' +
+    '</div>'
+  );
+}
+
+function _bindPolicyLinks(content) {
+  const policy = content.querySelector('#aaPolicyLink');
+  const elig = content.querySelector('#aaEligLink');
+  const nudge = content.querySelector('#aaNudgeLink');
+  if (policy) {
+    policy.addEventListener('click', function () {
+      _openSchoolSettingsTab('attendance_policy');
+    });
+  }
+  if (elig) {
+    elig.addEventListener('click', function () {
+      _openSchoolSettingsTab('eligibility');
+    });
+  }
+  if (nudge) {
+    nudge.addEventListener('click', function () {
+      _openSchoolSettingsTab('nudge');
+    });
+  }
 }
 
 function _renderRegisters(content) {
   content.innerHTML =
+    _policyToolbar() +
     '<div class="aa-toolbar">' +
     '<input class="aa-input" type="date" id="aaRegDate" value="' +
     _esc(_date) +
@@ -431,6 +332,8 @@ function _renderRegisters(content) {
           .join('') +
         '</tbody></table>'
       : '<div class="aa-empty">No students for this class/section.</div>');
+
+  _bindPolicyLinks(content);
 
   content.querySelector('#aaRegLoad').addEventListener('click', function () {
     _date = content.querySelector('#aaRegDate').value || _today();
@@ -491,6 +394,11 @@ export function aaOpenEditRecord(recordId, currentStatus) {
     if (res && res.status === 409) {
       const msg = res.message || 'window_closed';
       toast(msg, 'error');
+      /* L6 cosmetic — enforced server-side by P12-04 */
+      if (!_canRegularizeAndSettings()) {
+        toast("You don't have access to do this", 'error');
+        return;
+      }
       _regularizeTarget = { recordId: recordId, status: status };
       aaOpenRegularizeDialog(recordId, status, msg);
       return;
@@ -506,6 +414,11 @@ export function aaOpenEditRecord(recordId, currentStatus) {
  * @param {string} windowMsg
  */
 export function aaOpenRegularizeDialog(recordId, newStatus, windowMsg) {
+  /* L6 cosmetic — enforced server-side by P12-04 */
+  if (!_canRegularizeAndSettings()) {
+    toast("You don't have access to do this", 'error');
+    return;
+  }
   const reasonOpts = _reasonCodes
     .map(function (r) {
       return '<option value="' + _esc(r.id) + '">' + _esc(r.label || r.code) + '</option>';
@@ -565,6 +478,7 @@ export function aaOpenRegularizeDialog(recordId, newStatus, windowMsg) {
 
 function _renderUnexplained(content) {
   content.innerHTML =
+    _policyToolbar() +
     '<div class="aa-toolbar">' +
     '<input class="aa-input" type="date" id="aaUnDate" value="' +
     _esc(_date) +
@@ -604,6 +518,8 @@ function _renderUnexplained(content) {
           .join('') +
         '</tbody></table>'
       : '<div class="aa-empty">No unexplained absences for this date.</div>');
+
+  _bindPolicyLinks(content);
 
   content.querySelector('#aaUnLoad').addEventListener('click', function () {
     _date = content.querySelector('#aaUnDate').value || _today();
@@ -709,272 +625,6 @@ export function aaShowUnexplainedDetail(key) {
     '</div>';
 }
 
-function _renderSettings(content) {
-  const s = _settings || {
-    granularity: 'day',
-    editWindowMinutes: 120,
-    lateThresholdMinutes: 15,
-    halfDayMinMinutes: 180,
-    dayDerivation: 'majority',
-  };
-  content.innerHTML =
-    '<form id="aaSettingsForm">' +
-    '<div class="aa-field"><label>Granularity</label><select id="aaGranularity">' +
-    ['day', 'session', 'period']
-      .map(function (g) {
-        return (
-          '<option value="' +
-          g +
-          '"' +
-          (s.granularity === g ? ' selected' : '') +
-          '>' +
-          g +
-          '</option>'
-        );
-      })
-      .join('') +
-    '</select><div class="aa-help" id="aaGranHelp">' +
-    _esc(GRANULARITY_HELP[s.granularity] || '') +
-    '</div></div>' +
-    '<div class="aa-field"><label>Day derivation</label><select id="aaDerivation">' +
-    ['any_absent', 'majority', 'half_day_minutes']
-      .map(function (d) {
-        return (
-          '<option value="' +
-          d +
-          '"' +
-          (s.dayDerivation === d ? ' selected' : '') +
-          '>' +
-          d +
-          '</option>'
-        );
-      })
-      .join('') +
-    '</select><div class="aa-help" id="aaDerHelp">' +
-    _esc(DERIVATION_HELP[s.dayDerivation] || '') +
-    '</div></div>' +
-    '<div class="aa-field"><label>Edit window (minutes)</label><input type="number" id="aaEditWindow" value="' +
-    _esc(String(s.editWindowMinutes)) +
-    '"></div>' +
-    '<div class="aa-field"><label>Late threshold (minutes)</label><input type="number" id="aaLateThr" value="' +
-    _esc(String(s.lateThresholdMinutes)) +
-    '"><div class="aa-help">Minutes after which a late arrival is still recorded as late (status does not flip).</div></div>' +
-    '<div class="aa-field"><label>Half-day minimum (minutes)</label><input type="number" id="aaHalfDay" value="' +
-    _esc(String(s.halfDayMinMinutes)) +
-    '"></div>' +
-    '<button type="button" class="aa-btn" id="aaSettingsSave">Save settings</button>' +
-    '</form>';
-
-  const gran = content.querySelector('#aaGranularity');
-  const der = content.querySelector('#aaDerivation');
-  gran.addEventListener('change', function () {
-    content.querySelector('#aaGranHelp').textContent = GRANULARITY_HELP[gran.value] || '';
-  });
-  der.addEventListener('change', function () {
-    content.querySelector('#aaDerHelp').textContent = DERIVATION_HELP[der.value] || '';
-  });
-  content.querySelector('#aaSettingsSave').addEventListener('click', aaSaveSettings);
-}
-
-/**
- * Validate + PUT settings.
- */
-export async function aaSaveSettings() {
-  const content = _container.querySelector('#aaContent');
-  const fields = {
-    granularity: content.querySelector('#aaGranularity').value,
-    day_derivation: content.querySelector('#aaDerivation').value,
-    edit_window_minutes: Number(content.querySelector('#aaEditWindow').value),
-    late_threshold_minutes: Number(content.querySelector('#aaLateThr').value),
-    half_day_min_minutes: Number(content.querySelector('#aaHalfDay').value),
-  };
-  const err = validateSettingsFields(fields);
-  if (err) {
-    toast(err, 'error');
-    return false;
-  }
-  const res = await _att().put('/settings', fields);
-  if (res && !res._error) {
-    _settings = res.settings || res;
-    toast('Settings saved', 'success');
-    aaRenderStats();
-    return true;
-  }
-  toast((res && res.message) || 'Save failed', 'error');
-  return false;
-}
-
-function _renderEligibility(content) {
-  content.innerHTML =
-    '<div class="aa-toolbar">' +
-    '<input class="aa-input" type="date" id="aaElFrom" value="' +
-    _esc(_eligFrom) +
-    '">' +
-    '<input class="aa-input" type="date" id="aaElTo" value="' +
-    _esc(_eligTo) +
-    '">' +
-    '<input class="aa-input" type="number" id="aaElThr" min="0" max="100" value="' +
-    _esc(String(_eligThreshold)) +
-    '" title="Threshold %">' +
-    '<button type="button" class="aa-btn" id="aaElLoad">Run report</button>' +
-    '</div>' +
-    (_eligibility.length
-      ? '<table class="aa-table" id="aaElTable"><thead><tr><th>Student</th><th>Pct</th><th>Projected</th><th>Eligible</th></tr></thead><tbody>' +
-        _eligibility
-          .map(function (r) {
-            if (r.error) {
-              return (
-                '<tr><td>' +
-                _esc(r.name) +
-                '</td><td colspan="3">' +
-                _esc(r.error) +
-                '</td></tr>'
-              );
-            }
-            return (
-              '<tr data-student-id="' +
-              _esc(r.studentId) +
-              '"><td>' +
-              _esc(r.name) +
-              '</td><td>' +
-              _esc(String(r.pct)) +
-              '%</td><td>' +
-              _esc(String(r.projected)) +
-              '%</td><td><span class="aa-badge ' +
-              (r.eligible ? 'eligible' : 'ineligible') +
-              '">' +
-              (r.eligible ? 'yes' : 'no') +
-              '</span></td></tr>'
-            );
-          })
-          .join('') +
-        '</tbody></table>'
-      : '<div class="aa-empty">Run the eligibility report.</div>');
-
-  content.querySelector('#aaElLoad').addEventListener('click', function () {
-    _eligFrom = content.querySelector('#aaElFrom').value;
-    _eligTo = content.querySelector('#aaElTo').value;
-    _eligThreshold = Number(content.querySelector('#aaElThr').value);
-    aaLoadData();
-  });
-}
-
-function _renderNudge(content) {
-  const c = _nudgeConfig || {
-    enabled: false,
-    atRiskPct: 10,
-    chronicDays: 18,
-    holdoutPct: 10,
-    maxMessagesPerTerm: 6,
-  };
-  const t = (_nudgeReport && _nudgeReport.treatment) || {
-    mean_absence_pct: 0,
-    message_count: 0,
-    student_count: 0,
-  };
-  const h = (_nudgeReport && _nudgeReport.holdout) || {
-    mean_absence_pct: 0,
-    message_count: 0,
-    student_count: 0,
-  };
-
-  content.innerHTML =
-    '<div class="aa-field"><label><input type="checkbox" id="aaNudgeEnabled"' +
-    (c.enabled ? ' checked' : '') +
-    '> Enabled</label></div>' +
-    '<div class="aa-field"><label>At-risk % band</label><input type="number" id="aaAtRisk" value="' +
-    _esc(String(c.atRiskPct)) +
-    '"></div>' +
-    '<div class="aa-field"><label>Chronic days</label><input type="number" id="aaChronic" value="' +
-    _esc(String(c.chronicDays)) +
-    '"></div>' +
-    '<div class="aa-field"><label>Holdout %</label><input type="number" id="aaHoldout" value="' +
-    _esc(String(c.holdoutPct)) +
-    '"></div>' +
-    '<div class="aa-field"><label>Max messages / term</label><input type="number" id="aaMaxMsg" value="' +
-    _esc(String(c.maxMessagesPerTerm)) +
-    '"></div>' +
-    '<div class="aa-form-actions" style="justify-content:flex-start">' +
-    '<button type="button" class="aa-btn" id="aaNudgeSave">Save config</button>' +
-    '<button type="button" class="aa-btn ghost" id="aaNudgeRun">Run nudge</button>' +
-    '</div>' +
-    '<div class="aa-report-grid" id="aaNudgeReport">' +
-    '<div class="aa-report-card"><h4>Treatment</h4>' +
-    '<div class="aa-metric" id="aaTreatMean">' +
-    _esc(Number(t.mean_absence_pct).toFixed(1)) +
-    '%</div><div class="aa-metric-label">mean absence %</div>' +
-    '<div>Messages: <strong id="aaTreatMsg">' +
-    _esc(String(t.message_count)) +
-    '</strong></div>' +
-    '<div>Students: <strong id="aaTreatN">' +
-    _esc(String(t.student_count)) +
-    '</strong></div></div>' +
-    '<div class="aa-report-card"><h4>Holdout</h4>' +
-    '<div class="aa-metric" id="aaHoldMean">' +
-    _esc(Number(h.mean_absence_pct).toFixed(1)) +
-    '%</div><div class="aa-metric-label">mean absence %</div>' +
-    '<div>Messages: <strong id="aaHoldMsg">' +
-    _esc(String(h.message_count)) +
-    '</strong></div>' +
-    '<div>Students: <strong id="aaHoldN">' +
-    _esc(String(h.student_count)) +
-    '</strong></div></div>' +
-    '</div>';
-
-  content.querySelector('#aaNudgeSave').addEventListener('click', aaSaveNudgeConfig);
-  content.querySelector('#aaNudgeRun').addEventListener('click', aaRunNudge);
-}
-
-export async function aaSaveNudgeConfig() {
-  const content = _container.querySelector('#aaContent');
-  const body = {
-    enabled: content.querySelector('#aaNudgeEnabled').checked,
-    at_risk_pct: Number(content.querySelector('#aaAtRisk').value),
-    chronic_days: Number(content.querySelector('#aaChronic').value),
-    holdout_pct: Number(content.querySelector('#aaHoldout').value),
-    max_messages_per_term: Number(content.querySelector('#aaMaxMsg').value),
-  };
-  const res = await _att().put('/nudge/config', body);
-  if (res && !res._error) {
-    _nudgeConfig = res.config || res;
-    toast('Nudge config saved', 'success');
-    return true;
-  }
-  toast((res && res.message) || 'Save failed', 'error');
-  return false;
-}
-
-export async function aaRunNudge() {
-  const classMap = {};
-  _eligibility.forEach(function (r) {
-    if (r.studentId) classMap[r.studentId] = 'default';
-  });
-  if (!Object.keys(classMap).length) {
-    const list = await _id().get('/students?status=active&limit=100&offset=0');
-    const items = list && !list._error ? list.items || [] : [];
-    items.forEach(function (s) {
-      classMap[s.id] = (s.classLabel || 'default') + (s.section || '');
-    });
-  }
-  const res = await _att().post('/nudge/run', {
-    as_of: _today(),
-    class_map: classMap,
-  });
-  if (res && !res._error) {
-    toast(
-      'Nudge run: sent ' + (res.sent || 0) + ', skipped ' + (res.skipped || 0),
-      'success',
-    );
-    const report = await _att().get('/nudge/report');
-    if (report && !report._error) _nudgeReport = report;
-    aaRenderStats();
-    aaRender();
-    return res;
-  }
-  toast((res && res.message) || 'Nudge run failed', 'error');
-  return null;
-}
-
 function _openModal(html) {
   const box = _container.querySelector('#aaModalBox');
   const modal = _container.querySelector('#aaModal');
@@ -996,9 +646,6 @@ export function aaGetState() {
     register: Object.assign({}, _register),
     unexplained: _unexplained.slice(),
     acked: Array.from(_acked),
-    settings: _settings,
-    eligibility: _eligibility.slice(),
-    nudgeReport: _nudgeReport,
     regularizeTarget: _regularizeTarget,
   };
 }
@@ -1010,12 +657,7 @@ export function aaSetState(partial) {
   if (partial.students) _students = partial.students;
   if (partial.register) _register = partial.register;
   if (partial.unexplained) _unexplained = partial.unexplained;
-  if (partial.settings) _settings = partial.settings;
-  if (partial.eligibility) _eligibility = partial.eligibility;
-  if (partial.nudgeReport) _nudgeReport = partial.nudgeReport;
-  if (partial.nudgeConfig) _nudgeConfig = partial.nudgeConfig;
   if (partial.reasonCodes) _reasonCodes = partial.reasonCodes;
-  if (partial.eligThreshold != null) _eligThreshold = partial.eligThreshold;
   if (_container) {
     _container.querySelectorAll('.aa-tab').forEach(function (btn) {
       btn.classList.toggle('active', btn.dataset.tab === _tab);

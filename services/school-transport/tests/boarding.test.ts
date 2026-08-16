@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff, internalOnly } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -19,18 +20,18 @@ describe('school-transport boarding (P7-02)', () => {
   const cardB64 = Buffer.from('card-token-xyz', 'utf8').toString('base64');
 
   async function seedRoute() {
-    const vehicle = await request(app).post('/api/transport/t1/vehicles').send({
+    const vehicle = await request(app).post('/api/transport/t1/vehicles').set(staff('school_admin')).send({
       registration: 'KA01XY9999',
       capacity: 40,
       insurance_expiry: '2026-01-01',
       fitness_expiry: '2026-06-01',
     });
-    const route = await request(app).post('/api/transport/t1/routes').send({
+    const route = await request(app).post('/api/transport/t1/routes').set(staff('school_admin')).send({
       label: 'North Loop',
       vehicle_id: vehicle.body.id,
     });
     const stop = await request(app)
-      .post(`/api/transport/t1/routes/${route.body.id}/stops`)
+      .post(`/api/transport/t1/routes/${route.body.id}/stops`).set(staff('school_admin'))
       .send({
         label: 'Park Gate',
         lat: 12.97,
@@ -39,10 +40,10 @@ describe('school-transport boarding (P7-02)', () => {
         drop_time: '14:00',
       });
     await request(app)
-      .post(`/api/transport/t1/routes/${route.body.id}/students`)
+      .post(`/api/transport/t1/routes/${route.body.id}/students`).set(staff('school_admin'))
       .send({ stop_id: stop.body.id, student_ref: 'stu-1' });
     await request(app)
-      .post(`/api/transport/t1/routes/${route.body.id}/students`)
+      .post(`/api/transport/t1/routes/${route.body.id}/students`).set(staff('school_admin'))
       .send({ stop_id: stop.body.id, student_ref: 'stu-2' });
     return { routeId: route.body.id as string, stopId: stop.body.id as string };
   }
@@ -70,7 +71,7 @@ describe('school-transport boarding (P7-02)', () => {
 
   it('bind+capture; events; raw payload never stored', async () => {
     const { routeId } = await seedRoute();
-    const bind = await request(app).post('/api/transport/t1/bindings').send({
+    const bind = await request(app).post('/api/transport/t1/bindings').set(staff('school_admin')).send({
       student_ref: 'stu-1',
       payload_b64: cardB64,
     });
@@ -79,7 +80,7 @@ describe('school-transport boarding (P7-02)', () => {
     expect(JSON.stringify(bind.body)).not.toContain(cardB64);
     expect(JSON.stringify(bind.body)).not.toContain('card-token-xyz');
 
-    const board = await request(app).post('/api/transport/t1/boarding').send({
+    const board = await request(app).post('/api/transport/t1/boarding').set(internalOnly()).send({
       payload_b64: cardB64,
       direction: 'board',
       leg: 'pickup',
@@ -108,7 +109,7 @@ describe('school-transport boarding (P7-02)', () => {
 
   it('unmatched capture returns 200; anomaly on alight without board', async () => {
     const { routeId } = await seedRoute();
-    const unknown = await request(app).post('/api/transport/t1/boarding').send({
+    const unknown = await request(app).post('/api/transport/t1/boarding').set(internalOnly()).send({
       payload_b64: Buffer.from('unknown-card').toString('base64'),
       direction: 'board',
       leg: 'pickup',
@@ -120,7 +121,7 @@ describe('school-transport boarding (P7-02)', () => {
     expect(events.filter((e) => e.type === 'school.transport.boarded')).toHaveLength(0);
 
     events.length = 0;
-    const alight = await request(app).post('/api/transport/t1/boarding').send({
+    const alight = await request(app).post('/api/transport/t1/boarding').set(internalOnly()).send({
       student_ref: 'stu-1',
       direction: 'alight',
       leg: 'pickup',
@@ -140,7 +141,7 @@ describe('school-transport boarding (P7-02)', () => {
 
   it('sweep idempotency + manifest states', async () => {
     const { routeId } = await seedRoute();
-    await request(app).post('/api/transport/t1/boarding').send({
+    await request(app).post('/api/transport/t1/boarding').set(internalOnly()).send({
       student_ref: 'stu-1',
       direction: 'board',
       leg: 'pickup',
@@ -149,7 +150,7 @@ describe('school-transport boarding (P7-02)', () => {
     });
     events.length = 0;
 
-    const sweep1 = await request(app).post('/api/transport/t1/sweep-missed').send({
+    const sweep1 = await request(app).post('/api/transport/t1/sweep-missed').set(staff('school_admin')).send({
       route_id: routeId,
       leg: 'pickup',
       date: '2025-09-10',
@@ -160,7 +161,7 @@ describe('school-transport boarding (P7-02)', () => {
       events.filter((e) => e.type === 'school.transport.missed_boarding'),
     ).toHaveLength(1);
 
-    const sweep2 = await request(app).post('/api/transport/t1/sweep-missed').send({
+    const sweep2 = await request(app).post('/api/transport/t1/sweep-missed').set(staff('school_admin')).send({
       route_id: routeId,
       leg: 'pickup',
       date: '2025-09-10',
@@ -170,7 +171,7 @@ describe('school-transport boarding (P7-02)', () => {
 
     const manifest = await request(app).get(
       `/api/transport/t1/routes/${routeId}/manifest?date=2025-09-10`,
-    );
+    ).set(staff('school_admin'));
     expect(manifest.status).toBe(200);
     const s1 = manifest.body.students.find(
       (s: { studentRef: string }) => s.studentRef === 'stu-1',
@@ -185,11 +186,11 @@ describe('school-transport boarding (P7-02)', () => {
 
   it('tenant isolation', async () => {
     const { routeId } = await seedRoute();
-    await request(app).post('/api/transport/t1/bindings').send({
+    await request(app).post('/api/transport/t1/bindings').set(staff('school_admin')).send({
       student_ref: 'stu-1',
       payload_b64: cardB64,
     });
-    const other = await request(app).post('/api/transport/t2/boarding').send({
+    const other = await request(app).post('/api/transport/t2/boarding').set(internalOnly()).send({
       payload_b64: cardB64,
       direction: 'board',
       leg: 'pickup',

@@ -2,8 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import type { DatabaseEngine } from '../../src/db/engine';
-import { createTestApp, seedMember } from '../helpers/setup';
+import { createTestApp, seedMember, testLogger } from '../helpers/setup';
 import type { FeatureFlagService } from '../../src/services/feature-flags';
+import { TenantSettingsService } from '../../src/services/tenant-settings-service';
 
 describe('Feature Flags Module', () => {
   let app: Express;
@@ -65,6 +66,56 @@ describe('Feature Flags Module', () => {
       const analytics = res.body.features.find((f: { key: string }) => f.key === 'analytics');
       expect(analytics).toBeTruthy();
       expect(analytics.enabled).toBe(false);
+    });
+  });
+
+  // ── Derived school_vertical flag ──
+
+  describe('school_vertical (derived from tenant vertical)', () => {
+    it('is present but disabled for an HR tenant', async () => {
+      const res = await request(app).get('/api/features');
+      expect(res.status).toBe(200);
+      const flag = res.body.features.find(
+        (f: { key: string }) => f.key === 'school_vertical',
+      );
+      expect(flag).toBeTruthy();
+      expect(flag.enabled).toBe(false);
+    });
+
+    it('is enabled once the tenant vertical is school', async () => {
+      const tenants = new TenantSettingsService(db, testLogger);
+      const result = await tenants.setVerticalWriteOnce('school');
+      expect(result.ok).toBe(true);
+
+      const res = await request(app).get('/api/features');
+      const flag = res.body.features.find(
+        (f: { key: string }) => f.key === 'school_vertical',
+      );
+      expect(flag.enabled).toBe(true);
+    });
+
+    it('is included in the all=true listing', async () => {
+      const res = await request(app).get('/api/features?all=true');
+      expect(
+        res.body.features.some((f: { key: string }) => f.key === 'school_vertical'),
+      ).toBe(true);
+    });
+
+    it('cannot be toggled directly', async () => {
+      const res = await request(app)
+        .put('/api/features/school_vertical')
+        .send({ enabled: true, email: ADMIN });
+      expect(res.status).toBe(400);
+    });
+
+    it('cannot be toggled via bulk update', async () => {
+      const res = await request(app)
+        .put('/api/features')
+        .send({
+          email: ADMIN,
+          updates: [{ key: 'school_vertical', enabled: true }],
+        });
+      expect(res.status).toBe(400);
     });
   });
 

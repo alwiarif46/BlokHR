@@ -5,6 +5,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { registerModule } from '../../shared/router.js';
 
 let _container = null;
@@ -224,7 +225,7 @@ export async function ocSave(item) {
 }
 
 export async function ocDelete(idx) {
-  if (!confirm('Delete this position?')) return;
+  if (!(await confirmDialog({ message: 'Delete this position?', confirmLabel: 'Delete', danger: true }))) return;
   const item = _data[idx];
   if (!item || !item.id) return;
   const result = await api.delete('/api/org/positions/' + item.id);

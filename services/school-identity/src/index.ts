@@ -83,6 +83,9 @@ export {
 } from './services/guardian-auth-crypto';
 export * from './types';
 export * from './events';
+export { asRole, guardRoutes, staffFromHeaders } from './role-guard';
+export type { Role, RoutePolicy } from './role-guard';
+export { IDENTITY_ROUTE_POLICIES } from './route-policies';
 export {
   listStatePacks,
   getStatePack,

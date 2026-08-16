@@ -9,6 +9,7 @@ import {
   type Enrolment,
   type Student,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolIdentitySqlite } from '../src/db';
 
 function baseStudent(overrides: Partial<Student> = {}): Student {
@@ -153,7 +154,7 @@ describe('udise preflight API', () => {
   });
 
   it('aggregates and paginates preflight results', async () => {
-    const session = await request(app).post('/api/identity/t1/sessions').send({
+    const session = await request(app).post('/api/identity/t1/sessions').set(staff('school_admin')).send({
       label: '2025-26',
       starts_on: '2025-04-01',
       ends_on: '2026-03-31',
@@ -162,7 +163,7 @@ describe('udise preflight API', () => {
 
     for (let i = 0; i < 3; i++) {
       const s = await request(app)
-        .post('/api/identity/t1/students')
+        .post('/api/identity/t1/students').set(staff('admin'))
         .send({
           admission_number: `U-${i}`,
           first_name: `Kid${i}`,
@@ -178,7 +179,7 @@ describe('udise preflight API', () => {
         });
       if (i < 2) {
         await request(app)
-          .post(`/api/identity/t1/students/${s.body.id}/enrol`)
+          .post(`/api/identity/t1/students/${s.body.id}/enrol`).set(staff('admin'))
           .send({
             academic_session_id: sessionId,
             class_label: '5',
@@ -188,9 +189,11 @@ describe('udise preflight API', () => {
       }
     }
 
-    const page = await request(app).get(
-      `/api/identity/t1/udise/preflight?session_id=${sessionId}&limit=2&offset=0`,
-    );
+    const page = await request(app)
+      .get(
+        `/api/identity/t1/udise/preflight?session_id=${sessionId}&limit=2&offset=0`,
+      )
+      .set(staff('school_admin'));
     expect(page.status).toBe(200);
     expect(page.body.total).toBe(3);
     expect(page.body.results).toHaveLength(2);

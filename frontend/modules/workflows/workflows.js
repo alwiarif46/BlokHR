@@ -6,6 +6,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -722,7 +723,7 @@ export async function wfDelete(idx) {
   if (!_isAdmin()) return;
   const item = _workflows[idx];
   if (!item) return;
-  if (!confirm('Delete workflow "' + item.name + '"?')) return;
+  if (!(await confirmDialog({ message: 'Delete workflow "' + item.name + '"?', confirmLabel: 'Delete', danger: true }))) return;
   const result = await api.delete('/api/workflows/' + item.id);
   if (result && !result._error) {
     toast('Deleted', 'success');
@@ -774,7 +775,7 @@ async function wfAdvance(idx) {
 async function wfCancel(idx) {
   const item = _instances[idx];
   if (!item) return;
-  if (!confirm('Cancel this instance?')) return;
+  if (!(await confirmDialog({ message: 'Cancel this instance?', confirmLabel: 'Cancel instance', cancelLabel: 'Keep running', danger: true }))) return;
   const result = await api.post('/api/workflow-instances/' + item.id + '/cancel', {});
   if (result && !result._error) {
     toast('Cancelled', 'success');
@@ -788,7 +789,7 @@ async function wfDeleteForm(idx) {
   if (!_isAdmin()) return;
   const item = _forms[idx];
   if (!item) return;
-  if (!confirm('Delete form "' + item.name + '"?')) return;
+  if (!(await confirmDialog({ message: 'Delete form "' + item.name + '"?', confirmLabel: 'Delete', danger: true }))) return;
   const result = await api.delete('/api/workflow-forms/' + item.id);
   if (result && !result._error) {
     toast('Deleted', 'success');

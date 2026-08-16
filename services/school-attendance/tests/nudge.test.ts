@@ -10,6 +10,7 @@ import {
   type DomainEvent,
   type EventPublisher,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolAttendanceSqlite } from '../src/db';
 
 class RecordingPublisher implements EventPublisher {
@@ -85,13 +86,13 @@ describe('school-attendance nudge (P2-08)', () => {
 
   async function enable(tenant: string, patch: Record<string, unknown> = {}) {
     await request(app)
-      .put(`/api/attendance/${tenant}/nudge/config`)
+      .put(`/api/attendance/${tenant}/nudge/config`).set(staff('school_admin'))
       .send({ enabled: true, holdout_pct: 0, ...patch });
   }
 
   it('disabled config is a no-op', async () => {
     await seedRollup('t1', 's1', '2025-08', 10, 10);
-    const run = await request(app).post('/api/attendance/t1/nudge/run').send({
+    const run = await request(app).post('/api/attendance/t1/nudge/run').set(staff('school_admin')).send({
       as_of: '2025-08-31',
       class_map: { s1: 'A' },
     });
@@ -115,7 +116,7 @@ describe('school-attendance nudge (P2-08)', () => {
          ('a4', 't1', 'risk-kid', '2025-08-04', 'absent', 'unknown')`,
     );
 
-    const run = await request(app).post('/api/attendance/t1/nudge/run').send({
+    const run = await request(app).post('/api/attendance/t1/nudge/run').set(staff('school_admin')).send({
       as_of: '2025-08-31',
       class_map: { 'risk-kid': 'A', 'chronic-kid': 'A' },
     });
@@ -160,7 +161,7 @@ describe('school-attendance nudge (P2-08)', () => {
     await seedRollup('t1', holdoutId, '2025-08', 50, 50);
     await seedRollup('t1', treatmentId, '2025-08', 50, 50);
 
-    const first = await request(app).post('/api/attendance/t1/nudge/run').send({
+    const first = await request(app).post('/api/attendance/t1/nudge/run').set(staff('school_admin')).send({
       as_of: '2025-08-31',
       class_map: { [holdoutId]: 'B', [treatmentId]: 'B' },
     });
@@ -168,7 +169,7 @@ describe('school-attendance nudge (P2-08)', () => {
       treatmentId,
     ]);
 
-    const again = await request(app).post('/api/attendance/t1/nudge/run').send({
+    const again = await request(app).post('/api/attendance/t1/nudge/run').set(staff('school_admin')).send({
       as_of: '2025-08-31',
       class_map: { [holdoutId]: 'B', [treatmentId]: 'B' },
     });
@@ -212,7 +213,7 @@ describe('school-attendance nudge (P2-08)', () => {
     expect(Number(marked?.c)).toBe(days.length);
     expect(days.length).toBeGreaterThan(15);
 
-    const run = await request(app).post('/api/attendance/t1/nudge/run').send({
+    const run = await request(app).post('/api/attendance/t1/nudge/run').set(staff('school_admin')).send({
       as_of: '2025-08-22',
       class_map: { improving: 'C' },
     });
@@ -226,17 +227,17 @@ describe('school-attendance nudge (P2-08)', () => {
     await seedRollup('t1', 's1', '2025-08', 50, 50);
     await seedRollup('t2', 's1', '2025-08', 90, 10);
 
-    await request(app).post('/api/attendance/t1/nudge/run').send({
+    await request(app).post('/api/attendance/t1/nudge/run').set(staff('school_admin')).send({
       as_of: '2025-08-31',
       class_map: { s1: 'A' },
     });
-    await request(app).post('/api/attendance/t2/nudge/run').send({
+    await request(app).post('/api/attendance/t2/nudge/run').set(staff('school_admin')).send({
       as_of: '2025-08-31',
       class_map: { s1: 'A' },
     });
 
-    const r1 = await request(app).get('/api/attendance/t1/nudge/report');
-    const r2 = await request(app).get('/api/attendance/t2/nudge/report');
+    const r1 = await request(app).get('/api/attendance/t1/nudge/report').set(staff('school_admin'));
+    const r2 = await request(app).get('/api/attendance/t2/nudge/report').set(staff('school_admin'));
     expect(r1.status).toBe(200);
     expect(r1.body.treatment.message_count).toBe(1);
     expect(r1.body.treatment.mean_absence_pct).toBe(50);

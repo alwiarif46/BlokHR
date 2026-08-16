@@ -1,0 +1,328 @@
+{
+  "id": "state-MH-2026-27",
+  "family": "state",
+  "state_code": "MH",
+  "board": "state",
+  "academic_year": "2026-27",
+  "label": "Maharashtra SSC 2026-27 (sample)",
+  "status": "sample",
+  "source_note": "SAMPLE ONLY — derive from Balbharati/MSBSHSE; Marathi labels required before official",
+  "courses": [
+    {
+      "subject_code": "Science-I",
+      "class_label": "9",
+      "label": "Science-I 9",
+      "units": [
+        {
+          "label": "Sample Unit 1 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 1.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 1.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 1.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 2 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 2.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 2.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 2.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 3 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 3.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 3.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 3.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 4 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 4.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 4.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 4.3",
+              "estimated_periods": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "subject_code": "Science-I",
+      "class_label": "10",
+      "label": "Science-I 10",
+      "units": [
+        {
+          "label": "Sample Unit 1 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 1.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 1.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 1.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 2 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 2.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 2.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 2.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 3 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 3.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 3.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 3.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 4 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 4.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 4.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 4.3",
+              "estimated_periods": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "subject_code": "Mathematics-I",
+      "class_label": "9",
+      "label": "Mathematics-I 9",
+      "units": [
+        {
+          "label": "Sample Unit 1 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 1.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 1.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 1.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 2 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 2.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 2.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 2.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 3 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 3.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 3.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 3.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 4 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 4.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 4.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 4.3",
+              "estimated_periods": 2
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "subject_code": "Mathematics-I",
+      "class_label": "10",
+      "label": "Mathematics-I 10",
+      "units": [
+        {
+          "label": "Sample Unit 1 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 1.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 1.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 1.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 2 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 2.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 2.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 2.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 3 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 3.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 3.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 3.3",
+              "estimated_periods": 2
+            }
+          ]
+        },
+        {
+          "label": "Sample Unit 4 (replace from official MSBSHSE 2026-27)",
+          "planned_weeks": 2,
+          "topics": [
+            {
+              "label": "Sample Topic 4.1",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 4.2",
+              "estimated_periods": 2
+            },
+            {
+              "label": "Sample Topic 4.3",
+              "estimated_periods": 2
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

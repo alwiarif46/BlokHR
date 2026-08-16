@@ -5,6 +5,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -295,7 +296,7 @@ export async function chatSend(message) {
 
 export async function chatDeleteSession(sessionId) {
   if (!sessionId) return;
-  if (!confirm('Delete this conversation?')) return;
+  if (!(await confirmDialog({ message: 'Delete this conversation?', confirmLabel: 'Delete', danger: true }))) return;
 
   const res = await api.delete('/api/chat/sessions/' + encodeURIComponent(sessionId));
   if (res && res._error) {

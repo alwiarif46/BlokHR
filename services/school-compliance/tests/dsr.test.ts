@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -50,7 +51,7 @@ describe('school-compliance DSR (P8-04)', () => {
     body: Record<string, unknown> = {},
   ) {
     return request(app)
-      .post(`/api/compliance/${tenant}/data-requests`)
+      .post(`/api/compliance/${tenant}/data-requests`).set(staff('school_admin'))
       .send({
         student_ref: 'stu-1',
         guardian_ref: 'g-1',
@@ -66,7 +67,7 @@ describe('school-compliance DSR (P8-04)', () => {
     extra: Record<string, unknown> = {},
   ) {
     return request(app)
-      .patch(`/api/compliance/${tenant}/data-requests/${id}`)
+      .patch(`/api/compliance/${tenant}/data-requests/${id}`).set(staff('school_admin'))
       .send({ state, handled_by: 'clerk', ...extra });
   }
 
@@ -110,7 +111,7 @@ describe('school-compliance DSR (P8-04)', () => {
 
     const detail = await request(app).get(
       `/api/compliance/t1/data-requests/${id}`,
-    );
+    ).set(staff('school_admin'));
     expect(detail.status).toBe(200);
     expect(detail.body.audit.map((a: { toState: string }) => a.toState)).toEqual(
       ['verifying', 'in_progress', 'rejected'],
@@ -145,14 +146,14 @@ describe('school-compliance DSR (P8-04)', () => {
 
     const overdueList = await request(app).get(
       '/api/compliance/t1/data-requests?overdue=true&today=2026-02-01',
-    );
+    ).set(staff('school_admin'));
     expect(overdueList.status).toBe(200);
     expect(overdueList.body.requests).toHaveLength(1);
     expect(overdueList.body.requests[0].id).toBe(id);
 
     events.length = 0;
     const sweep1 = await request(app)
-      .post('/api/compliance/t1/data-requests/sweep-overdue')
+      .post('/api/compliance/t1/data-requests/sweep-overdue').set(staff('school_admin'))
       .send({ today: '2026-02-01' });
     expect(sweep1.status).toBe(200);
     expect(sweep1.body.emitted).toEqual([{ requestId: id }]);
@@ -160,7 +161,7 @@ describe('school-compliance DSR (P8-04)', () => {
 
     events.length = 0;
     const sweep2 = await request(app)
-      .post('/api/compliance/t1/data-requests/sweep-overdue')
+      .post('/api/compliance/t1/data-requests/sweep-overdue').set(staff('school_admin'))
       .send({ today: '2026-02-01' });
     expect(sweep2.body.emitted).toEqual([]);
     expect(events.filter((e) => e.type === 'school.dsr.overdue')).toHaveLength(0);
@@ -170,13 +171,13 @@ describe('school-compliance DSR (P8-04)', () => {
     const a = await createRequest('t1');
     const b = await createRequest('t2', { student_ref: 'other' });
 
-    const listA = await request(app).get('/api/compliance/t1/data-requests');
+    const listA = await request(app).get('/api/compliance/t1/data-requests').set(staff('school_admin'));
     expect(listA.body.requests).toHaveLength(1);
     expect(listA.body.requests[0].id).toBe(a.body.id);
 
     const cross = await request(app).get(
       `/api/compliance/t1/data-requests/${b.body.id}`,
-    );
+    ).set(staff('school_admin'));
     expect(cross.status).toBe(404);
   });
 });

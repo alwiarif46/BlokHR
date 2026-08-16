@@ -11,7 +11,16 @@ import type {
   StudentGender,
   StudentStatus,
 } from '../types';
-import { enforceGuardianPrincipal } from '../internal-auth';
+import {
+  enforceGuardianPrincipal,
+  requireInternalMatch,
+} from '../internal-auth';
+import {
+  decodeImportBase64,
+  importStudentsFromWorkbook,
+} from '../services/student-import';
+import { guardRoutes } from '../role-guard';
+import { IDENTITY_ROUTE_POLICIES } from '../route-policies';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -19,6 +28,23 @@ function asyncHandler(
   return (req, res, next) => {
     fn(req, res, next).catch(next);
   };
+}
+
+/** Strip sensitive fields for teacher roster reads (P12-03). Keys absent, not empty. */
+function redactStudentForTeacher<T extends Record<string, unknown>>(
+  student: T,
+): Omit<T, 'aadhaarLast4' | 'guardianContact'> {
+  const out = { ...student } as Record<string, unknown>;
+  delete out.aadhaarLast4;
+  delete out.guardianContact;
+  for (const key of Object.keys(out)) {
+    if (/consent/i.test(key)) delete out[key];
+  }
+  return out as Omit<T, 'aadhaarLast4' | 'guardianContact'>;
+}
+
+function staffRole(req: Request): string | undefined {
+  return (req as Request & { staff?: { role?: string } }).staff?.role;
 }
 
 function pickStudentBody(body: Record<string, unknown>): CreateStudentInput {
@@ -76,6 +102,8 @@ export function createIdentityRouter(
 ): Router {
   const internalSecret = opts.internalSecret ?? '';
   const router = Router({ mergeParams: true });
+
+  guardRoutes(router, IDENTITY_ROUTE_POLICIES, { internalSecret });
 
   router.get(
     '/state-packs',
@@ -162,6 +190,15 @@ export function createIdentityRouter(
         limit: req.query.limit ? Number(req.query.limit) : 50,
         offset: req.query.offset ? Number(req.query.offset) : 0,
       });
+      if (staffRole(req) === 'teacher') {
+        res.json({
+          ...result,
+          items: result.items.map((s) =>
+            redactStudentForTeacher(s as unknown as Record<string, unknown>),
+          ),
+        });
+        return;
+      }
       res.json(result);
     }),
   );
@@ -186,6 +223,30 @@ export function createIdentityRouter(
     }),
   );
 
+  router.post(
+    '/:tenantId/students/import',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const filename = String(body.filename ?? '');
+      const contentBase64 = String(body.contentBase64 ?? body.content_base64 ?? '');
+      if (!/\.(xlsx|xls|csv)$/i.test(filename)) {
+        res.status(400).json({ error: 'filename must end with .xlsx, .xls, or .csv' });
+        return;
+      }
+      const decoded = decodeImportBase64(contentBase64);
+      if ('error' in decoded) {
+        res.status(400).json({ error: decoded.error });
+        return;
+      }
+      const result = await importStudentsFromWorkbook(
+        service,
+        req.params.tenantId,
+        decoded,
+      );
+      res.json({ success: true, ...result });
+    }),
+  );
+
   router.get(
     '/:tenantId/students/:id',
     asyncHandler(async (req, res) => {
@@ -194,7 +255,48 @@ export function createIdentityRouter(
         res.status(404).json({ error: 'Student not found' });
         return;
       }
+      if (staffRole(req) === 'teacher') {
+        res.json(redactStudentForTeacher(student as unknown as Record<string, unknown>));
+        return;
+      }
       res.json(student);
+    }),
+  );
+
+  /**
+   * Internal: active section_ref for diary/guardian feeds (P13-01).
+   * Secret only — no X-Blok-Principal (service→service).
+   * section_ref = "<class_label>|<section>".
+   */
+  router.get(
+    '/:tenantId/internal/students/:id/section',
+    asyncHandler(async (req, res) => {
+      const internal = requireInternalMatch(req, internalSecret);
+      if (!('ok' in internal) || !internal.ok) {
+        const denied = internal as { error: string; status: number };
+        res.status(denied.status).json({ error: denied.error });
+        return;
+      }
+      if (
+        String(req.headers['x-blok-principal'] ?? '')
+          .trim()
+          .toLowerCase()
+      ) {
+        res.status(403).json({ error: 'internal_only' });
+        return;
+      }
+      const result = await service.getActiveStudentSection(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if ('error' in result) {
+        res.status(result.status).json({ error: result.error });
+        return;
+      }
+      res.json({
+        section_ref: result.sectionRef,
+        academic_session_id: result.academicSessionId,
+      });
     }),
   );
 

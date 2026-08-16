@@ -10,6 +10,7 @@ import {
   type GuardianAuthRepository,
   type SchoolIdentitySqlite,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 
 function guardianPayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -51,7 +52,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
     overrides: Record<string, unknown> = {},
   ) {
     const res = await request(app)
-      .post(`/api/identity/${tenant}/guardians`)
+      .post(`/api/identity/${tenant}/guardians`).set(staff('admin'))
       .send(guardianPayload(overrides));
     expect(res.status).toBe(201);
     return res.body as { id: string; phone: string };

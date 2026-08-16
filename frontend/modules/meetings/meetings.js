@@ -6,6 +6,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog, confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -179,7 +180,13 @@ async function mtgLink(provider) {
   const hint = labels[provider] || 'Platform user ID';
   const session = getSession();
   const def = session && session.email ? session.email : '';
-  const externalUserId = window.prompt(hint + ' (leave blank to use your login email)', def);
+  const externalUserId = await promptDialog({
+    title: 'Link ' + (provider || 'platform') + ' calendar',
+    label: hint,
+    value: def,
+    placeholder: 'Leave blank to use your login email',
+    confirmLabel: 'Link',
+  });
   if (externalUserId === null) return;
   const res = await api.post('/api/meetings/calendar/link/' + encodeURIComponent(provider), {
     externalUserId: (externalUserId || '').trim() || undefined,
@@ -193,7 +200,7 @@ async function mtgLink(provider) {
 }
 
 async function mtgDisconnect(provider) {
-  if (!confirm('Disconnect ' + provider + ' calendar?')) return;
+  if (!(await confirmDialog({ message: 'Disconnect ' + provider + ' calendar?', confirmLabel: 'Disconnect', danger: true }))) return;
   const res = await api.delete('/api/meetings/calendar/connect/' + encodeURIComponent(provider));
   if (res && !res._error) {
     toast('Disconnected', 'success');

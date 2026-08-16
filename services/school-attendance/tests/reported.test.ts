@@ -8,6 +8,7 @@ import {
   type DomainEvent,
   type EventPublisher,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolAttendanceSqlite } from '../src/db';
 
 class RecordingPublisher implements EventPublisher {
@@ -52,13 +53,13 @@ describe('school-attendance reported absences (P2-06)', () => {
   });
 
   async function sickCode(tenant = 't1') {
-    const codes = await request(app).get(`/api/attendance/${tenant}/reason-codes`);
+    const codes = await request(app).get(`/api/attendance/${tenant}/reason-codes`).set(staff('school_admin'));
     return codes.body.reasonCodes.find((c: { code: string }) => c.code === 'SICK').id as string;
   }
 
   it('validates dates and merges resubmissions idempotently', async () => {
     const reason = await sickCode();
-    const past = await request(app).post('/api/attendance/t1/reported-absences').send({
+    const past = await request(app).post('/api/attendance/t1/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: [addDaysUtc(today, -1)],
@@ -67,7 +68,7 @@ describe('school-attendance reported absences (P2-06)', () => {
     });
     expect(past.status).toBe(400);
 
-    const tooFar = await request(app).post('/api/attendance/t1/reported-absences').send({
+    const tooFar = await request(app).post('/api/attendance/t1/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: [addDaysUtc(today, 31)],
@@ -76,7 +77,7 @@ describe('school-attendance reported absences (P2-06)', () => {
     });
     expect(tooFar.status).toBe(400);
 
-    const tooMany = await request(app).post('/api/attendance/t1/reported-absences').send({
+    const tooMany = await request(app).post('/api/attendance/t1/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: Array.from({ length: 16 }, (_, i) => addDaysUtc(today, i)),
@@ -85,7 +86,7 @@ describe('school-attendance reported absences (P2-06)', () => {
     });
     expect(tooMany.status).toBe(400);
 
-    const first = await request(app).post('/api/attendance/t1/reported-absences').send({
+    const first = await request(app).post('/api/attendance/t1/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: [today, tomorrow],
@@ -98,7 +99,7 @@ describe('school-attendance reported absences (P2-06)', () => {
     expect(first.body.dates).toEqual([today, tomorrow]);
 
     const day3 = addDaysUtc(today, 2);
-    const merge = await request(app).post('/api/attendance/t1/reported-absences').send({
+    const merge = await request(app).post('/api/attendance/t1/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: [tomorrow, day3],
@@ -117,7 +118,7 @@ describe('school-attendance reported absences (P2-06)', () => {
     expect(Number(count?.c)).toBe(1);
 
     const attach = await request(app)
-      .post(`/api/attendance/t1/reported-absences/${first.body.id}/attach`)
+      .post(`/api/attendance/t1/reported-absences/${first.body.id}/attach`).set(staff('school_admin'))
       .send({ attachment_ref: 'storage://certs/s1-med.pdf' });
     expect(attach.status).toBe(200);
     expect(attach.body.attachmentRef).toBe('storage://certs/s1-med.pdf');
@@ -125,7 +126,7 @@ describe('school-attendance reported absences (P2-06)', () => {
 
   it('report-then-mark sets explained:true and excused excuse', async () => {
     const reason = await sickCode();
-    await request(app).post('/api/attendance/t1/reported-absences').send({
+    await request(app).post('/api/attendance/t1/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: [today],
@@ -133,7 +134,7 @@ describe('school-attendance reported absences (P2-06)', () => {
       channel: 'app',
     });
 
-    const mark = await request(app).post('/api/attendance/t1/mark').send({
+    const mark = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: today },
       marks: [{ student_id: 's1', status: 'absent' }],
       marked_by: 'teacher',
@@ -149,7 +150,7 @@ describe('school-attendance reported absences (P2-06)', () => {
 
   it('mark-then-report retro-updates excuse and emits explained', async () => {
     const reason = await sickCode();
-    const mark = await request(app).post('/api/attendance/t1/mark').send({
+    const mark = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: today },
       marks: [
         { student_id: 's1', status: 'absent' },
@@ -165,7 +166,7 @@ describe('school-attendance reported absences (P2-06)', () => {
     expect(unmarkedEvt?.data.explained).toBe(false);
 
     publisher.events = [];
-    const report = await request(app).post('/api/attendance/t1/reported-absences').send({
+    const report = await request(app).post('/api/attendance/t1/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: [today],
@@ -179,8 +180,8 @@ describe('school-attendance reported absences (P2-06)', () => {
     expect(explained[0].data.student_id).toBe('s1');
 
     const register = await request(app).get(
-      `/api/attendance/t1/register?date=${today}&student_ids=s1,s2`,
-    );
+      `/api/attendance/t1/register?date=${today}&student_ids=s1,s2`
+    ).set(staff('school_admin'));
     expect(register.body.register.s1.excuse).toBe('excused');
     expect(register.body.register.s2.excuse).toBe('unknown');
   });
@@ -189,7 +190,7 @@ describe('school-attendance reported absences (P2-06)', () => {
     const reason = await sickCode();
     const reason2 = await sickCode('t2');
 
-    await request(app).post('/api/attendance/t1/mark').send({
+    await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: today },
       marks: [
         { student_id: 's1', status: 'absent' },
@@ -198,7 +199,7 @@ describe('school-attendance reported absences (P2-06)', () => {
       marked_by: 't',
       idempotency_key: 'u1',
     });
-    await request(app).post('/api/attendance/t1/reported-absences').send({
+    await request(app).post('/api/attendance/t1/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: [today],
@@ -206,20 +207,20 @@ describe('school-attendance reported absences (P2-06)', () => {
       channel: 'app',
     });
 
-    const worklist = await request(app).get(`/api/attendance/t1/unexplained?date=${today}`);
+    const worklist = await request(app).get(`/api/attendance/t1/unexplained?date=${today}`).set(staff('school_admin'));
     expect(worklist.status).toBe(200);
     expect(worklist.body.unexplained).toHaveLength(1);
     expect(worklist.body.unexplained[0].studentId).toBe('s2');
     expect(worklist.body.unexplained[0].explained).toBe(false);
 
-    await request(app).post('/api/attendance/t2/reported-absences').send({
+    await request(app).post('/api/attendance/t2/reported-absences').set(staff('school_admin')).send({
       student_id: 's1',
       reported_by_guardian_id: 'g1',
       dates: [today],
       reason_code_id: reason2,
       channel: 'app',
     });
-    const t2 = await request(app).get(`/api/attendance/t2/unexplained?date=${today}`);
+    const t2 = await request(app).get(`/api/attendance/t2/unexplained?date=${today}`).set(staff('school_admin'));
     expect(t2.body.unexplained).toHaveLength(0);
   });
 });

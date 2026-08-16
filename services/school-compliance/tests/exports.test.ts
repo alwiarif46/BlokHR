@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -165,7 +166,7 @@ describe('school-compliance udise export (P8-02)', () => {
         },
       ],
     };
-    const res = await request(app).post('/api/compliance/t1/exports/udise').send({
+    const res = await request(app).post('/api/compliance/t1/exports/udise').set(staff('school_admin')).send({
       session_ref: '2025-26',
       created_by: 'clerk',
     });
@@ -202,7 +203,7 @@ describe('school-compliance udise export (P8-02)', () => {
         },
       ],
     };
-    const res = await request(app).post('/api/compliance/t1/exports/udise').send({
+    const res = await request(app).post('/api/compliance/t1/exports/udise').set(staff('school_admin')).send({
       session_ref: '2025-26',
       created_by: 'clerk',
     });
@@ -213,17 +214,17 @@ describe('school-compliance udise export (P8-02)', () => {
     expect(storedBodies[0]).toContain('"Asha Sharma, Jr"');
     expect(events.some((e) => e.type === 'school.compliance.export_ready')).toBe(true);
 
-    const list = await request(app).get('/api/compliance/t1/exports?kind=udise_sdms');
+    const list = await request(app).get('/api/compliance/t1/exports?kind=udise_sdms').set(staff('school_admin'));
     expect(list.body.runs).toHaveLength(1);
     const one = await request(app).get(
       `/api/compliance/t1/exports/${res.body.id}`,
-    );
+    ).set(staff('school_admin'));
     expect(one.body.id).toBe(res.body.id);
   });
 
   it('client failure → failed run not crash; tenant isolation', async () => {
     identity.fail = true;
-    const res = await request(app).post('/api/compliance/t1/exports/udise').send({
+    const res = await request(app).post('/api/compliance/t1/exports/udise').set(staff('school_admin')).send({
       session_ref: '2025-26',
       created_by: 'clerk',
     });
@@ -231,7 +232,7 @@ describe('school-compliance udise export (P8-02)', () => {
     expect(res.body.state).toBe('failed');
     expect(res.body.errors[0].code).toBe('client_error');
 
-    const other = await request(app).get('/api/compliance/t2/exports');
+    const other = await request(app).get('/api/compliance/t2/exports').set(staff('school_admin'));
     expect(other.body.runs).toEqual([]);
   });
 });

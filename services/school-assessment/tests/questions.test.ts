@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -28,7 +29,7 @@ describe('school-assessment questions/papers (P4-03)', () => {
 
   async function createQuestion(body: Record<string, unknown>) {
     return request(app)
-      .post('/api/assessment/t1/questions')
+      .post('/api/assessment/t1/questions').set(staff('school_admin'))
       .send({
         subject_code: 'Sc',
         class_label: '10',
@@ -50,11 +51,11 @@ describe('school-assessment questions/papers (P4-03)', () => {
 
     const filtered = await request(app).get(
       '/api/assessment/t1/questions?subject=Sc&kind=mcq&outcome=10.Sc.LO1',
-    );
+    ).set(staff('school_admin'));
     expect(filtered.body.questions).toHaveLength(1);
 
     const patched = await request(app)
-      .patch(`/api/assessment/t1/questions/${created.body.id}`)
+      .patch(`/api/assessment/t1/questions/${created.body.id}`).set(staff('school_admin'))
       .send({ marks: 2, competency_style: true });
     expect(patched.status).toBe(200);
     expect(patched.body.marks).toBe(2);
@@ -62,17 +63,17 @@ describe('school-assessment questions/papers (P4-03)', () => {
 
     const other = await request(app).get(
       `/api/assessment/t2/questions/${created.body.id}`,
-    );
+    ).set(staff('school_admin'));
     expect(other.status).toBe(404);
 
     const del = await request(app).delete(
       `/api/assessment/t1/questions/${created.body.id}`,
-    );
+    ).set(staff('school_admin'));
     expect(del.status).toBe(204);
   });
 
   it('conformance check + paper persist guard', async () => {
-    const bp = await request(app).post('/api/assessment/t1/blueprints').send({
+    const bp = await request(app).post('/api/assessment/t1/blueprints').set(staff('school_admin')).send({
       label: 'CBSE X Sc',
       class_label: '10',
       subject_code: 'Sc',
@@ -94,21 +95,21 @@ describe('school-assessment questions/papers (P4-03)', () => {
     const c = await createQuestion({ kind: 'sa', marks: 40, outcome_code: '10.Sc.LO2' });
     const ids = [a.body.id, b.body.id, c.body.id];
 
-    const check = await request(app).post('/api/assessment/t1/papers/check').send({
+    const check = await request(app).post('/api/assessment/t1/papers/check').set(staff('school_admin')).send({
       blueprint_id: bp.body.id,
       question_ids: ids,
     });
     expect(check.status).toBe(200);
     expect(check.body.pass).toBe(true);
 
-    const bad = await request(app).post('/api/assessment/t1/papers').send({
+    const bad = await request(app).post('/api/assessment/t1/papers').set(staff('school_admin')).send({
       blueprint_id: bp.body.id,
       question_ids: [a.body.id, b.body.id],
     });
     expect(bad.status).toBe(400);
     expect(bad.body.report.pass).toBe(false);
 
-    const ok = await request(app).post('/api/assessment/t1/papers').send({
+    const ok = await request(app).post('/api/assessment/t1/papers').set(staff('school_admin')).send({
       blueprint_id: bp.body.id,
       question_ids: ids,
       exam_ref: 'exam-1',
@@ -116,12 +117,12 @@ describe('school-assessment questions/papers (P4-03)', () => {
     expect(ok.status).toBe(201);
     expect(ok.body.questionIds).toEqual(ids);
 
-    const reused = await request(app).get(`/api/assessment/t1/questions/${a.body.id}`);
+    const reused = await request(app).get(`/api/assessment/t1/questions/${a.body.id}`).set(staff('school_admin'));
     expect(reused.body.timesUsed).toBe(1);
   });
 
   it('analysis route returns review flags', async () => {
-    const res = await request(app).post('/api/assessment/t1/questions/analysis').send({
+    const res = await request(app).post('/api/assessment/t1/questions/analysis').set(staff('school_admin')).send({
       results: [
         { question_id: 'q1', scores: [1, 1, 1, 0, 0], max: 1 },
         { question_id: 'q2', scores: [1, 1, 1, 1, 1], max: 1 },

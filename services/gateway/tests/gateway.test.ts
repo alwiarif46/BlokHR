@@ -8,6 +8,7 @@ import pino from 'pino';
 import type { AddressInfo } from 'net';
 import { createGatewayApp } from '../src/index';
 import { loadGatewayConfig, SERVICE_NAMES, type GatewayConfig, type ServiceName } from '../src/config';
+import { StaffIntrospectUnavailableError } from '../src/guards/staff-introspect';
 
 const logger = pino({ level: 'silent' });
 
@@ -114,8 +115,26 @@ describe('Gateway G-01', () => {
   });
 
   it('rewrites /svc/:service path when proxying', async () => {
-    const { app } = createGatewayApp({ config, logger });
-    const res = await request(app).get('/svc/school-identity/api/identity/t1/students');
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: async () => ({
+        active: true,
+        email: 'staff@school.edu',
+        name: 'Staff',
+        tenantId: 'default',
+        isAdmin: false,
+        isGlobalManager: false,
+        isGlobalHR: false,
+        managerOf: [],
+        hrOf: [],
+        role: 'teacher',
+        memberId: 'mem-1',
+      }),
+    });
+    const res = await request(app)
+      .get('/svc/school-identity/api/identity/t1/students')
+      .set('Authorization', 'Bearer staff-tok');
     expect(res.status).toBe(200);
     expect(res.body.path).toBe('/api/identity/t1/students');
     expect(res.body.method).toBe('GET');
@@ -160,8 +179,26 @@ describe('Gateway G-01', () => {
       ...config,
       serviceUrls: deadUrls,
     };
-    const { app } = createGatewayApp({ config: deadConfig, logger });
-    const res = await request(app).get('/svc/school-identity/api/identity/t1/students');
+    const { app } = createGatewayApp({
+      config: deadConfig,
+      logger,
+      staffIntrospect: async () => ({
+        active: true,
+        email: 'staff@school.edu',
+        name: 'Staff',
+        tenantId: 'default',
+        isAdmin: false,
+        isGlobalManager: false,
+        isGlobalHR: false,
+        managerOf: [],
+        hrOf: [],
+        role: 'teacher',
+        memberId: null,
+      }),
+    });
+    const res = await request(app)
+      .get('/svc/school-identity/api/identity/t1/students')
+      .set('Authorization', 'Bearer staff-tok');
     expect(res.status).toBe(502);
     expect(res.body.error).toBe('upstream_unavailable');
     expect(res.body.service).toBe('school-identity');
@@ -202,12 +239,33 @@ describe('Gateway G-02 — header hygiene', () => {
   });
 
   it('strips inbound X-Blok-Tenant spoof before upstream', async () => {
-    const { app } = createGatewayApp({ config, logger });
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: async () => ({
+        active: true,
+        email: 'staff@school.edu',
+        name: 'Staff',
+        tenantId: 'tenant-real',
+        isAdmin: false,
+        isGlobalManager: false,
+        isGlobalHR: false,
+        managerOf: [],
+        hrOf: [],
+        role: 'office',
+        memberId: 'mem-9',
+      }),
+    });
     const res = await request(app)
       .get('/svc/school-identity/api/identity/t1/students')
-      .set('X-Blok-Tenant', 'spoofed-tenant');
+      .set('Authorization', 'Bearer staff-tok')
+      .set('X-Blok-Tenant', 'spoofed-tenant')
+      .set('X-Blok-Role', 'admin');
     expect(res.status).toBe(200);
-    expect(res.body.headers['x-blok-tenant']).toBeUndefined();
+    // Spoofed inbound stripped; gateway-set staff headers win
+    expect(res.body.headers['x-blok-tenant']).toBe('tenant-real');
+    expect(res.body.headers['x-blok-role']).toBe('office');
+    expect(res.body.headers['x-blok-principal']).toBe('staff');
   });
 
   it('injects X-Blok-Internal with configured secret', async () => {
@@ -367,7 +425,7 @@ describe('Gateway G-03 — SSE passthrough', () => {
 });
 
 describe('Gateway G-03 — root dev:school script', () => {
-  it('names monolith, identity, timetable, and gateway processes', () => {
+  it('names monolith, identity, timetable, academics, and gateway processes', () => {
     const rootPkgPath = path.resolve(__dirname, '../../../package.json');
     const pkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8')) as {
       scripts?: Record<string, string>;
@@ -379,10 +437,12 @@ describe('Gateway G-03 — root dev:school script', () => {
     expect(script).toMatch(/monolith/i);
     expect(script).toMatch(/identity/i);
     expect(script).toMatch(/timetable/i);
+    expect(script).toMatch(/academics/i);
     expect(script).toMatch(/gateway/i);
     expect(script).toContain('backend');
     expect(script).toContain('school-identity');
     expect(script).toContain('school-timetable');
+    expect(script).toContain('school-academics');
     expect(script).toContain('services/gateway');
   });
 });
@@ -515,6 +575,44 @@ describe('Gateway P9-02 — guardian principal guard', () => {
       '/api/surveys/tenant-from-token/guardian/surveys/sv-1/respond',
     );
     expect(respond.body.method).toBe('POST');
+
+    const diary = await request(app)
+      .get('/guardian/diary?student_ref=stu-9&from=2026-01-01')
+      .set('Authorization', 'Bearer good-token');
+    expect(diary.status).toBe(200);
+    expect(diary.body.path).toBe(
+      '/api/engagement/tenant-from-token/guardian/diary?student_ref=stu-9&from=2026-01-01',
+    );
+    expect(diary.body.headers['x-blok-students']).toBe('stu-linked-1,stu-9');
+
+    const diaryAck = await request(app)
+      .post('/guardian/diary/entry-1/ack')
+      .set('Authorization', 'Bearer good-token')
+      .send({ student_ref: 'stu-9' });
+    expect(diaryAck.status).toBe(200);
+    expect(diaryAck.body.path).toBe(
+      '/api/engagement/tenant-from-token/guardian/diary/entry-1/ack',
+    );
+    expect(diaryAck.body.method).toBe('POST');
+  });
+
+  it('diary student_ref must be a linked child', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      introspect: stubIntrospect(),
+    });
+
+    const own = await request(app)
+      .get('/guardian/diary?student_ref=stu-linked-1')
+      .set('Authorization', 'Bearer good-token');
+    expect(own.status).toBe(200);
+
+    const other = await request(app)
+      .get('/guardian/diary?student_ref=not-my-child')
+      .set('Authorization', 'Bearer good-token');
+    expect(other.status).toBe(403);
+    expect(other.body.error).toBe('forbidden');
   });
 
   it('deny matrix: guardian cannot reach non-guardian paths', async () => {
@@ -608,5 +706,232 @@ describe('Gateway P9-02 — guardian principal guard', () => {
     expect(login.status).toBe(200);
     expect(login.body.path).toBe('/api/identity/guardian-auth/login');
     expect(login.body.method).toBe('POST');
+  });
+});
+
+describe('Gateway P12-02 — staff guard', () => {
+  let frontendDir: string;
+  let echoServer: http.Server;
+  let monolithServer: http.Server;
+  let echoPort: number;
+  let monolithPort: number;
+  let config: GatewayConfig;
+  let staffMode: 'active' | 'inactive' | 'down' | 'active-no-member';
+
+  beforeEach(async () => {
+    frontendDir = fs.mkdtempSync(path.join(os.tmpdir(), 'blokhr-gw-fe-'));
+    fs.writeFileSync(
+      path.join(frontendDir, 'shell.html'),
+      '<!doctype html><html><body>shell-ok</body></html>',
+      'utf8',
+    );
+    echoServer = createEchoServer();
+    monolithServer = createEchoServer();
+    echoPort = await listen(echoServer);
+    monolithPort = await listen(monolithServer);
+    config = loadGatewayConfig(
+      baseEnv(monolithPort, echoPort, frontendDir),
+      path.resolve(__dirname, '..'),
+    );
+    staffMode = 'active';
+  });
+
+  afterEach(async () => {
+    await close(echoServer);
+    await close(monolithServer);
+    fs.rmSync(frontendDir, { recursive: true, force: true });
+  });
+
+  function stubStaff() {
+    return async () => {
+      if (staffMode === 'down') {
+        throw new StaffIntrospectUnavailableError();
+      }
+      if (staffMode === 'inactive') {
+        return { active: false as const };
+      }
+      if (staffMode === 'active-no-member') {
+        return {
+          active: true as const,
+          email: 'legacy@school.edu',
+          name: 'Legacy',
+          tenantId: 't1',
+          isAdmin: true,
+          isGlobalManager: true,
+          isGlobalHR: true,
+          managerOf: [] as string[],
+          hrOf: [] as string[],
+          role: 'admin' as const,
+          memberId: null,
+        };
+      }
+      return {
+        active: true as const,
+        email: 'teach@school.edu',
+        name: 'Teach',
+        tenantId: 't1',
+        isAdmin: false,
+        isGlobalManager: false,
+        isGlobalHR: false,
+        managerOf: [] as string[],
+        hrOf: [] as string[],
+        role: 'teacher' as const,
+        memberId: 'mem-teach',
+      };
+    };
+  }
+
+  it('no token → 401 on /svc', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const res = await request(app).get('/svc/school-identity/api/identity/t1/students');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('unauthorized');
+  });
+
+  it('introspect down → 503 fail-closed', async () => {
+    staffMode = 'down';
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const res = await request(app)
+      .get('/svc/school-identity/api/identity/t1/students')
+      .set('Authorization', 'Bearer x');
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe('introspect_unavailable');
+  });
+
+  it('inactive token → 401', async () => {
+    staffMode = 'inactive';
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const res = await request(app)
+      .get('/svc/school-identity/api/identity/t1/students')
+      .set('Authorization', 'Bearer dead');
+    expect(res.status).toBe(401);
+  });
+
+  it('active staff sets exact X-Blok-* headers; strips spoofed role', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const res = await request(app)
+      .get('/svc/school-identity/api/identity/t1/students')
+      .set('Authorization', 'Bearer good')
+      .set('X-Blok-Role', 'admin')
+      .set('X-Blok-Email', 'spoof@evil');
+    expect(res.status).toBe(200);
+    expect(res.body.headers['x-blok-principal']).toBe('staff');
+    expect(res.body.headers['x-blok-email']).toBe('teach@school.edu');
+    expect(res.body.headers['x-blok-role']).toBe('teacher');
+    expect(res.body.headers['x-blok-admin']).toBe('0');
+    expect(res.body.headers['x-blok-tenant']).toBe('t1');
+    expect(res.body.headers['x-blok-member']).toBe('mem-teach');
+    expect(res.body.headers['x-blok-internal']).toBe('gw-test-secret');
+  });
+
+  it('directory-miss fallback role (admin via claims, no member header)', async () => {
+    staffMode = 'active-no-member';
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const res = await request(app)
+      .get('/svc/school-identity/api/x')
+      .set('Authorization', 'Bearer good');
+    expect(res.status).toBe(200);
+    expect(res.body.headers['x-blok-role']).toBe('admin');
+    expect(res.body.headers['x-blok-admin']).toBe('1');
+    expect(res.body.headers['x-blok-member']).toBeUndefined();
+  });
+
+  it('PUBLIC_PATHS pass without token; sibling paths do not', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+
+    const boarding = await request(app).post(
+      '/svc/school-transport/api/transport/t1/boarding',
+    );
+    expect(boarding.status).toBe(200);
+
+    const pings = await request(app).post('/svc/school-transport/api/transport/t1/pings');
+    expect(pings.status).toBe(200);
+
+    const capture = await request(app).post(
+      '/svc/school-attendance/api/attendance/t1/capture',
+    );
+    expect(capture.status).toBe(200);
+
+    const prune = await request(app).post(
+      '/svc/school-transport/api/transport/t1/pings/prune',
+    );
+    expect(prune.status).toBe(401);
+
+    const mark = await request(app).post(
+      '/svc/school-attendance/api/attendance/t1/mark',
+    );
+    expect(mark.status).toBe(401);
+  });
+
+  it('blocks /api/auth/introspect from outside with 404', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const res = await request(app)
+      .post('/api/auth/introspect')
+      .send({ token: 'x' });
+    expect(res.status).toBe(404);
+    expect(res.body.error).toBe('not_found');
+  });
+
+  it('whoami: staff / anonymous / guardian-as-anonymous', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+      introspect: async () => ({
+        active: true,
+        tenantId: 't1',
+        guardianId: 'g1',
+        studentIds: ['s1'],
+      }),
+    });
+
+    const anon = await request(app).get('/whoami');
+    expect(anon.body).toEqual({ principal: 'anonymous' });
+
+    const staff = await request(app)
+      .get('/whoami')
+      .set('Authorization', 'Bearer staff');
+    expect(staff.body).toMatchObject({
+      principal: 'staff',
+      email: 'teach@school.edu',
+      role: 'teacher',
+      isAdmin: false,
+      tenantId: 't1',
+      memberId: 'mem-teach',
+    });
+
+    staffMode = 'inactive';
+    const guardianTok = await request(app)
+      .get('/whoami')
+      .set('Authorization', 'Bearer guardian-tok');
+    expect(guardianTok.body).toEqual({ principal: 'anonymous' });
   });
 });

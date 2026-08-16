@@ -10,6 +10,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { promptDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -785,7 +786,15 @@ export async function tsApprove(id) {
 }
 
 export async function tsReject(id) {
-  const reason = window.prompt('Rejection reason', '') || '';
+  const reason = await promptDialog({
+    title: 'Reject timesheet',
+    label: 'Rejection reason',
+    placeholder: 'Why is this being rejected?',
+    confirmLabel: 'Reject',
+    required: true,
+    danger: true,
+  });
+  if (reason === null) return;
   const result = await api.post('/api/timesheets/' + id + '/reject', { reason });
   if (result && !result._error) {
     toast('Rejected', 'success');

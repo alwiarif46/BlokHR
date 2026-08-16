@@ -34,6 +34,10 @@ import type {
   UpsertNudgeConfigInput,
 } from '../types';
 import { enforceGuardianAccess, isGuardianPrincipal } from '../internal-auth';
+import { guardRoutes } from '../role-guard';
+import { ATTENDANCE_ROUTE_POLICIES } from '../route-policies';
+import type { TimetableClient } from '../clients/timetable-client';
+import { assertTeacherSectionScope } from '../teacher-scope';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -45,10 +49,13 @@ function asyncHandler(
 
 export function createAttendanceRouter(
   service: AttendanceService,
-  opts: { internalSecret?: string } = {},
+  opts: { internalSecret?: string; timetable?: TimetableClient } = {},
 ): Router {
   const internalSecret = opts.internalSecret ?? '';
   const router = Router({ mergeParams: true });
+  const timetable = opts.timetable;
+
+  guardRoutes(router, ATTENDANCE_ROUTE_POLICIES, { internalSecret });
 
   router.get(
     '/:tenantId/reason-codes',
@@ -174,13 +181,24 @@ export function createAttendanceRouter(
               : null,
         };
       });
+      const periodInstanceId =
+        context.period_instance_id != null || context.periodInstanceId != null
+          ? String(context.period_instance_id ?? context.periodInstanceId)
+          : null;
+      if (timetable) {
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          periodInstanceId,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
       const input: MarkBatchInput = {
         context: {
           date: String(context.date ?? ''),
-          periodInstanceId:
-            context.period_instance_id != null || context.periodInstanceId != null
-              ? String(context.period_instance_id ?? context.periodInstanceId)
-              : null,
+          periodInstanceId,
           sessionPart:
             context.session_part != null || context.sessionPart != null
               ? (String(context.session_part ?? context.sessionPart) as SessionPart)
@@ -205,6 +223,21 @@ export function createAttendanceRouter(
   router.patch(
     '/:tenantId/records/:id',
     asyncHandler(async (req, res) => {
+      if (timetable) {
+        const existing = await service.getRecord(req.params.tenantId, req.params.id);
+        if (existing.error) {
+          res.status(existing.error.status).json({ error: existing.error.error });
+          return;
+        }
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          periodInstanceId: existing.record!.periodInstanceId,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
       const body = req.body as Record<string, unknown>;
       const input: PatchRecordInput = {
         actor: String(body.actor ?? body.marked_by ?? body.markedBy ?? 'editor'),

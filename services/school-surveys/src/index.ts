@@ -70,3 +70,7 @@ export {
 };
 export * from './types';
 export type { EventPublisher, DomainEvent } from './events';
+
+export { asRole, guardRoutes } from './role-guard';
+export type { Role, RoutePolicy } from './role-guard';
+export { SURVEYS_ROUTE_POLICIES } from './route-policies';

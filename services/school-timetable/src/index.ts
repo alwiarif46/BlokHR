@@ -57,3 +57,7 @@ export {
 };
 export * from './types';
 export * from './events';
+
+export { asRole, guardRoutes } from './role-guard';
+export type { Role, RoutePolicy } from './role-guard';
+export { TIMETABLE_ROUTE_POLICIES } from './route-policies';

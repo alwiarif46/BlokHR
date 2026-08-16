@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -59,13 +60,13 @@ describe('school-fees invoices (P6-02)', () => {
   let events: DomainEvent[];
 
   async function seedStructure(withConcession = true) {
-    const head = await request(app).post('/api/fees/t1/heads').send({
+    const head = await request(app).post('/api/fees/t1/heads').set(staff('school_admin')).send({
       code: 'TUITION',
       label: 'Tuition',
       kind: 'tuition',
     });
     const headId = head.body.id as string;
-    const structure = await request(app).post('/api/fees/t1/structures').send({
+    const structure = await request(app).post('/api/fees/t1/structures').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       class_label: '5-A',
       label: 'Class 5',
@@ -73,7 +74,7 @@ describe('school-fees invoices (P6-02)', () => {
     });
     let concessionId: string | undefined;
     if (withConcession) {
-      const conc = await request(app).post('/api/fees/t1/concessions').send({
+      const conc = await request(app).post('/api/fees/t1/concessions').set(staff('school_admin')).send({
         code: 'SIB',
         label: 'Sibling',
         kind: 'pct',
@@ -112,14 +113,14 @@ describe('school-fees invoices (P6-02)', () => {
 
   it('generation idempotency + concession math', async () => {
     const { structureId, concessionId } = await seedStructure(true);
-    await request(app).post('/api/fees/t1/assignments').send({
+    await request(app).post('/api/fees/t1/assignments').set(staff('school_admin')).send({
       student_ref: 's1',
       fee_structure_id: structureId,
       payer: 'guardian',
       concession_ids: [concessionId],
     });
 
-    const gen1 = await request(app).post('/api/fees/t1/invoices/generate').send({
+    const gen1 = await request(app).post('/api/fees/t1/invoices/generate').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       period_label: '2025-T1',
       class_label: '5-A',
@@ -132,7 +133,7 @@ describe('school-fees invoices (P6-02)', () => {
     expect(events).toHaveLength(1);
     expect(events[0]!.type).toBe('school.fee.invoice_issued');
 
-    const gen2 = await request(app).post('/api/fees/t1/invoices/generate').send({
+    const gen2 = await request(app).post('/api/fees/t1/invoices/generate').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       period_label: '2025-T1',
       class_label: '5-A',
@@ -144,18 +145,18 @@ describe('school-fees invoices (P6-02)', () => {
 
   it('RTE segregation: no guardian event; claim aggregation', async () => {
     const { structureId } = await seedStructure(false);
-    await request(app).post('/api/fees/t1/assignments').send({
+    await request(app).post('/api/fees/t1/assignments').set(staff('school_admin')).send({
       student_ref: 'rte1',
       fee_structure_id: structureId,
       payer: 'government_rte',
     });
-    await request(app).post('/api/fees/t1/assignments').send({
+    await request(app).post('/api/fees/t1/assignments').set(staff('school_admin')).send({
       student_ref: 'rte2',
       fee_structure_id: structureId,
       payer: 'government_rte',
     });
 
-    const gen = await request(app).post('/api/fees/t1/invoices/generate').send({
+    const gen = await request(app).post('/api/fees/t1/invoices/generate').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       period_label: '2025-T1',
       state_code: 'KA',
@@ -170,12 +171,12 @@ describe('school-fees invoices (P6-02)', () => {
 
   it('RTE claim lifecycle submit/receive/reject', async () => {
     const { structureId } = await seedStructure(false);
-    await request(app).post('/api/fees/t1/assignments').send({
+    await request(app).post('/api/fees/t1/assignments').set(staff('school_admin')).send({
       student_ref: 'rte1',
       fee_structure_id: structureId,
       payer: 'government_rte',
     });
-    const gen = await request(app).post('/api/fees/t1/invoices/generate').send({
+    const gen = await request(app).post('/api/fees/t1/invoices/generate').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       period_label: '2025-T1',
       state_code: 'KA',
@@ -184,40 +185,40 @@ describe('school-fees invoices (P6-02)', () => {
     const invoiceId = gen.body.created[0].id as string;
 
     const noRef = await request(app)
-      .post(`/api/fees/t1/rte-claims/${claimId}/receive`)
+      .post(`/api/fees/t1/rte-claims/${claimId}/receive`).set(staff('school_admin'))
       .send({});
     expect(noRef.status).toBe(400);
 
     const submitted = await request(app).post(
       `/api/fees/t1/rte-claims/${claimId}/submit`,
-    );
+    ).set(staff('school_admin'));
     expect(submitted.body.status).toBe('submitted');
 
     const received = await request(app)
-      .post(`/api/fees/t1/rte-claims/${claimId}/receive`)
+      .post(`/api/fees/t1/rte-claims/${claimId}/receive`).set(staff('school_admin'))
       .send({ reference: 'GOV-99' });
     expect(received.body.status).toBe('received');
     expect(received.body.reference).toBe('GOV-99');
 
     // Fresh claim for reject path
-    await request(app).post('/api/fees/t1/assignments').send({
+    await request(app).post('/api/fees/t1/assignments').set(staff('school_admin')).send({
       student_ref: 'rte3',
       fee_structure_id: structureId,
       payer: 'government_rte',
     });
-    const gen2 = await request(app).post('/api/fees/t1/invoices/generate').send({
+    const gen2 = await request(app).post('/api/fees/t1/invoices/generate').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       period_label: '2025-T2',
       state_code: 'KA',
     });
     const claim2 = gen2.body.rteClaim.id as string;
     const inv2 = gen2.body.created[0].id as string;
-    await request(app).post(`/api/fees/t1/rte-claims/${claim2}/submit`);
+    await request(app).post(`/api/fees/t1/rte-claims/${claim2}/submit`).set(staff('school_admin'));
     const rejected = await request(app).post(
       `/api/fees/t1/rte-claims/${claim2}/reject`,
-    );
+    ).set(staff('school_admin'));
     expect(rejected.body.status).toBe('rejected');
-    const invoices = await request(app).get('/api/fees/t1/invoices');
+    const invoices = await request(app).get('/api/fees/t1/invoices').set(staff('school_admin'));
     const reopened = invoices.body.invoices.find(
       (i: { id: string }) => i.id === inv2,
     );
@@ -227,16 +228,16 @@ describe('school-fees invoices (P6-02)', () => {
 
   it('tenant isolation', async () => {
     const { structureId } = await seedStructure(false);
-    await request(app).post('/api/fees/t1/assignments').send({
+    await request(app).post('/api/fees/t1/assignments').set(staff('school_admin')).send({
       student_ref: 's1',
       fee_structure_id: structureId,
       payer: 'guardian',
     });
-    await request(app).post('/api/fees/t1/invoices/generate').send({
+    await request(app).post('/api/fees/t1/invoices/generate').set(staff('school_admin')).send({
       academic_session_ref: '2025-26',
       period_label: '2025-T1',
     });
-    const other = await request(app).get('/api/fees/t2/invoices');
+    const other = await request(app).get('/api/fees/t2/invoices').set(staff('school_admin'));
     expect(other.body.invoices).toEqual([]);
   });
 });

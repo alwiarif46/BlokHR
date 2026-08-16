@@ -86,3 +86,7 @@ export {
 } from './services/date-only';
 export { computeFine } from './services/fine-math';
 export type { EventPublisher, DomainEvent } from './events';
+
+export { asRole, guardRoutes } from './role-guard';
+export type { Role, RoutePolicy } from './role-guard';
+export { LIBRARY_ROUTE_POLICIES } from './route-policies';

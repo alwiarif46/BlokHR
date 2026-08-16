@@ -15,6 +15,8 @@ import {
   type DirectoryMember,
 } from '@blokhr/directory';
 import { MultiAuthService } from '../services/multi-auth-service';
+import { SettingsRepository } from '../repositories/settings-repository';
+import { SettingsService } from '../services/settings-service';
 
 export interface DirectoryBundle {
   service: DirectoryService;
@@ -134,7 +136,15 @@ export async function createDirectoryBundle(
   );
   await runDirectoryMigrations(db, migrationsDir);
 
-  const authService = new MultiAuthService(deps.monolithDb, logger);
+  const settingsService = new SettingsService(
+    new SettingsRepository(deps.monolithDb),
+    null,
+    null,
+    null,
+    null,
+    logger,
+  );
+  const authService = new MultiAuthService(deps.monolithDb, logger, settingsService);
   const projection = createProjectionPort(deps.monolithDb, logger);
 
   const service = new DirectoryService({
@@ -220,19 +230,13 @@ export function mountDirectoryRouter(
   app: Express,
   bundle: DirectoryBundle,
   config: AppConfig,
-  monolithDb: DatabaseEngine,
+  _monolithDb: DatabaseEngine,
 ): void {
+  // P12-04: admin gating is role-guard on gateway X-Blok-* headers (not X-User-Email).
   app.use(
     '/api/directory',
     createDirectoryRouter(bundle.service, {
       tenantId: config.defaultTenantId,
-      isAdmin: async (email: string) => {
-        const row = await monolithDb.get<{ email: string }>(
-          'SELECT email FROM admins WHERE email = ?',
-          [email],
-        );
-        return !!row;
-      },
     }),
   );
 }

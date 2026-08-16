@@ -9,6 +9,7 @@ import {
   type DomainEvent,
   type EventPublisher,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolAttendanceSqlite } from '../src/db';
 
 class RecordingPublisher implements EventPublisher {
@@ -59,7 +60,7 @@ describe('school-attendance capture (P2-04)', () => {
 
   it('bind / rebind rules and never stores raw payload', async () => {
     const payload = b64('card-uid-AAA');
-    const first = await request(app).post('/api/attendance/t1/bindings').send({
+    const first = await request(app).post('/api/attendance/t1/bindings').set(staff('office')).send({
       subject_type: 'student',
       subject_id: 's1',
       modality: 'nfc',
@@ -71,7 +72,7 @@ describe('school-attendance capture (P2-04)', () => {
     expect(await rawPayloadLeaked(payload)).toBe(false);
     expect(await rawPayloadLeaked('card-uid-AAA')).toBe(false);
 
-    const conflict = await request(app).post('/api/attendance/t1/bindings').send({
+    const conflict = await request(app).post('/api/attendance/t1/bindings').set(staff('office')).send({
       subject_type: 'student',
       subject_id: 's2',
       modality: 'nfc',
@@ -80,12 +81,12 @@ describe('school-attendance capture (P2-04)', () => {
     expect(conflict.status).toBe(409);
 
     const deact = await request(app).post(
-      `/api/attendance/t1/bindings/${first.body.id}/deactivate`,
-    );
+      `/api/attendance/t1/bindings/${first.body.id}/deactivate`
+    ).set(staff('school_admin'));
     expect(deact.status).toBe(200);
     expect(deact.body.isActive).toBe(false);
 
-    const rebound = await request(app).post('/api/attendance/t1/bindings').send({
+    const rebound = await request(app).post('/api/attendance/t1/bindings').set(staff('office')).send({
       subject_type: 'student',
       subject_id: 's2',
       modality: 'nfc',
@@ -97,14 +98,14 @@ describe('school-attendance capture (P2-04)', () => {
 
   it('capture matched / no_match / duplicate; gate marks present', async () => {
     const payload = b64('qr-student-1');
-    await request(app).post('/api/attendance/t1/bindings').send({
+    await request(app).post('/api/attendance/t1/bindings').set(staff('office')).send({
       subject_type: 'student',
       subject_id: 's1',
       modality: 'qr',
       payload_b64: payload,
     });
 
-    const matched = await request(app).post('/api/attendance/t1/capture').send({
+    const matched = await request(app).post('/api/attendance/t1/capture').set(staff('office')).send({
       modality: 'qr',
       payload_b64: payload,
       device_id: 'gate-main',
@@ -119,7 +120,7 @@ describe('school-attendance capture (P2-04)', () => {
       publisher.events.some((e) => e.type === 'school.attendance.gate_entry'),
     ).toBe(true);
 
-    const noMatch = await request(app).post('/api/attendance/t1/capture').send({
+    const noMatch = await request(app).post('/api/attendance/t1/capture').set(staff('office')).send({
       modality: 'qr',
       payload_b64: b64('unknown-token'),
       device_id: 'gate-main',
@@ -134,7 +135,7 @@ describe('school-attendance capture (P2-04)', () => {
       'SELECT COUNT(*) as c FROM attendance_records WHERE tenant_id = ?',
       ['t1'],
     );
-    const dup = await request(app).post('/api/attendance/t1/capture').send({
+    const dup = await request(app).post('/api/attendance/t1/capture').set(staff('office')).send({
       modality: 'qr',
       payload_b64: payload,
       device_id: 'gate-main',
@@ -152,14 +153,14 @@ describe('school-attendance capture (P2-04)', () => {
 
   it('emits impossible_sequence anomaly across devices within 60s', async () => {
     const payload = b64('nfc-s1');
-    await request(app).post('/api/attendance/t1/bindings').send({
+    await request(app).post('/api/attendance/t1/bindings').set(staff('office')).send({
       subject_type: 'student',
       subject_id: 's1',
       modality: 'nfc',
       payload_b64: payload,
     });
 
-    await request(app).post('/api/attendance/t1/capture').send({
+    await request(app).post('/api/attendance/t1/capture').set(staff('office')).send({
       modality: 'nfc',
       payload_b64: payload,
       device_id: 'gate-A',
@@ -168,7 +169,7 @@ describe('school-attendance capture (P2-04)', () => {
     });
 
     publisher.events = [];
-    const second = await request(app).post('/api/attendance/t1/capture').send({
+    const second = await request(app).post('/api/attendance/t1/capture').set(staff('office')).send({
       modality: 'nfc',
       payload_b64: payload,
       device_id: 'gate-B',
@@ -184,14 +185,14 @@ describe('school-attendance capture (P2-04)', () => {
 
   it('replays capture by idempotency_key without new writes', async () => {
     const payload = b64('idem-card');
-    await request(app).post('/api/attendance/t1/bindings').send({
+    await request(app).post('/api/attendance/t1/bindings').set(staff('office')).send({
       subject_type: 'student',
       subject_id: 's1',
       modality: 'nfc',
       payload_b64: payload,
     });
 
-    const first = await request(app).post('/api/attendance/t1/capture').send({
+    const first = await request(app).post('/api/attendance/t1/capture').set(staff('office')).send({
       modality: 'nfc',
       payload_b64: payload,
       device_id: 'gate-main',
@@ -205,7 +206,7 @@ describe('school-attendance capture (P2-04)', () => {
       'SELECT COUNT(*) as c FROM capture_events WHERE tenant_id = ?',
       ['t1'],
     );
-    const second = await request(app).post('/api/attendance/t1/capture').send({
+    const second = await request(app).post('/api/attendance/t1/capture').set(staff('office')).send({
       modality: 'nfc',
       payload_b64: payload,
       device_id: 'gate-main',
@@ -224,20 +225,20 @@ describe('school-attendance capture (P2-04)', () => {
 
   it('lists capture-events filtered; isolates tenants', async () => {
     const payload = b64('tenant-iso');
-    await request(app).post('/api/attendance/t1/bindings').send({
+    await request(app).post('/api/attendance/t1/bindings').set(staff('office')).send({
       subject_type: 'student',
       subject_id: 's1',
       modality: 'qr',
       payload_b64: payload,
     });
-    await request(app).post('/api/attendance/t1/capture').send({
+    await request(app).post('/api/attendance/t1/capture').set(staff('office')).send({
       modality: 'qr',
       payload_b64: payload,
       device_id: 'd1',
       context: { date: '2025-08-11', gate: 'main' },
       idempotency_key: 't1-cap',
     });
-    await request(app).post('/api/attendance/t2/capture').send({
+    await request(app).post('/api/attendance/t2/capture').set(staff('office')).send({
       modality: 'qr',
       payload_b64: payload,
       device_id: 'd1',
@@ -246,13 +247,13 @@ describe('school-attendance capture (P2-04)', () => {
     });
 
     const listed = await request(app).get(
-      '/api/attendance/t1/capture-events?date=2025-08-11&decision=matched',
-    );
+      '/api/attendance/t1/capture-events?date=2025-08-11&decision=matched'
+    ).set(staff('school_admin'));
     expect(listed.status).toBe(200);
     expect(listed.body.events).toHaveLength(1);
     expect(listed.body.events[0].tenantId).toBe('t1');
 
-    const t2 = await request(app).get('/api/attendance/t2/capture-events?date=2025-08-11');
+    const t2 = await request(app).get('/api/attendance/t2/capture-events?date=2025-08-11').set(staff('school_admin'));
     expect(t2.body.events).toHaveLength(1);
     expect(t2.body.events[0].decision).toBe('no_match');
   });

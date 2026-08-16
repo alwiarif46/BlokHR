@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -20,7 +21,7 @@ describe('school-academics homework (P3-06)', () => {
     app = created.app;
     db = created.db;
 
-    const course = await request(app).post('/api/academics/t1/courses').send({
+    const course = await request(app).post('/api/academics/t1/courses').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       board: 'cbse',
       subject_code: 'Sc',
@@ -29,10 +30,10 @@ describe('school-academics homework (P3-06)', () => {
     });
     courseId = course.body.id;
     const unit = await request(app)
-      .post(`/api/academics/t1/courses/${courseId}/units`)
+      .post(`/api/academics/t1/courses/${courseId}/units`).set(staff('school_admin'))
       .send({ label: 'Unit 1', planned_weeks: 2 });
     const topic = await request(app)
-      .post(`/api/academics/t1/units/${unit.body.id}/topics`)
+      .post(`/api/academics/t1/units/${unit.body.id}/topics`).set(staff('school_admin'))
       .send({ label: 'Topic A' });
     topicId = topic.body.id;
   });
@@ -43,7 +44,7 @@ describe('school-academics homework (P3-06)', () => {
 
   async function createAssignment(overrides: Record<string, unknown> = {}) {
     return request(app)
-      .post('/api/academics/t1/assignments')
+      .post('/api/academics/t1/assignments').set(staff('school_admin'))
       .send({
         course_id: courseId,
         section_ref: '8A',
@@ -68,7 +69,7 @@ describe('school-academics homework (P3-06)', () => {
 
     const coverage = await request(app).get(
       `/api/academics/t1/courses/${courseId}/coverage?section_ref=8A`,
-    );
+    ).set(staff('school_admin'));
     expect(coverage.status).toBe(200);
     expect(coverage.body.units[0].topicsDelivered).toBe(1);
 
@@ -89,44 +90,44 @@ describe('school-academics homework (P3-06)', () => {
     const sub1 = lateAssign.body.submissions[0].id as string;
     const sub2 = lateAssign.body.submissions[1].id as string;
 
-    const turned = await request(app).post(`/api/academics/t1/submissions/${sub1}/turn-in`);
+    const turned = await request(app).post(`/api/academics/t1/submissions/${sub1}/turn-in`).set(staff('school_admin'));
     expect(turned.status).toBe(200);
     expect(turned.body.state).toBe('turned_in');
     expect(turned.body.late).toBe(true);
 
-    const reclaim = await request(app).post(`/api/academics/t1/submissions/${sub1}/reclaim`);
+    const reclaim = await request(app).post(`/api/academics/t1/submissions/${sub1}/reclaim`).set(staff('school_admin'));
     expect(reclaim.status).toBe(200);
     expect(reclaim.body.state).toBe('reclaimed');
 
-    const again = await request(app).post(`/api/academics/t1/submissions/${sub1}/turn-in`);
+    const again = await request(app).post(`/api/academics/t1/submissions/${sub1}/turn-in`).set(staff('school_admin'));
     expect(again.status).toBe(200);
     expect(again.body.state).toBe('turned_in');
 
     const direct = await request(app)
-      .patch(`/api/academics/t1/submissions/${sub1}/grade`)
+      .patch(`/api/academics/t1/submissions/${sub1}/grade`).set(staff('school_admin'))
       .send({ assigned_grade: 9 });
     expect(direct.status).toBe(400);
 
     const draft = await request(app)
-      .patch(`/api/academics/t1/submissions/${sub1}/grade`)
+      .patch(`/api/academics/t1/submissions/${sub1}/grade`).set(staff('school_admin'))
       .send({ draft_grade: 8 });
     expect(draft.status).toBe(200);
     expect(draft.body.draftGrade).toBe(8);
     expect(draft.body.assignedGrade).toBeNull();
 
     const returned = await request(app)
-      .post(`/api/academics/t1/submissions/${sub1}/return`)
+      .post(`/api/academics/t1/submissions/${sub1}/return`).set(staff('school_admin'))
       .send({ feedback: 'Good' });
     expect(returned.status).toBe(200);
     expect(returned.body.state).toBe('returned');
     expect(returned.body.assignedGrade).toBe(8);
     expect(returned.body.feedback).toBe('Good');
 
-    await request(app).post(`/api/academics/t1/submissions/${sub2}/turn-in`);
+    await request(app).post(`/api/academics/t1/submissions/${sub2}/turn-in`).set(staff('school_admin'));
     await request(app)
-      .patch(`/api/academics/t1/submissions/${sub2}/grade`)
+      .patch(`/api/academics/t1/submissions/${sub2}/grade`).set(staff('school_admin'))
       .send({ draft_grade: 6 });
-    await request(app).post(`/api/academics/t1/submissions/${sub2}/return`);
+    await request(app).post(`/api/academics/t1/submissions/${sub2}/return`).set(staff('school_admin'));
   });
 
   it('stats exclude excused; sweep marks missing', async () => {
@@ -137,18 +138,18 @@ describe('school-academics homework (P3-06)', () => {
     });
     const [sa, sb, sc] = created.body.submissions.map((s: { id: string }) => s.id);
 
-    await request(app).post(`/api/academics/t1/submissions/${sa}/turn-in`);
-    await request(app).patch(`/api/academics/t1/submissions/${sa}/grade`).send({ draft_grade: 10 });
-    await request(app).post(`/api/academics/t1/submissions/${sa}/return`);
+    await request(app).post(`/api/academics/t1/submissions/${sa}/turn-in`).set(staff('school_admin'));
+    await request(app).patch(`/api/academics/t1/submissions/${sa}/grade`).set(staff('school_admin')).send({ draft_grade: 10 });
+    await request(app).post(`/api/academics/t1/submissions/${sa}/return`).set(staff('school_admin'));
 
-    await request(app).post(`/api/academics/t1/submissions/${sb}/turn-in`);
-    await request(app).patch(`/api/academics/t1/submissions/${sb}/grade`).send({ draft_grade: 4 });
-    await request(app).post(`/api/academics/t1/submissions/${sb}/return`);
-    await request(app).patch(`/api/academics/t1/submissions/${sb}/excuse`).send({ excused: true });
+    await request(app).post(`/api/academics/t1/submissions/${sb}/turn-in`).set(staff('school_admin'));
+    await request(app).patch(`/api/academics/t1/submissions/${sb}/grade`).set(staff('school_admin')).send({ draft_grade: 4 });
+    await request(app).post(`/api/academics/t1/submissions/${sb}/return`).set(staff('school_admin'));
+    await request(app).patch(`/api/academics/t1/submissions/${sb}/excuse`).set(staff('school_admin')).send({ excused: true });
 
     const stats = await request(app).get(
       `/api/academics/t1/assignments/${created.body.assignment.id}/stats`,
-    );
+    ).set(staff('school_admin'));
     expect(stats.status).toBe(200);
     expect(stats.body.mean).toBe(10);
     expect(stats.body.median).toBe(10);
@@ -158,7 +159,7 @@ describe('school-academics homework (P3-06)', () => {
 
     const sweep = await request(app).post(
       `/api/academics/t1/assignments/${created.body.assignment.id}/sweep-missing`,
-    );
+    ).set(staff('school_admin'));
     expect(sweep.status).toBe(200);
     expect(sweep.body.updated).toHaveLength(1);
     expect(sweep.body.updated[0].id).toBe(sc);
@@ -170,7 +171,7 @@ describe('school-academics homework (P3-06)', () => {
     const created = await createAssignment({ student_ids: ['s1'] });
     const other = await request(app).get(
       `/api/academics/t2/assignments/${created.body.assignment.id}`,
-    );
+    ).set(staff('school_admin'));
     expect(other.status).toBe(404);
   });
 });

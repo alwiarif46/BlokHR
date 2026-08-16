@@ -52,6 +52,7 @@ export function initWizard(statusData) {
     _pendingVertical = existingVertical;
     _verticalLocked = true;
     wzSyncVerticalCards(existingVertical);
+    wzApplyVerticalCopy(existingVertical);
     if (existingVertical === 'school') wzApplyAccent(WZ_ACCENT_SCHOOL);
     else wzApplyAccent(WZ_ACCENT_HR);
   } else {
@@ -59,6 +60,7 @@ export function initWizard(statusData) {
     _pendingVertical = null;
     _verticalLocked = false;
     wzSyncVerticalCards(null);
+    wzApplyVerticalCopy(null);
   }
 
   if (statusData && statusData.currentStep > 1) {
@@ -138,6 +140,63 @@ function wzApplyDeploymentMode(mode) {
     btnText.textContent =
       _deploymentMode === 'self_hosted' ? 'Activate & finish →' : 'Start trial →';
   }
+}
+
+/* ── Vertical-aware copy ── */
+
+/**
+ * Wizard copy that differs per vertical. The markup ships the HR wording, so
+ * an HR workspace is correct with no JS applied; school copy is layered on when
+ * that vertical is chosen. Kept local to the wizard because it runs before any
+ * tenant settings (and therefore shared/labels.js terminology) exist.
+ */
+const WZ_VERTICAL_COPY = {
+  hr: {
+    text: {
+      wzSecIdentity: 'Company Identity',
+      wzLblOrgName: 'Company Name',
+      wzErrName: 'Company name is required',
+      wzSecAuth: 'How your team signs in',
+      wzLocalHint: 'Best for small teams — no SSO setup needed',
+    },
+    placeholder: {
+      wzCompanyName: 'Acme Corporation',
+      wzTagline: 'Empowering your team',
+      wzEmailName: 'Defaults to company name',
+      wzAdminEmail: 'admin@company.com',
+    },
+  },
+  school: {
+    text: {
+      wzSecIdentity: 'Campus Identity',
+      wzLblOrgName: 'Campus Name',
+      wzErrName: 'Campus name is required',
+      wzSecAuth: 'How your staff signs in',
+      wzLocalHint: 'Best for a single campus — no SSO setup needed',
+    },
+    placeholder: {
+      wzCompanyName: 'Greenwood High School',
+      wzTagline: 'Every learner, every day',
+      wzEmailName: 'Defaults to campus name',
+      wzAdminEmail: 'admin@greenwood.edu',
+    },
+  },
+};
+
+/**
+ * Swap wizard copy to match the chosen vertical.
+ * @param {'hr'|'school'|null} vertical
+ */
+function wzApplyVerticalCopy(vertical) {
+  const copy = WZ_VERTICAL_COPY[vertical === 'school' ? 'school' : 'hr'];
+  Object.keys(copy.text).forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = copy.text[id];
+  });
+  Object.keys(copy.placeholder).forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.setAttribute('placeholder', copy.placeholder[id]);
+  });
 }
 
 /* ── Accent colour application ── */
@@ -412,6 +471,7 @@ function wzSelectVertical(vertical) {
   if (vertical !== 'hr' && vertical !== 'school') return;
   _pendingVertical = vertical;
   wzSyncVerticalCards(vertical);
+  wzApplyVerticalCopy(vertical);
   if (vertical === 'school') wzApplyAccent(WZ_ACCENT_SCHOOL);
   else wzApplyAccent(WZ_ACCENT_HR);
   wzValidate0();
@@ -426,7 +486,7 @@ async function wzConfirmVerticalAndAdvance() {
     return;
   }
 
-  const label = chosen === 'school' ? 'School' : 'Company';
+  const label = chosen === 'school' ? 'Campus' : 'Workforce';
   const ok = await confirmDialog({
     title: 'Confirm workspace type',
     message:

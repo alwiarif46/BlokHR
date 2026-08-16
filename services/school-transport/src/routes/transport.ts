@@ -3,6 +3,10 @@ import type { TransportService } from '../services/transport-service';
 import type { BoardingService } from '../services/boarding-service';
 import type { TelemetryService } from '../services/telemetry-service';
 import type { BoardingDirection, BoardingLeg } from '../types';
+import { resolveInternalSecret } from '../internal-auth';
+import { guardRoutes } from '../role-guard';
+import { TRANSPORT_ROUTE_POLICIES } from '../route-policies';
+
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -16,9 +20,11 @@ export function createTransportRouter(
   service: TransportService,
   boarding: BoardingService,
   telemetry: TelemetryService,
+  opts: { internalSecret?: string } = {},
 ): Router {
   const router = Router({ mergeParams: true });
-
+  const internalSecret = opts.internalSecret ?? resolveInternalSecret();
+  guardRoutes(router, TRANSPORT_ROUTE_POLICIES, { internalSecret });
   router.post(
     '/:tenantId/vehicles',
     asyncHandler(async (req, res) => {

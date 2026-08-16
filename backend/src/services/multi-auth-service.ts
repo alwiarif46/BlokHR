@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import { isTenantVertical, type TenantVertical } from './vertical-defaults';
+import type { SettingsService } from './settings-service';
 
 // ── Row types ──
 
@@ -90,6 +91,20 @@ const BCRYPT_ROUNDS = 10;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
+/** Staff session lifetime for gateway introspect (P12-01). */
+const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export interface StaffIntrospectResult {
+  active: boolean;
+  email?: string;
+  name?: string;
+  tenantId?: string;
+  isAdmin?: boolean;
+  isGlobalManager?: boolean;
+  isGlobalHR?: boolean;
+  managerOf?: string[];
+  hrOf?: string[];
+}
 
 /**
  * Multi-provider authentication service.
@@ -105,12 +120,72 @@ const MAGIC_LINK_EXPIRY_MINUTES = 15;
  *
  * Each provider is toggleable via branding table config.
  * Setup wizard configures which providers are active.
+ *
+ * P12-01: session tokens are persisted in `auth_sessions` so the gateway can
+ * introspect Bearer tokens. Long-term owner is a future auth service — this is
+ * a deliberate minimal monolith extension until extraction.
  */
 export class MultiAuthService {
   constructor(
     private readonly db: DatabaseEngine,
     private readonly logger: Logger,
+    /** Shared with GET /api/user-roles — introspect must not fork role logic. */
+    private readonly settingsService: SettingsService,
   ) {}
+
+  /**
+   * Persist a staff session token (previously ephemeral uuid with no server lookup).
+   */
+  async issueSession(email: string, name: string): Promise<string> {
+    const token = uuidv4();
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
+    await this.db.run(
+      `INSERT INTO auth_sessions (token, email, name, expires_at) VALUES (?, ?, ?, ?)`,
+      [token, email.toLowerCase().trim(), name, expiresAt],
+    );
+    return token;
+  }
+
+  /**
+   * Gateway staff introspect — same claims shape as GET /api/user-roles plus identity.
+   * Invalid/expired/empty → { active: false } with HTTP 200 at the route layer.
+   */
+  async introspect(token: string): Promise<StaffIntrospectResult> {
+    const raw = (token || '').trim();
+    if (!raw) return { active: false };
+
+    const row = await this.db.get<{
+      email: string;
+      name: string;
+      expires_at: string;
+    }>('SELECT email, name, expires_at FROM auth_sessions WHERE token = ?', [raw]);
+
+    if (!row) return { active: false };
+    const exp = Date.parse(row.expires_at);
+    if (!Number.isFinite(exp) || exp < Date.now()) {
+      await this.db.run('DELETE FROM auth_sessions WHERE token = ?', [raw]);
+      return { active: false };
+    }
+
+    const email = row.email.toLowerCase().trim();
+    const roles = await this.settingsService.getUserRoles(email);
+    const branding = await this.db.get<{ tenant_id: string }>(
+      'SELECT tenant_id FROM branding WHERE id = 1',
+    );
+    const tenantId = (branding?.tenant_id || '').trim() || 'default';
+
+    return {
+      active: true,
+      email,
+      name: row.name || email,
+      tenantId,
+      isAdmin: roles.isAdmin,
+      isGlobalManager: roles.isGlobalManager,
+      isGlobalHR: roles.isGlobalHR,
+      managerOf: roles.managerOf,
+      hrOf: roles.hrOf,
+    };
+  }
 
   /** Session vertical from settings_json; absent → hr (legacy tenants). */
   private async resolveVertical(): Promise<TenantVertical> {
@@ -282,7 +357,7 @@ export class MultiAuthService {
       success: true,
       email,
       name: member?.name ?? email,
-      sessionToken: uuidv4(),
+      sessionToken: await this.issueSession(email, member?.name ?? email),
       mustChangePassword: cred.must_change_password === 1,
     });
   }
@@ -405,11 +480,12 @@ export class MultiAuthService {
     );
 
     this.logger.info({ email: row.email }, 'Magic link verified');
+    const name = member?.name ?? row.email;
     return this.withVertical({
       success: true,
       email: row.email,
-      name: member?.name ?? row.email,
-      sessionToken: uuidv4(),
+      name,
+      sessionToken: await this.issueSession(row.email, name),
     });
   }
 
@@ -438,7 +514,12 @@ export class MultiAuthService {
         return { success: false, error: 'No email claim in SSO token' };
       }
       const name = (payload.name as string) ?? email;
-      return this.withVertical({ success: true, email, name, sessionToken: uuidv4() });
+      return this.withVertical({
+        success: true,
+        email,
+        name,
+        sessionToken: await this.issueSession(email, name),
+      });
     } catch {
       return { success: false, error: 'Failed to decode SSO token' };
     }
@@ -462,7 +543,12 @@ export class MultiAuthService {
         return { success: false, error: 'No email claim in Google token' };
       }
       const name = (payload.name as string) ?? email;
-      return this.withVertical({ success: true, email, name, sessionToken: uuidv4() });
+      return this.withVertical({
+        success: true,
+        email,
+        name,
+        sessionToken: await this.issueSession(email, name),
+      });
     } catch {
       return { success: false, error: 'Failed to decode Google token' };
     }
@@ -501,11 +587,11 @@ export class MultiAuthService {
    * ID token from the response — the token exchange should be done
    * by the frontend or a server-side callback handler.
    */
-  authenticateOidcToken(idToken: string): Promise<AuthResult> {
+  async authenticateOidcToken(idToken: string): Promise<AuthResult> {
     try {
       const parts = idToken.split('.');
       if (parts.length !== 3) {
-        return Promise.resolve({ success: false, error: 'Invalid OIDC token format' });
+        return { success: false, error: 'Invalid OIDC token format' };
       }
       const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<
         string,
@@ -520,12 +606,17 @@ export class MultiAuthService {
         .toLowerCase()
         .trim();
       if (!email) {
-        return Promise.resolve({ success: false, error: 'No email claim in OIDC token' });
+        return { success: false, error: 'No email claim in OIDC token' };
       }
       const name = (payload.name as string) ?? email;
-      return this.withVertical({ success: true, email, name, sessionToken: uuidv4() });
+      return this.withVertical({
+        success: true,
+        email,
+        name,
+        sessionToken: await this.issueSession(email, name),
+      });
     } catch {
-      return Promise.resolve({ success: false, error: 'Failed to decode OIDC token' });
+      return { success: false, error: 'Failed to decode OIDC token' };
     }
   }
 
@@ -567,11 +658,13 @@ export class MultiAuthService {
     if (!assertion.email) {
       return { success: false, error: 'No email in SAML assertion' };
     }
+    const email = assertion.email.toLowerCase().trim();
+    const name = assertion.name ?? assertion.email;
     return this.withVertical({
       success: true,
-      email: assertion.email.toLowerCase().trim(),
-      name: assertion.name ?? assertion.email,
-      sessionToken: uuidv4(),
+      email,
+      name,
+      sessionToken: await this.issueSession(email, name),
     });
   }
 
@@ -623,7 +716,7 @@ export class MultiAuthService {
       success: true,
       email: member.email,
       name: member.name,
-      sessionToken: uuidv4(),
+      sessionToken: await this.issueSession(member.email, member.name),
     });
   }
 

@@ -14,6 +14,7 @@
  */
 
 import { getSession, clearSession, getGuardianSession, clearGuardianSession } from './session.js';
+import { toast } from './toast.js';
 
 let _base = '';
 let _mockMode = false;
@@ -119,14 +120,28 @@ export async function api(path, opts) {
 
     if (!response.ok) {
       let message = 'Request failed';
+      let error;
+      let errors;
       try {
         const text = await response.text();
         const parsed = JSON.parse(text);
         message = parsed.error || parsed.message || text;
+        error = parsed.error;
+        errors = parsed.errors;
       } catch (_e) {
         /* leave default message */
       }
-      return { _error: true, status: response.status, message: message };
+      /* P12-06 L6: generic copy — no role leakage */
+      if (
+        response.status === 403 &&
+        (error === 'role_denied' ||
+          error === 'scope_unverifiable' ||
+          message === 'role_denied' ||
+          message === 'scope_unverifiable')
+      ) {
+        toast("You don't have access to do this", 'error');
+      }
+      return { _error: true, status: response.status, message: message, error: error, errors: errors };
     }
 
     /* 204 No Content */

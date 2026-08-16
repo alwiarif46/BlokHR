@@ -8,6 +8,7 @@ import {
   type DomainEvent,
   type EventPublisher,
 } from '../src/index';
+import { staff, guardian, internalOnly, SECRET } from './helpers/auth';
 import type { SchoolAttendanceSqlite } from '../src/db';
 
 class RecordingPublisher implements EventPublisher {
@@ -39,7 +40,7 @@ describe('school-attendance marking', () => {
   });
 
   async function sickCode(tenant = 't1') {
-    const codes = await request(app).get(`/api/attendance/${tenant}/reason-codes`);
+    const codes = await request(app).get(`/api/attendance/${tenant}/reason-codes`).set(staff('school_admin'));
     return codes.body.reasonCodes.find((c: { code: string }) => c.code === 'SICK').id as string;
   }
 
@@ -60,7 +61,7 @@ describe('school-attendance marking', () => {
   }
 
   it('marks day and period granularity; rejects wrong context', async () => {
-    const day = await request(app).post('/api/attendance/t1/mark').send({
+    const day = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11' },
       marks: [{ student_id: 's1', status: 'present' }],
       marked_by: 'teacher-1',
@@ -70,8 +71,8 @@ describe('school-attendance marking', () => {
     expect(day.body.records).toHaveLength(1);
     expect(day.body.records[0].status).toBe('present');
 
-    await request(app).put('/api/attendance/t1/settings').send({ granularity: 'period' });
-    const wrong = await request(app).post('/api/attendance/t1/mark').send({
+    await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({ granularity: 'period' });
+    const wrong = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11' },
       marks: [{ student_id: 's1', status: 'present' }],
       marked_by: 'teacher-1',
@@ -79,7 +80,7 @@ describe('school-attendance marking', () => {
     });
     expect(wrong.status).toBe(400);
 
-    const period = await request(app).post('/api/attendance/t1/mark').send({
+    const period = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11', period_instance_id: 'pi-1' },
       marks: [{ student_id: 's1', status: 'absent', reason_code_id: await sickCode() }],
       marked_by: 'teacher-1',
@@ -90,7 +91,7 @@ describe('school-attendance marking', () => {
   });
 
   it('replays idempotent mark with zero new writes', async () => {
-    const first = await request(app).post('/api/attendance/t1/mark').send({
+    const first = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11' },
       marks: [
         { student_id: 's1', status: 'present' },
@@ -103,7 +104,7 @@ describe('school-attendance marking', () => {
     expect(first.body.replayed).toBe(false);
     const countAfterFirst = await countRecords('t1');
 
-    const second = await request(app).post('/api/attendance/t1/mark').send({
+    const second = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11' },
       marks: [
         { student_id: 's1', status: 'present' },
@@ -119,7 +120,7 @@ describe('school-attendance marking', () => {
   });
 
   it('requires late_minutes and emits absent events', async () => {
-    const noLate = await request(app).post('/api/attendance/t1/mark').send({
+    const noLate = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11' },
       marks: [{ student_id: 's1', status: 'late' }],
       marked_by: 't',
@@ -127,7 +128,7 @@ describe('school-attendance marking', () => {
     });
     expect(noLate.status).toBe(400);
 
-    const late = await request(app).post('/api/attendance/t1/mark').send({
+    const late = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11' },
       marks: [{ student_id: 's1', status: 'late', late_minutes: 45 }],
       marked_by: 't',
@@ -138,7 +139,7 @@ describe('school-attendance marking', () => {
     expect(late.body.records[0].lateMinutes).toBe(45);
 
     publisher.events = [];
-    await request(app).post('/api/attendance/t1/mark').send({
+    await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-12' },
       marks: [
         { student_id: 's1', status: 'absent', reason_code_id: await sickCode() },
@@ -155,10 +156,10 @@ describe('school-attendance marking', () => {
   });
 
   it('enforces edit window, audit, and regularization', async () => {
-    await request(app).put('/api/attendance/t1/settings').send({
+    await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       edit_window_minutes: 120,
     });
-    const marked = await request(app).post('/api/attendance/t1/mark').send({
+    const marked = await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11' },
       marks: [{ student_id: 's1', status: 'present' }],
       marked_by: 't',
@@ -167,7 +168,7 @@ describe('school-attendance marking', () => {
     const id = marked.body.records[0].id as string;
 
     const patched = await request(app)
-      .patch(`/api/attendance/t1/records/${id}`)
+      .patch(`/api/attendance/t1/records/${id}`).set(staff('school_admin'))
       .send({ status: 'absent', actor: 't', reason_code_id: await sickCode() });
     expect(patched.status).toBe(200);
     expect(patched.body.status).toBe('absent');
@@ -175,7 +176,7 @@ describe('school-attendance marking', () => {
     const audits = await countAudits('t1', id);
     expect(audits).toBeGreaterThanOrEqual(1);
 
-    await request(app).put('/api/attendance/t1/settings').send({
+    await request(app).put('/api/attendance/t1/settings').set(staff('school_admin')).send({
       edit_window_minutes: 0,
     });
     // Force marked_at into the past so window is closed
@@ -185,7 +186,7 @@ describe('school-attendance marking', () => {
     );
 
     const closed = await request(app)
-      .patch(`/api/attendance/t1/records/${id}`)
+      .patch(`/api/attendance/t1/records/${id}`).set(staff('school_admin'))
       .send({ status: 'present', actor: 't' });
     expect(closed.status).toBe(409);
     expect(closed.body.error).toBe('window_closed');
@@ -193,7 +194,7 @@ describe('school-attendance marking', () => {
 
     publisher.events = [];
     const reg = await request(app)
-      .post(`/api/attendance/t1/records/${id}/regularize`)
+      .post(`/api/attendance/t1/records/${id}/regularize`).set(staff('school_admin'))
       .send({
         new_status: 'present',
         new_excuse: 'excused',
@@ -209,7 +210,7 @@ describe('school-attendance marking', () => {
   });
 
   it('returns register with unmarked and isolates tenants', async () => {
-    await request(app).post('/api/attendance/t1/mark').send({
+    await request(app).post('/api/attendance/t1/mark').set(staff('school_admin')).send({
       context: { date: '2025-08-11' },
       marks: [{ student_id: 's1', status: 'present' }],
       marked_by: 't',
@@ -217,15 +218,15 @@ describe('school-attendance marking', () => {
     });
 
     const reg = await request(app).get(
-      '/api/attendance/t1/register?date=2025-08-11&section=8A&student_ids=s1,s2',
-    );
+      '/api/attendance/t1/register?date=2025-08-11&section=8A&student_ids=s1,s2'
+    ).set(staff('school_admin'));
     expect(reg.status).toBe(200);
     expect(reg.body.register.s1.status).toBe('present');
     expect(reg.body.register.s2).toEqual({ status: 'unmarked' });
 
     const other = await request(app).get(
-      '/api/attendance/tenant-b/register?date=2025-08-11&student_ids=s1',
-    );
+      '/api/attendance/tenant-b/register?date=2025-08-11&student_ids=s1'
+    ).set(staff('school_admin'));
     expect(other.body.register.s1).toEqual({ status: 'unmarked' });
   });
 });

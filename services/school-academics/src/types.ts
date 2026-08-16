@@ -346,6 +346,19 @@ export interface SyllabusUnitImport {
   outcomeCodes?: string[];
 }
 
+/**
+ * Wire shape for P3-07 course import units (HTTP body + syllabus packs).
+ * Same fields the import endpoint accepts.
+ */
+export interface ImportUnit {
+  label: string;
+  planned_weeks: number;
+  planned_start_week?: number | null;
+  summary?: string | null;
+  topics: Array<{ label: string; estimated_periods?: number }>;
+  outcome_codes?: string[];
+}
+
 export interface SyllabusImportPayload {
   units: SyllabusUnitImport[];
   mode?: 'append' | 'replace';

@@ -7,11 +7,13 @@ import {
   createSchoolEngagementApp,
   type SchoolEngagementSqlite,
 } from '../src/index';
+import { SECRET, staff } from './helpers/auth';
 
 describe('school-engagement threads (P5-04)', () => {
   let app: Express;
   let db: SchoolEngagementSqlite;
   let clock: { now: Date };
+  const office = staff('office');
 
   beforeEach(async () => {
     clock = { now: new Date('2025-09-10T12:00:00.000Z') };
@@ -20,6 +22,7 @@ describe('school-engagement threads (P5-04)', () => {
       migrationsDir: path.resolve(__dirname, '../migrations'),
       logger: pino({ level: 'silent' }),
       clock: () => clock.now,
+      internalSecret: SECRET,
     });
     app = created.app;
     db = created.db;
@@ -30,19 +33,23 @@ describe('school-engagement threads (P5-04)', () => {
   });
 
   it('state flips on reply; reopen closed; assign', async () => {
-    const created = await request(app).post('/api/engagement/t1/threads').send({
-      guardian_ref: 'g1',
-      student_ref: 's1',
-      subject: 'Fees',
-      body: 'When is the due date?',
-      author: 'guardian:g1',
-    });
+    const created = await request(app)
+      .post('/api/engagement/t1/threads')
+      .set(office)
+      .send({
+        guardian_ref: 'g1',
+        student_ref: 's1',
+        subject: 'Fees',
+        body: 'When is the due date?',
+        author: 'guardian:g1',
+      });
     expect(created.status).toBe(201);
     expect(created.body.thread.state).toBe('waiting_school');
     const id = created.body.thread.id as string;
 
     const schoolReply = await request(app)
       .post(`/api/engagement/t1/threads/${id}/reply`)
+      .set(office)
       .send({
         direction: 'school',
         body: 'Due Friday.',
@@ -53,6 +60,7 @@ describe('school-engagement threads (P5-04)', () => {
 
     const guardianReply = await request(app)
       .post(`/api/engagement/t1/threads/${id}/reply`)
+      .set(office)
       .send({
         direction: 'guardian',
         body: 'Thanks.',
@@ -62,24 +70,30 @@ describe('school-engagement threads (P5-04)', () => {
 
     const assigned = await request(app)
       .post(`/api/engagement/t1/threads/${id}/assign`)
+      .set(office)
       .send({ assigned_to: 'staff-9' });
     expect(assigned.status).toBe(200);
     expect(assigned.body.assignedTo).toBe('staff-9');
 
-    const closed = await request(app).post(`/api/engagement/t1/threads/${id}/close`);
+    const closed = await request(app)
+      .post(`/api/engagement/t1/threads/${id}/close`)
+      .set(office);
     expect(closed.body.state).toBe('closed');
 
-    const reopen = await request(app).post(`/api/engagement/t1/threads/${id}/reply`).send({
-      direction: 'guardian',
-      body: 'One more question.',
-      author: 'guardian:g1',
-    });
+    const reopen = await request(app)
+      .post(`/api/engagement/t1/threads/${id}/reply`)
+      .set(office)
+      .send({
+        direction: 'guardian',
+        body: 'One more question.',
+        author: 'guardian:g1',
+      });
     expect(reopen.status).toBe(201);
     expect(reopen.body.thread.state).toBe('open');
   });
 
   it('SLA overdue list for waiting_school', async () => {
-    const a = await request(app).post('/api/engagement/t1/threads').send({
+    const a = await request(app).post('/api/engagement/t1/threads').set(office).send({
       guardian_ref: 'g1',
       student_ref: 's1',
       subject: 'Old',
@@ -89,7 +103,7 @@ describe('school-engagement threads (P5-04)', () => {
     expect(a.status).toBe(201);
 
     clock.now = new Date('2025-09-10T13:00:00.000Z');
-    const b = await request(app).post('/api/engagement/t1/threads').send({
+    const b = await request(app).post('/api/engagement/t1/threads').set(office).send({
       guardian_ref: 'g2',
       student_ref: 's2',
       subject: 'Fresh',
@@ -99,16 +113,16 @@ describe('school-engagement threads (P5-04)', () => {
     expect(b.status).toBe(201);
 
     clock.now = new Date('2025-09-11T13:00:00.000Z');
-    const overdue = await request(app).get(
-      '/api/engagement/t1/threads/overdue?hours=24',
-    );
+    const overdue = await request(app)
+      .get('/api/engagement/t1/threads/overdue?hours=24')
+      .set(office);
     expect(overdue.status).toBe(200);
     expect(overdue.body.threads).toHaveLength(1);
     expect(overdue.body.threads[0].id).toBe(a.body.thread.id);
   });
 
   it('translated_flag required when body_translated set', async () => {
-    const bad = await request(app).post('/api/engagement/t1/threads').send({
+    const bad = await request(app).post('/api/engagement/t1/threads').set(office).send({
       guardian_ref: 'g1',
       student_ref: 's1',
       subject: 'Lang',
@@ -119,7 +133,7 @@ describe('school-engagement threads (P5-04)', () => {
     });
     expect(bad.status).toBe(400);
 
-    const ok = await request(app).post('/api/engagement/t1/threads').send({
+    const ok = await request(app).post('/api/engagement/t1/threads').set(office).send({
       guardian_ref: 'g1',
       student_ref: 's1',
       subject: 'Lang',
@@ -134,19 +148,24 @@ describe('school-engagement threads (P5-04)', () => {
   });
 
   it('tenant isolation', async () => {
-    const created = await request(app).post('/api/engagement/t1/threads').send({
-      guardian_ref: 'g1',
-      student_ref: 's1',
-      subject: 'Private',
-      body: 'Secret',
-      author: 'g1',
-    });
+    const created = await request(app)
+      .post('/api/engagement/t1/threads')
+      .set(office)
+      .send({
+        guardian_ref: 'g1',
+        student_ref: 's1',
+        subject: 'Private',
+        body: 'Secret',
+        author: 'g1',
+      });
     const id = created.body.thread.id as string;
 
-    const otherList = await request(app).get('/api/engagement/t2/threads');
+    const otherList = await request(app).get('/api/engagement/t2/threads').set(office);
     expect(otherList.body.threads).toEqual([]);
 
-    const otherGet = await request(app).get(`/api/engagement/t2/threads/${id}`);
+    const otherGet = await request(app)
+      .get(`/api/engagement/t2/threads/${id}`)
+      .set(office);
     expect(otherGet.status).toBe(404);
   });
 });

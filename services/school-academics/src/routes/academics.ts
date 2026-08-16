@@ -1,5 +1,14 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import type { AcademicsService } from '../services/academics-service';
+import { resolveInternalSecret } from '../internal-auth';
+import {
+  assertTeacherMemberMatch,
+  guardRoutes,
+  type Role,
+} from '../role-guard';
+import { ACADEMICS_ROUTE_POLICIES } from '../route-policies';
+import type { TimetableClient } from '../clients/timetable-client';
+import { assertTeacherSectionScope } from '../teacher-scope';
 import type {
   CourseBoard,
   CreateCrosswalkInput,
@@ -19,6 +28,14 @@ import type {
   UnitOutcomeField,
 } from '../types';
 
+function staffOf(req: Request) {
+  return (
+    req as Request & {
+      staff?: { ok: true; role: Role; memberId: string };
+    }
+  ).staff;
+}
+
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
 ): (req: Request, res: Response, next: NextFunction) => void {
@@ -27,8 +44,123 @@ function asyncHandler(
   };
 }
 
-export function createAcademicsRouter(service: AcademicsService): Router {
+export function createAcademicsRouter(
+  service: AcademicsService,
+  opts: { internalSecret?: string; timetable?: TimetableClient } = {},
+): Router {
   const router = Router({ mergeParams: true });
+  const internalSecret = opts.internalSecret ?? resolveInternalSecret();
+  const timetable = opts.timetable;
+  guardRoutes(router, ACADEMICS_ROUTE_POLICIES, { internalSecret });
+  router.get(
+    '/packs',
+    asyncHandler(async (_req, res) => {
+      res.json({ packs: service.listPackSummaries() });
+    }),
+  );
+
+  router.get(
+    '/packs/:id',
+    asyncHandler(async (req, res) => {
+      const pack = service.getPack(req.params.id);
+      if (!pack) {
+        res.status(404).json({ error: 'pack not found' });
+        return;
+      }
+      res.json(pack);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/packs/installed',
+    asyncHandler(async (req, res) => {
+      const installed = await service.listInstalledPacks(req.params.tenantId);
+      res.json({ installed });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/packs/:packId/install',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const classes = Array.isArray(body.classes)
+        ? body.classes.map((c) => String(c))
+        : undefined;
+      const subjects = Array.isArray(body.subjects)
+        ? body.subjects.map((s) => String(s))
+        : undefined;
+      const result = await service.installPack(req.params.tenantId, req.params.packId, {
+        academicSessionId: String(body.academic_session_id ?? body.academicSessionId ?? ''),
+        installedBy: String(body.installed_by ?? body.installedBy ?? ''),
+        classes,
+        subjects,
+      });
+      if (result.error) {
+        res.status(result.status ?? 400).json({
+          error: result.error,
+          ...(result.errors ? { errors: result.errors } : {}),
+        });
+        return;
+      }
+      res.status(201).json({
+        courses_created: result.courses_created,
+        courses_skipped: result.courses_skipped,
+        installed_pack_id: result.installed_pack_id,
+      });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/syllabus/upload',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const filename = String(body.filename ?? '');
+      if (!/\.(xlsx|xls|csv)$/i.test(filename)) {
+        res.status(400).json({ error: 'filename must end with .xlsx, .xls, or .csv' });
+        return;
+      }
+      const classes = Array.isArray(body.classes)
+        ? body.classes.map((c) => String(c))
+        : undefined;
+      const importLessonPlans =
+        body.import_lesson_plans === undefined && body.importLessonPlans === undefined
+          ? undefined
+          : body.import_lesson_plans === true ||
+            body.importLessonPlans === true ||
+            body.import_lesson_plans === 'true' ||
+            body.importLessonPlans === 'true'
+            ? true
+            : body.import_lesson_plans === false ||
+                body.importLessonPlans === false ||
+                body.import_lesson_plans === 'false' ||
+                body.importLessonPlans === 'false'
+              ? false
+              : undefined;
+      const result = await service.uploadSyllabus(req.params.tenantId, {
+        contentBase64: String(body.contentBase64 ?? body.content_base64 ?? ''),
+        academicSessionId: String(body.academic_session_id ?? body.academicSessionId ?? ''),
+        installedBy: String(body.installed_by ?? body.installedBy ?? ''),
+        board: String(body.board ?? ''),
+        classes,
+        importLessonPlans,
+      });
+      if (result.error) {
+        res.status(result.status ?? 400).json({
+          error: result.error,
+          ...(result.errors ? { errors: result.errors } : {}),
+        });
+        return;
+      }
+      res.status(201).json({
+        courses_created: result.courses_created,
+        courses_skipped: result.courses_skipped,
+        classes_in_file: result.classes_in_file,
+        lessons_created: result.lessons_created,
+        lessons_skipped: result.lessons_skipped,
+        lesson_warnings: result.lesson_warnings,
+      });
+    }),
+  );
 
   router.get(
     '/:tenantId/outcomes',
@@ -503,14 +635,33 @@ export function createAcademicsRouter(service: AcademicsService): Router {
     '/:tenantId/delivery',
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
+      const teacherMemberId = String(
+        body.teacher_member_id ?? body.teacherMemberId ?? '',
+      );
+      const match = assertTeacherMemberMatch(req, teacherMemberId);
+      if (!('ok' in match)) {
+        res.status(match.status).json({ error: match.error });
+        return;
+      }
+      const sectionRef = String(body.section_ref ?? body.sectionRef ?? '');
+      if (timetable) {
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
       const result = await service.assertDelivery(req.params.tenantId, {
         topicId: String(body.topic_id ?? body.topicId ?? ''),
         periodInstanceId: String(
           body.period_instance_id ?? body.periodInstanceId ?? '',
         ),
-        sectionRef: String(body.section_ref ?? body.sectionRef ?? ''),
+        sectionRef,
         date: String(body.date ?? ''),
-        teacherMemberId: String(body.teacher_member_id ?? body.teacherMemberId ?? ''),
+        teacherMemberId,
       });
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
@@ -523,6 +674,24 @@ export function createAcademicsRouter(service: AcademicsService): Router {
   router.delete(
     '/:tenantId/delivery/:id',
     asyncHandler(async (req, res) => {
+      if (timetable) {
+        const existing = await service.getDelivery(
+          req.params.tenantId,
+          req.params.id,
+        );
+        if (existing.error) {
+          res.status(existing.error.status).json({ error: existing.error.error });
+          return;
+        }
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef: existing.delivery!.sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
       const result = await service.deleteDelivery(req.params.tenantId, req.params.id);
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
@@ -536,9 +705,17 @@ export function createAcademicsRouter(service: AcademicsService): Router {
     '/:tenantId/lessons/submit-week',
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
+      const teacherMemberId = String(
+        body.teacher_member_id ?? body.teacherMemberId ?? '',
+      );
+      const match = assertTeacherMemberMatch(req, teacherMemberId);
+      if (!('ok' in match)) {
+        res.status(match.status).json({ error: match.error });
+        return;
+      }
       const result = await service.submitWeek(
         req.params.tenantId,
-        String(body.teacher_member_id ?? body.teacherMemberId ?? ''),
+        teacherMemberId,
         String(body.week_start ?? body.weekStart ?? ''),
       );
       if (result.error) {
@@ -594,6 +771,14 @@ export function createAcademicsRouter(service: AcademicsService): Router {
     '/:tenantId/lessons',
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
+      const teacherMemberId = String(
+        body.teacher_member_id ?? body.teacherMemberId ?? '',
+      );
+      const match = assertTeacherMemberMatch(req, teacherMemberId);
+      if (!('ok' in match)) {
+        res.status(match.status).json({ error: match.error });
+        return;
+      }
       const result = await service.createLesson(req.params.tenantId, {
         courseId: String(body.course_id ?? body.courseId ?? ''),
         unitId: String(body.unit_id ?? body.unitId ?? ''),
@@ -603,7 +788,7 @@ export function createAcademicsRouter(service: AcademicsService): Router {
               ? null
               : String(body.topic_id ?? body.topicId)
             : null,
-        teacherMemberId: String(body.teacher_member_id ?? body.teacherMemberId ?? ''),
+        teacherMemberId,
         weekStart: String(body.week_start ?? body.weekStart ?? ''),
         title: String(body.title ?? ''),
         body: (body.body as LessonBody) ?? undefined,
@@ -629,13 +814,21 @@ export function createAcademicsRouter(service: AcademicsService): Router {
   router.get(
     '/:tenantId/lessons',
     asyncHandler(async (req, res) => {
+      const staff = staffOf(req);
+      let teacherMemberId:
+        | string
+        | undefined =
+        typeof req.query.teacher_member_id === 'string'
+          ? req.query.teacher_member_id
+          : typeof req.query.teacherMemberId === 'string'
+            ? req.query.teacherMemberId
+            : undefined;
+      // Teachers only see their own lessons (P12-04).
+      if (staff?.ok && staff.role === 'teacher') {
+        teacherMemberId = staff.memberId;
+      }
       const result = await service.listLessons(req.params.tenantId, {
-        teacherMemberId:
-          typeof req.query.teacher_member_id === 'string'
-            ? req.query.teacher_member_id
-            : typeof req.query.teacherMemberId === 'string'
-              ? req.query.teacherMemberId
-              : undefined,
+        teacherMemberId,
         weekStart:
           typeof req.query.week_start === 'string'
             ? req.query.week_start
@@ -669,6 +862,14 @@ export function createAcademicsRouter(service: AcademicsService): Router {
         res.status(result.error.status).json({ error: result.error.error });
         return;
       }
+      const match = assertTeacherMemberMatch(
+        req,
+        result.lesson!.teacherMemberId,
+      );
+      if (!('ok' in match)) {
+        res.status(match.status).json({ error: match.error });
+        return;
+      }
       res.json(result.lesson);
     }),
   );
@@ -676,6 +877,19 @@ export function createAcademicsRouter(service: AcademicsService): Router {
   router.patch(
     '/:tenantId/lessons/:id',
     asyncHandler(async (req, res) => {
+      const existing = await service.getLesson(req.params.tenantId, req.params.id);
+      if (existing.error) {
+        res.status(existing.error.status).json({ error: existing.error.error });
+        return;
+      }
+      const match = assertTeacherMemberMatch(
+        req,
+        existing.lesson!.teacherMemberId,
+      );
+      if (!('ok' in match)) {
+        res.status(match.status).json({ error: match.error });
+        return;
+      }
       const body = req.body as Record<string, unknown>;
       const input: PatchLessonInput = {};
       if (body.title !== undefined) input.title = String(body.title);
@@ -732,9 +946,20 @@ export function createAcademicsRouter(service: AcademicsService): Router {
         : Array.isArray(body.studentIds)
           ? body.studentIds.map((x) => String(x))
           : [];
+      const sectionRef = String(body.section_ref ?? body.sectionRef ?? '');
+      if (timetable) {
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
       const result = await service.createAssignment(req.params.tenantId, {
         courseId: String(body.course_id ?? body.courseId ?? ''),
-        sectionRef: String(body.section_ref ?? body.sectionRef ?? ''),
+        sectionRef,
         topicId:
           body.topic_id !== undefined || body.topicId !== undefined
             ? body.topic_id === null || body.topicId === null
@@ -845,6 +1070,29 @@ export function createAcademicsRouter(service: AcademicsService): Router {
   router.patch(
     '/:tenantId/submissions/:id/grade',
     asyncHandler(async (req, res) => {
+      if (timetable) {
+        const sub = await service.getSubmission(req.params.tenantId, req.params.id);
+        if (sub.error) {
+          res.status(sub.error.status).json({ error: sub.error.error });
+          return;
+        }
+        const asg = await service.getAssignment(
+          req.params.tenantId,
+          sub.submission!.assignmentId,
+        );
+        if (asg.error) {
+          res.status(asg.error.status).json({ error: asg.error.error });
+          return;
+        }
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef: asg.assignment!.sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
       const result = await service.gradeSubmission(
         req.params.tenantId,
         req.params.id,
@@ -861,6 +1109,29 @@ export function createAcademicsRouter(service: AcademicsService): Router {
   router.post(
     '/:tenantId/submissions/:id/return',
     asyncHandler(async (req, res) => {
+      if (timetable) {
+        const sub = await service.getSubmission(req.params.tenantId, req.params.id);
+        if (sub.error) {
+          res.status(sub.error.status).json({ error: sub.error.error });
+          return;
+        }
+        const asg = await service.getAssignment(
+          req.params.tenantId,
+          sub.submission!.assignmentId,
+        );
+        if (asg.error) {
+          res.status(asg.error.status).json({ error: asg.error.error });
+          return;
+        }
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef: asg.assignment!.sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
       const body = req.body as Record<string, unknown>;
       const result = await service.returnSubmission(
         req.params.tenantId,

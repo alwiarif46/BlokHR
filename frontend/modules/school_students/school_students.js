@@ -11,7 +11,7 @@
 import { api, getSchoolTenantId } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
 import { getSession } from '../../shared/session.js';
-import { registerModule } from '../../shared/router.js';
+import { navigateToModule, registerModule } from '../../shared/router.js';
 
 const PAGE_SIZE = 25;
 const STATUSES = ['enquiry', 'admitted', 'active', 'transferred', 'alumni', 'withdrawn'];
@@ -186,6 +186,7 @@ export function renderSchoolStudentsPage(container) {
     '</select>' +
     '<input class="ss-search" id="ssSectionFilter" placeholder="Section" style="min-width:90px">' +
     '<div class="ss-spacer"></div>' +
+    '<button type="button" class="ss-btn ghost" id="ssImportGoBtn" title="Open School Settings → Data Import">Import…</button>' +
     '<button type="button" class="ss-btn" id="ssNewBtn">+ Student</button>' +
     '</div>' +
     '<div class="ss-stats" id="ssStats"></div>' +
@@ -250,6 +251,13 @@ function _bindEvents(container) {
   if (newBtn) newBtn.addEventListener('click', function () {
     ssOpenStudentForm(null);
   });
+
+  const importGo = container.querySelector('#ssImportGoBtn');
+  if (importGo) {
+    importGo.addEventListener('click', function () {
+      navigateToModule('school_settings');
+    });
+  }
 
   const modal = container.querySelector('#ssModal');
   if (modal) {

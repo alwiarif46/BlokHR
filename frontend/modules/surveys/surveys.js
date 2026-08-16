@@ -5,6 +5,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
+import { confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { registerModule } from '../../shared/router.js';
 
@@ -638,7 +639,7 @@ export async function svDelete(idx) {
   if (!_isAdmin()) return;
   const item = _surveys[idx];
   if (!item) return;
-  if (!confirm('Delete this draft survey?')) return;
+  if (!(await confirmDialog({ message: 'Delete this draft survey?', confirmLabel: 'Delete', danger: true }))) return;
   const result = await api.delete('/api/surveys/' + item.id);
   if (result && !result._error) {
     toast('Deleted', 'success');

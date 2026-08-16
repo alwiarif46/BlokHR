@@ -225,12 +225,17 @@ describe('school_academics (F-05)', () => {
       const actual = await vi.importActual('../../shared/session.js');
       return {
         ...actual,
-        getSession: () => ({ email: 'teacher@school.test', name: 'Teacher' }),
+        getSession: () => ({
+          email: 'teacher@school.test',
+          name: 'Teacher',
+          schoolRole: 'school_admin',
+        }),
       };
     });
 
     vi.doMock('../../shared/router.js', () => ({
       registerModule: () => {},
+      navigateToModule: vi.fn(),
     }));
 
     mod = await import('../../modules/school_academics/school_academics.js');
@@ -249,6 +254,17 @@ describe('school_academics (F-05)', () => {
     expect(document.body.textContent).toMatch(/Cells/);
     expect(document.querySelector('.sac-chip .sac-field').textContent).toBe('A');
     expect(document.querySelector('.sac-chip .sac-depth').textContent).toBe('I');
+  });
+
+  it('shows empty units message when course has no units', () => {
+    mod.sacSetState({
+      courses: [course],
+      courseId: 'c1',
+      loadError: null,
+      tree: { id: 'c1', units: [] },
+    });
+    expect(document.getElementById('sacEmptyUnits')).toBeTruthy();
+    expect(document.getElementById('sacEmptyUnits').textContent).toMatch(/No units/);
   });
 
   it('reorders units via API', async () => {
@@ -355,5 +371,214 @@ describe('school_academics (F-05)', () => {
         review_note: 'Please add materials',
       }),
     );
+  });
+});
+
+describe('school_academics L6 teacher gates (P12-06)', () => {
+  /** @type {typeof import('../../modules/school_academics/school_academics.js')} */
+  let mod;
+  let acGet;
+
+  const course = {
+    id: 'c1',
+    label: 'Science 8',
+    subjectCode: 'Sc',
+    classLabel: '8',
+  };
+  const tree = {
+    id: 'c1',
+    units: [
+      {
+        id: 'u1',
+        label: 'Unit 1',
+        topics: [{ id: 't1', label: 'Cells' }],
+        outcomes: [{ outcomeId: 'o1', field: 'activity', depth: 'introduced' }],
+      },
+    ],
+  };
+
+  beforeEach(async () => {
+    vi.resetModules();
+    document.body.innerHTML = '<div id="toasts"></div><div id="root"></div>';
+    acGet = vi.fn(async (path) => {
+      if (path === '/courses') return { courses: [course] };
+      if (path === '/courses/c1/tree') return { ...tree };
+      if (path === '/outcomes') return { outcomes: [] };
+      if (path.startsWith('/lessons')) {
+        if (path.includes('state=submitted')) return { lessons: [{ id: 'x', title: 'R' }] };
+        return { lessons: [{ id: 'l1', title: 'My draft', state: 'draft', provenance: 'human' }] };
+      }
+      return {};
+    });
+    vi.doMock('../../shared/api.js', async () => {
+      const actual = await vi.importActual('../../shared/api.js');
+      return {
+        ...actual,
+        api: Object.assign(async () => null, {
+          get: vi.fn(),
+          school: (name) => {
+            if (name === 'school-academics') {
+              return {
+                get: acGet,
+                post: vi.fn(),
+                put: vi.fn(),
+                patch: vi.fn(),
+                del: vi.fn(),
+              };
+            }
+            return { get: vi.fn(), post: vi.fn(), put: vi.fn(), patch: vi.fn(), del: vi.fn() };
+          },
+        }),
+      };
+    });
+    vi.doMock('../../shared/toast.js', () => ({ toast: vi.fn(), setToastDuration: () => {} }));
+    vi.doMock('../../shared/session.js', async () => {
+      const actual = await vi.importActual('../../shared/session.js');
+      return {
+        ...actual,
+        getSession: () => ({ email: 'teacher@school.test', schoolRole: 'teacher' }),
+      };
+    });
+    vi.doMock('../../shared/router.js', () => ({
+      registerModule: () => {},
+      navigateToModule: vi.fn(),
+    }));
+    mod = await import('../../modules/school_academics/school_academics.js');
+    mod.renderSchoolAcademicsPage(document.getElementById('root'));
+    await vi.waitFor(() => {
+      expect(document.querySelector('.sac-tree-unit')).toBeTruthy();
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('hides course writes and review queue for teacher', async () => {
+    /* L6 cosmetic — enforced server-side by P12-04/05 */
+    expect(document.querySelector('[data-tag-unit]')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/Drag units/);
+    mod.sacSwitchTab('lessons');
+    await vi.waitFor(() => {
+      expect(document.getElementById('sacLessonList')).toBeTruthy();
+    });
+    expect(document.getElementById('sacReviewList')).toBeNull();
+    expect(document.body.textContent).toMatch(/My week/);
+    expect(document.body.textContent).not.toMatch(/Reviewer queue/);
+  });
+});
+
+describe('school_academics empty / service states', () => {
+  /** @type {typeof import('../../modules/school_academics/school_academics.js')} */
+  let mod;
+  let acGet;
+  let toastFn;
+  let navigateToModule;
+  let sessionUser;
+
+  async function boot(getImpl) {
+    vi.resetModules();
+    document.body.innerHTML = '<div id="toasts"></div><div id="root"></div>';
+    sessionStorage.clear();
+    sessionUser = { email: 'teacher@school.test', name: 'Teacher', is_admin: false, role: 'employee' };
+    acGet = vi.fn(getImpl);
+    toastFn = vi.fn();
+    navigateToModule = vi.fn();
+
+    vi.doMock('../../shared/api.js', async () => {
+      const actual = await vi.importActual('../../shared/api.js');
+      return {
+        ...actual,
+        api: Object.assign(async () => null, {
+          get: vi.fn(),
+          post: vi.fn(),
+          put: vi.fn(),
+          patch: vi.fn(),
+          delete: vi.fn(),
+          school: () => ({
+            get: acGet,
+            post: vi.fn(),
+            put: vi.fn(),
+            patch: vi.fn(),
+            del: vi.fn(),
+          }),
+        }),
+      };
+    });
+    vi.doMock('../../shared/toast.js', () => ({
+      toast: toastFn,
+      setToastDuration: () => {},
+    }));
+    vi.doMock('../../shared/session.js', async () => {
+      const actual = await vi.importActual('../../shared/session.js');
+      return {
+        ...actual,
+        getSession: () => sessionUser,
+      };
+    });
+    vi.doMock('../../shared/router.js', () => ({
+      registerModule: () => {},
+      navigateToModule,
+    }));
+
+    mod = await import('../../modules/school_academics/school_academics.js');
+    mod.renderSchoolAcademicsPage(document.getElementById('root'));
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    sessionStorage.clear();
+  });
+
+  it('shows unavailable panel on 502 / courses load error', async () => {
+    await boot(async (path) => {
+      if (path === '/courses') {
+        return {
+          _error: true,
+          status: 502,
+          message: 'upstream_unavailable',
+          error: 'upstream_unavailable',
+        };
+      }
+      return {};
+    });
+    await vi.waitFor(() => {
+      expect(document.getElementById('sacUnavailable')).toBeTruthy();
+    });
+    expect(document.getElementById('sacUnavailable').textContent).toMatch(/unavailable/i);
+    expect(document.getElementById('sacRetryBtn')).toBeTruthy();
+    expect(toastFn).toHaveBeenCalled();
+  });
+
+  it('shows no-syllabus copy for employees without install CTA', async () => {
+    await boot(async (path) => {
+      if (path === '/courses') return { courses: [] };
+      return {};
+    });
+    await vi.waitFor(() => {
+      expect(document.getElementById('sacNoCourses')).toBeTruthy();
+    });
+    expect(document.getElementById('sacNoCourses').textContent).toMatch(/Ask an admin/);
+    expect(document.getElementById('sacInstallSyllabusBtn')).toBeFalsy();
+  });
+
+  it('admin no-syllabus CTA opens School Settings syllabus tab', async () => {
+    await boot(async (path) => {
+      if (path === '/courses') return { courses: [] };
+      return {};
+    });
+    sessionUser = {
+      email: 'admin@school.test',
+      name: 'Admin',
+      is_admin: true,
+      role: 'admin',
+    };
+    mod.sacSetState({ courses: [], loadError: null });
+    await vi.waitFor(() => {
+      expect(document.getElementById('sacInstallSyllabusBtn')).toBeTruthy();
+    });
+    document.getElementById('sacInstallSyllabusBtn').click();
+    expect(sessionStorage.getItem('scs_open_tab')).toBe('syllabus');
+    expect(navigateToModule).toHaveBeenCalledWith('school_settings');
   });
 });

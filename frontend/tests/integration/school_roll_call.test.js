@@ -181,18 +181,49 @@ describe('school_roll_call (F-03)', () => {
           total: 3,
         };
       }
-      return {};
-    });
-
-    schoolPost = vi.fn(async (path) => {
-      if (path === '/mark') {
-        if (markFail) return { _error: true, status: 500, message: 'upstream down' };
-        return { records: [], replayed: false };
+      if (path.startsWith('/diary?')) {
+        return {
+          entries: [
+            {
+              id: 'de1',
+              kind: 'homework',
+              body: 'Read ch 3',
+              acks: 12,
+              studentRef: null,
+            },
+          ],
+        };
       }
       return {};
     });
 
-    schoolPatch = vi.fn(async () => ({ id: 'inst-1', status: 'held' }));
+    schoolPost = vi.fn(async (path, body) => {
+      if (path === '/mark') {
+        if (markFail) return { _error: true, status: 500, message: 'upstream down' };
+        return { records: [], replayed: false };
+      }
+      if (path === '/diary') {
+        return {
+          id: 'de-new',
+          kind: body.kind,
+          body: body.body,
+          sectionRef: body.section_ref,
+          studentRef: body.student_ref || null,
+          acks: 0,
+        };
+      }
+      return {};
+    });
+
+    schoolPatch = vi.fn(async (path, body) => {
+      if (String(path).startsWith('/diary/')) {
+        if (body && body._forceEditWindowClosed) {
+          return { _error: true, status: 403, error: 'edit_window_closed', message: 'edit_window_closed' };
+        }
+        return { id: String(path).split('/').pop(), kind: body.kind, body: body.body, acks: 0 };
+      }
+      return { id: 'inst-1', status: 'held' };
+    });
     savePrefs = vi.fn(async () => true);
     toastFn = vi.fn();
 
@@ -446,5 +477,90 @@ describe('school_roll_call (F-03)', () => {
       expect.objectContaining({ status: 'held' }),
     );
     expect(toastFn).toHaveBeenCalledWith('Saved ✓', 'success');
+  });
+
+  it('diary view toggle preserves section context', async () => {
+    const before = mod.rcGetState().periodId;
+    expect(before).toBe('inst-1');
+    mod.rcSwitchMode('diary');
+    await vi.waitFor(() => {
+      expect(document.getElementById('rcDiary').hidden).toBe(false);
+      expect(document.getElementById('rcModeDiary').classList.contains('active')).toBe(true);
+    });
+    expect(mod.rcGetState().periodId).toBe(before);
+    expect(mod.rcGetState().sectionRef).toBe('5|A');
+    expect(document.getElementById('rcDiary').textContent).toContain('Seen by 12');
+    mod.rcSwitchMode('rollcall');
+    expect(document.getElementById('rcDiary').hidden).toBe(true);
+    expect(mod.rcGetState().periodId).toBe(before);
+  });
+
+  it('diary whole-class vs targeted compose payloads', async () => {
+    mod.rcSwitchMode('diary');
+    await vi.waitFor(() => expect(document.getElementById('rcDiaryForm')).toBeTruthy());
+    mod.rcSetState({ diaryBody: 'Homework for all', diaryKind: 'homework', diaryTargets: [] });
+    await mod.rcDiarySubmit();
+    expect(schoolPost).toHaveBeenCalledWith(
+      '/diary',
+      expect.objectContaining({
+        section_ref: '5|A',
+        kind: 'homework',
+        body: 'Homework for all',
+      }),
+    );
+    const lastClass = schoolPost.mock.calls.filter((c) => c[0] === '/diary').pop();
+    expect(lastClass[1].student_ref).toBeUndefined();
+
+    mod.rcSetState({
+      diaryBody: 'Just Asha',
+      diaryKind: 'remark',
+      diaryTargets: ['s1'],
+      diaryTargetMode: true,
+    });
+    await mod.rcDiarySubmit();
+    expect(schoolPost).toHaveBeenCalledWith(
+      '/diary',
+      expect.objectContaining({
+        section_ref: '5|A',
+        student_ref: 's1',
+        body: 'Just Asha',
+      }),
+    );
+  });
+
+  it('diary char limit and edit-window 403 surfacing', async () => {
+    mod.rcSwitchMode('diary');
+    mod.rcSetState({ diaryBody: 'x'.repeat(2001), diaryKind: 'note' });
+    await mod.rcDiarySubmit();
+    expect(toastFn).toHaveBeenCalledWith('Body must be ≤2000 characters', 'error');
+
+    schoolPatch.mockImplementationOnce(async () => ({
+      _error: true,
+      status: 403,
+      error: 'edit_window_closed',
+      message: 'edit_window_closed',
+    }));
+    mod.rcSetState({ diaryEditId: 'de1', diaryBody: 'late edit', diaryKind: 'note' });
+    await mod.rcDiarySubmit();
+    expect(toastFn).toHaveBeenCalledWith('Editing window closed', 'error');
+  });
+
+  it('offline disables diary compose; posts never touch IndexedDB', async () => {
+    const before = await queue.countPending('tenant-t');
+    mod.rcSwitchMode('diary');
+    mod.rcSetState({ diaryOnline: false, diaryBody: 'offline try' });
+    await vi.waitFor(() => {
+      expect(document.getElementById('rcDiaryPost').disabled).toBe(true);
+      expect(document.querySelector('.rc-diary-offline')).toBeTruthy();
+    });
+    await mod.rcDiarySubmit();
+    expect(toastFn).toHaveBeenCalledWith('Diary needs a connection', 'error');
+    expect(schoolPost.mock.calls.some((c) => c[0] === '/diary')).toBe(false);
+    expect(await queue.countPending('tenant-t')).toBe(before);
+
+    mod.rcSetState({ diaryOnline: true, diaryBody: 'online ok', diaryTargets: [] });
+    await mod.rcDiarySubmit();
+    expect(schoolPost).toHaveBeenCalledWith('/diary', expect.objectContaining({ body: 'online ok' }));
+    expect(await queue.countPending('tenant-t')).toBe(before);
   });
 });

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
+import { staff } from './helpers/auth';
 import pino from 'pino';
 import path from 'path';
 import type { Express } from 'express';
@@ -27,13 +28,13 @@ describe('school-assessment exams (P4-01)', () => {
   });
 
   it('health ok', async () => {
-    const res = await request(app).get('/health');
+    const res = await request(app).get('/health').set(staff('school_admin'));
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
   });
 
   it('exam term and exam CRUD', async () => {
-    const term = await request(app).post('/api/assessment/t1/exam-terms').send({
+    const term = await request(app).post('/api/assessment/t1/exam-terms').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       label: 'PT1',
       starts_on: '2025-07-01',
@@ -46,16 +47,16 @@ describe('school-assessment exams (P4-01)', () => {
 
     const listed = await request(app).get(
       '/api/assessment/t1/exam-terms?academic_session_id=ay-2025',
-    );
+    ).set(staff('school_admin'));
     expect(listed.body.terms).toHaveLength(1);
 
     const patched = await request(app)
-      .patch(`/api/assessment/t1/exam-terms/${term.body.id}`)
+      .patch(`/api/assessment/t1/exam-terms/${term.body.id}`).set(staff('school_admin'))
       .send({ weightage_pct: 25 });
     expect(patched.status).toBe(200);
     expect(patched.body.weightagePct).toBe(25);
 
-    const exam = await request(app).post('/api/assessment/t1/exams').send({
+    const exam = await request(app).post('/api/assessment/t1/exams').set(staff('school_admin')).send({
       exam_term_id: term.body.id,
       course_ref: 'course-1',
       section_ref: '8A',
@@ -70,7 +71,7 @@ describe('school-assessment exams (P4-01)', () => {
     expect(exam.body.kind).toBe('formative');
 
     const examPatch = await request(app)
-      .patch(`/api/assessment/t1/exams/${exam.body.id}`)
+      .patch(`/api/assessment/t1/exams/${exam.body.id}`).set(staff('school_admin'))
       .send({ max_marks: 50, kind: 'summative' });
     expect(examPatch.status).toBe(200);
     expect(examPatch.body.maxMarks).toBe(50);
@@ -78,20 +79,20 @@ describe('school-assessment exams (P4-01)', () => {
 
     const exams = await request(app).get(
       `/api/assessment/t1/exams?exam_term_id=${term.body.id}`,
-    );
+    ).set(staff('school_admin'));
     expect(exams.body.exams).toHaveLength(1);
 
-    const delExam = await request(app).delete(`/api/assessment/t1/exams/${exam.body.id}`);
+    const delExam = await request(app).delete(`/api/assessment/t1/exams/${exam.body.id}`).set(staff('school_admin'));
     expect(delExam.status).toBe(204);
 
     const delTerm = await request(app).delete(
       `/api/assessment/t1/exam-terms/${term.body.id}`,
-    );
+    ).set(staff('school_admin'));
     expect(delTerm.status).toBe(204);
   });
 
   it('enforces session weightage_pct sum ≤ 100', async () => {
-    const a = await request(app).post('/api/assessment/t1/exam-terms').send({
+    const a = await request(app).post('/api/assessment/t1/exam-terms').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       label: 'PT1',
       starts_on: '2025-07-01',
@@ -100,7 +101,7 @@ describe('school-assessment exams (P4-01)', () => {
     });
     expect(a.status).toBe(201);
 
-    const b = await request(app).post('/api/assessment/t1/exam-terms').send({
+    const b = await request(app).post('/api/assessment/t1/exam-terms').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       label: 'HY',
       starts_on: '2025-09-01',
@@ -110,7 +111,7 @@ describe('school-assessment exams (P4-01)', () => {
     expect(b.status).toBe(400);
     expect(b.body.error).toMatch(/weightage/i);
 
-    const ok = await request(app).post('/api/assessment/t1/exam-terms').send({
+    const ok = await request(app).post('/api/assessment/t1/exam-terms').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       label: 'HY',
       starts_on: '2025-09-01',
@@ -120,20 +121,20 @@ describe('school-assessment exams (P4-01)', () => {
     expect(ok.status).toBe(201);
 
     const breachPatch = await request(app)
-      .patch(`/api/assessment/t1/exam-terms/${ok.body.id}`)
+      .patch(`/api/assessment/t1/exam-terms/${ok.body.id}`).set(staff('school_admin'))
       .send({ weightage_pct: 50 });
     expect(breachPatch.status).toBe(400);
   });
 
   it('tenant isolation', async () => {
-    const term = await request(app).post('/api/assessment/t1/exam-terms').send({
+    const term = await request(app).post('/api/assessment/t1/exam-terms').set(staff('school_admin')).send({
       academic_session_id: 'ay-2025',
       label: 'Annual',
       starts_on: '2026-02-01',
       ends_on: '2026-03-15',
       weightage_pct: 50,
     });
-    const exam = await request(app).post('/api/assessment/t1/exams').send({
+    const exam = await request(app).post('/api/assessment/t1/exams').set(staff('school_admin')).send({
       exam_term_id: term.body.id,
       course_ref: 'c1',
       section_ref: '8A',
@@ -144,10 +145,10 @@ describe('school-assessment exams (P4-01)', () => {
       kind: 'summative',
     });
 
-    expect((await request(app).get(`/api/assessment/t2/exam-terms/${term.body.id}`)).status).toBe(
+    expect((await request(app).get(`/api/assessment/t2/exam-terms/${term.body.id}`).set(staff('school_admin'))).status).toBe(
       404,
     );
-    expect((await request(app).get(`/api/assessment/t2/exams/${exam.body.id}`)).status).toBe(
+    expect((await request(app).get(`/api/assessment/t2/exams/${exam.body.id}`).set(staff('school_admin'))).status).toBe(
       404,
     );
   });

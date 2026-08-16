@@ -3,6 +3,10 @@ import type { FeesService } from '../services/fees-service';
 import type { InvoiceService } from '../services/invoice-service';
 import type { PaymentService } from '../services/payment-service';
 import type { ConcessionKind, FeeHeadKind, FeePayer, PaymentMethod } from '../types';
+import { resolveInternalSecret } from '../internal-auth';
+import { guardRoutes } from '../role-guard';
+import { FEES_ROUTE_POLICIES } from '../route-policies';
+
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -16,9 +20,11 @@ export function createFeesRouter(
   service: FeesService,
   invoices: InvoiceService,
   payments: PaymentService,
+  opts: { internalSecret?: string } = {},
 ): Router {
   const router = Router({ mergeParams: true });
-
+  const internalSecret = opts.internalSecret ?? resolveInternalSecret();
+  guardRoutes(router, FEES_ROUTE_POLICIES, { internalSecret });
   router.post(
     '/:tenantId/heads',
     asyncHandler(async (req, res) => {

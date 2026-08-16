@@ -24,15 +24,19 @@ npm install
 npm run dev:school
 ```
 
-That boots four processes via `concurrently`:
+That boots the school stack via `concurrently`:
 
 | Prefix | Process | Default port |
 |--------|---------|--------------|
 | `monolith` | `backend` | 3000 |
 | `identity` | `services/school-identity` | 3011 |
 | `timetable` | `services/school-timetable` | 3012 |
+| `academics` | `services/school-academics` | 3014 |
+| `surveys` | `services/school-surveys` | 3022 |
 | `gateway` | `services/gateway` | 8080 |
 
-Open **http://localhost:8080** — everything is proxied; add services to the script as P2+ land.
+Open **http://127.0.0.1:8080** — everything is proxied; add services to the script as further domains land.
+
+**Academics:** Curriculum needs courses. After the stack is up, sign in as admin → **School Settings → Syllabus Packs** → install a sample pack (or upload a custom syllabus). Then **Academics** shows the course tree.
 
 The gateway serves `frontend/shell.html`, proxies `/api/*` (and SSE at `/api/sse/stream`) to the monolith, and `/svc/<service>/*` to school microservices. Set a real `INTERNAL_SECRET` in production; the script uses a local-only default.

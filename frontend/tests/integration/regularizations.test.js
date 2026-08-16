@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { answerPrompt } from '../helpers/dialog.js';
 
 describe('regularizations module', () => {
   /** @type {typeof import('../../modules/regularizations/regularizations.js')} */
@@ -161,7 +162,6 @@ describe('regularizations module', () => {
   });
 
   it('reject sends comments not reason', async () => {
-    vi.stubGlobal('prompt', () => 'Incomplete evidence');
     mod.renderRegularizationsPage(document.getElementById('root'));
     await vi.waitFor(() => expect(apiGet).toHaveBeenCalled());
 
@@ -169,11 +169,11 @@ describe('regularizations module', () => {
     await vi.waitFor(() => expect(document.querySelector('[data-reg-action="reject"]')).toBeTruthy());
 
     document.querySelector('[data-reg-action="reject"][data-reg-id="r1"]').click();
+    await answerPrompt('Incomplete evidence');
     await vi.waitFor(() => {
       expect(apiPut).toHaveBeenCalledWith('/api/regularizations/r1/reject', {
         comments: 'Incomplete evidence',
       });
     });
-    vi.unstubAllGlobals();
   });
 });

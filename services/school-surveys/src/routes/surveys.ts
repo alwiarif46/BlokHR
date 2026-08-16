@@ -4,6 +4,9 @@ import {
   parseStudentsHeader,
 } from '../internal-auth';
 import type { SurveysService } from '../services/surveys-service';
+import { guardRoutes } from '../role-guard';
+import { SURVEYS_ROUTE_POLICIES } from '../route-policies';
+
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -18,7 +21,7 @@ export function createSurveysRouter(
   internalSecret: string,
 ): Router {
   const router = Router({ mergeParams: true });
-
+  guardRoutes(router, SURVEYS_ROUTE_POLICIES, { internalSecret });
   // Guardian routes BEFORE /:tenantId/:id so "guardian" is not an id
   router.get(
     '/:tenantId/guardian/pending',

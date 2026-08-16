@@ -2,7 +2,29 @@ import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import { AppError, asyncHandler } from '../app';
-import { FeatureFlagService } from '../services/feature-flags';
+import { FeatureFlagService, type FeatureFlag } from '../services/feature-flags';
+import { TenantSettingsService } from '../services/tenant-settings-service';
+
+/**
+ * Synthetic flag the shell uses to gate the school module group. It is derived
+ * from the tenant vertical rather than stored, because the vertical is chosen
+ * once at setup and is immutable — an independently toggleable flag would let
+ * the two disagree.
+ */
+export const SCHOOL_VERTICAL_FLAG = 'school_vertical';
+
+function schoolVerticalFlag(enabled: boolean): FeatureFlag {
+  return {
+    key: SCHOOL_VERTICAL_FLAG,
+    enabled,
+    label: 'School vertical',
+    description: 'Derived from the tenant vertical; not directly toggleable.',
+    category: 'vertical',
+    adminOnly: false,
+    updatedBy: 'system',
+    updatedAt: '',
+  };
+}
 
 /**
  * Feature Flags routes:
@@ -13,10 +35,17 @@ import { FeatureFlagService } from '../services/feature-flags';
  */
 export function createFeatureFlagsRouter(
   featureFlags: FeatureFlagService,
-  _logger: Logger,
+  logger: Logger,
   db?: DatabaseEngine,
+  tenantSettings?: TenantSettingsService,
 ): Router {
   const router = Router();
+  const tenants = tenantSettings ?? (db ? new TenantSettingsService(db, logger) : null);
+
+  async function isSchoolVertical(): Promise<boolean> {
+    if (!tenants) return false;
+    return (await tenants.getVertical()) === 'school';
+  }
 
   router.get(
     '/features',
@@ -24,7 +53,7 @@ export function createFeatureFlagsRouter(
       // Backward compat: ?all=true returns all flags (original behavior)
       if (req.query.all === 'true') {
         const flags = await featureFlags.getAll();
-        res.json({ features: flags });
+        res.json({ features: [...flags, schoolVerticalFlag(await isSchoolVertical())] });
         return;
       }
       const callerEmail = req.identity?.email ?? '';
@@ -34,7 +63,7 @@ export function createFeatureFlagsRouter(
         isAdmin = !!admin;
       }
       const flags = await featureFlags.getForUser(isAdmin);
-      res.json({ features: flags });
+      res.json({ features: [...flags, schoolVerticalFlag(await isSchoolVertical())] });
     }),
   );
 
@@ -52,6 +81,9 @@ export function createFeatureFlagsRouter(
       const body = req.body as Record<string, unknown>;
       const enabled = body.enabled;
       if (typeof enabled !== 'boolean') throw new AppError('enabled (boolean) is required', 400);
+      if (req.params.key === SCHOOL_VERTICAL_FLAG) {
+        throw new AppError('school_vertical is derived from the tenant vertical', 400);
+      }
       const updatedBy = req.identity?.email ?? ((body.email as string) ?? '').toLowerCase().trim();
       if (!updatedBy) throw new AppError('email is required', 400);
 
@@ -74,6 +106,9 @@ export function createFeatureFlagsRouter(
       const updates = body.updates as Array<{ key: string; enabled: boolean }> | undefined;
       if (!Array.isArray(updates) || updates.length === 0) {
         throw new AppError('updates array is required', 400);
+      }
+      if (updates.some(u => u.key === SCHOOL_VERTICAL_FLAG)) {
+        throw new AppError('school_vertical is derived from the tenant vertical', 400);
       }
       const updatedBy = req.identity?.email ?? ((body.email as string) ?? '').toLowerCase().trim();
       if (!updatedBy) throw new AppError('email is required', 400);
