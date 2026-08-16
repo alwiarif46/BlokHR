@@ -4,26 +4,49 @@ import type {
   TimesheetRepository,
   TimesheetRow,
   TimesheetEntryRow,
+  TimesheetAdjustmentRow,
   AttendanceDayRow,
   LeaveAggRow,
   HolidayAggRow,
 } from '../repositories/timesheet-repository';
 import type { EventBus } from '../events';
+import type { NotificationDispatcher } from './notification/dispatcher';
 
 export interface TimesheetDetail {
   timesheet: TimesheetRow;
   entries: TimesheetEntryRow[];
+  adjustments: TimesheetAdjustmentRow[];
+}
+
+export interface TimesheetWithEntries extends TimesheetRow {
+  entries: TimesheetEntryRow[];
+}
+
+export interface WeekView {
+  startDate: string;
+  endDate: string;
+  timesheets: TimesheetWithEntries[];
 }
 
 export interface GenerateResult {
   success: boolean;
   timesheet?: TimesheetRow;
   error?: string;
+  statusCode?: number;
+}
+
+export interface TeamGenerateResult {
+  success: boolean;
+  error?: string;
+  statusCode?: number;
+  generated: string[];
+  skipped: Array<{ email: string; reason: string }>;
 }
 
 export interface ActionResult {
   success: boolean;
   error?: string;
+  statusCode?: number;
 }
 
 /** Build a YYYY-MM-DD string from a Date (UTC). */
@@ -81,11 +104,20 @@ function checkLeaveCoverage(
   return { covered: false, leaveType: '', leaveDays: 0 };
 }
 
+/** Monday of the week containing dateStr, as YYYY-MM-DD. */
+function mondayOf(dateStr: string): string {
+  const d = parseDate(dateStr);
+  const dow = d.getUTCDay();
+  d.setUTCDate(d.getUTCDate() - ((dow + 6) % 7));
+  return toDateStr(d);
+}
+
 export class TimesheetService {
   constructor(
     private readonly repo: TimesheetRepository,
     private readonly logger: Logger,
     private readonly eventBus?: EventBus,
+    private readonly dispatcher?: NotificationDispatcher | null,
   ) {}
 
   /**
@@ -172,6 +204,9 @@ export class TimesheetService {
       return { success: false, error: `Cannot regenerate a timesheet in ${ts.status} status` };
     }
 
+    // Admin overrides survive a refresh of the derived data
+    const preserved = await this.repo.getAdjustedEntries(id);
+
     // Delete old entries and rebuild
     await this.repo.deleteEntries(id);
 
@@ -185,8 +220,21 @@ export class TimesheetService {
     });
     await this.repo.insertEntries(entries);
 
+    for (const adj of preserved) {
+      await this.repo.setAdjustment(id, adj.date, {
+        adjustedMinutes: adj.adjustedMinutes,
+        reason: adj.reason,
+        adjustedBy: adj.adjustedBy,
+        adjustedAt: adj.adjustedAt ?? new Date().toISOString(),
+      });
+    }
+    if (preserved.length > 0) await this.repo.recomputeWorkedTotal(id);
+
     const updated = await this.repo.getById(id);
-    this.logger.info({ timesheetId: id }, 'Timesheet regenerated');
+    this.logger.info(
+      { timesheetId: id, preservedAdjustments: preserved.length },
+      'Timesheet regenerated',
+    );
     return { success: true, timesheet: updated ?? undefined };
   }
 
@@ -205,6 +253,9 @@ export class TimesheetService {
     await this.repo.updateStatus(id, 'submitted', { submittedAt: now });
     this.logger.info({ timesheetId: id, email: ts.email }, 'Timesheet submitted');
     this.eventBus?.emit('timesheet.submitted', { timesheetId: id, email: ts.email, periodType: ts.period_type, startDate: ts.start_date, endDate: ts.end_date });
+    this.notifyApprover(ts).catch((err) => {
+      this.logger.error({ err, timesheetId: id }, 'Approver notification failed');
+    });
     return { success: true };
   }
 
@@ -214,6 +265,14 @@ export class TimesheetService {
     if (!ts) return { success: false, error: 'Timesheet not found' };
     if (ts.status !== 'submitted') {
       return { success: false, error: `Cannot approve a timesheet in ${ts.status} status` };
+    }
+    const allowed = await this.canApprove(approverEmail, ts.email);
+    if (!allowed) {
+      return {
+        success: false,
+        error: 'Only a manager, HR, or an admin can approve this timesheet',
+        statusCode: 403,
+      };
     }
 
     const now = new Date().toISOString();
@@ -226,6 +285,9 @@ export class TimesheetService {
       'Timesheet approved',
     );
     this.eventBus?.emit('timesheet.approved', { timesheetId: id, email: ts.email, periodType: ts.period_type, startDate: ts.start_date, endDate: ts.end_date, approverEmail });
+    this.notifyOwner(ts, 'approved').catch((err) => {
+      this.logger.error({ err, timesheetId: id }, 'Owner notification failed');
+    });
     return { success: true };
   }
 
@@ -235,6 +297,14 @@ export class TimesheetService {
     if (!ts) return { success: false, error: 'Timesheet not found' };
     if (ts.status !== 'submitted') {
       return { success: false, error: `Cannot reject a timesheet in ${ts.status} status` };
+    }
+    const allowed = await this.canApprove(rejectorEmail, ts.email);
+    if (!allowed) {
+      return {
+        success: false,
+        error: 'Only a manager, HR, or an admin can reject this timesheet',
+        statusCode: 403,
+      };
     }
 
     const now = new Date().toISOString();
@@ -248,15 +318,21 @@ export class TimesheetService {
       'Timesheet rejected',
     );
     this.eventBus?.emit('timesheet.rejected', { timesheetId: id, email: ts.email, periodType: ts.period_type, startDate: ts.start_date, endDate: ts.end_date, approverEmail: rejectorEmail, reason });
+    this.notifyOwner(ts, 'rejected', reason).catch((err) => {
+      this.logger.error({ err, timesheetId: id }, 'Owner notification failed');
+    });
     return { success: true };
   }
 
-  /** Get a timesheet with all its daily entries. */
+  /** Get a timesheet with all its daily entries and its adjustment trail. */
   async getDetail(id: string): Promise<TimesheetDetail | null> {
     const timesheet = await this.repo.getById(id);
     if (!timesheet) return null;
-    const entries = await this.repo.getEntries(id);
-    return { timesheet, entries };
+    const [entries, adjustments] = await Promise.all([
+      this.repo.getEntries(id),
+      this.repo.listAdjustments(id),
+    ]);
+    return { timesheet, entries, adjustments };
   }
 
   /** List timesheets with optional filters. */
@@ -268,6 +344,257 @@ export class TimesheetService {
     endDate?: string;
   }): Promise<TimesheetRow[]> {
     return this.repo.list(filters);
+  }
+
+  // ── Week view ──
+
+  /**
+   * Weekly grid data: every weekly timesheet starting on the given Monday,
+   * each with its seven daily entries attached.
+   */
+  async getWeek(startDate: string, filters: { email?: string } = {}): Promise<WeekView | null> {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) return null;
+    const monday = mondayOf(startDate);
+    const endD = parseDate(monday);
+    endD.setUTCDate(endD.getUTCDate() + 6);
+    const endDate = toDateStr(endD);
+
+    const timesheets = await this.repo.list({
+      periodType: 'weekly',
+      startDate: monday,
+      endDate,
+      email: filters.email,
+    });
+
+    const entries = await this.repo.getEntriesForTimesheetIds(timesheets.map((t) => t.id));
+    const byTimesheet = new Map<string, TimesheetEntryRow[]>();
+    for (const e of entries) {
+      const list = byTimesheet.get(e.timesheet_id) ?? [];
+      list.push(e);
+      byTimesheet.set(e.timesheet_id, list);
+    }
+
+    return {
+      startDate: monday,
+      endDate,
+      timesheets: timesheets.map((t) => ({ ...t, entries: byTimesheet.get(t.id) ?? [] })),
+    };
+  }
+
+  /** Submitted timesheets the actor is allowed to approve. */
+  async listPendingApprovals(actorEmail: string): Promise<TimesheetRow[]> {
+    const submitted = await this.repo.list({ status: 'submitted' });
+    const allowed: TimesheetRow[] = [];
+    for (const ts of submitted) {
+      if (ts.email === actorEmail) continue;
+      if (await this.canApprove(actorEmail, ts.email)) allowed.push(ts);
+    }
+    return allowed;
+  }
+
+  // ── Team generation ──
+
+  /**
+   * Generate weekly timesheets for the whole roster (or an explicit subset).
+   * Already-generated members are skipped rather than failing the batch.
+   */
+  async generateTeam(
+    periodType: string,
+    startDate: string,
+    emails?: string[],
+  ): Promise<TeamGenerateResult> {
+    const roster =
+      emails && emails.length > 0
+        ? emails.map((e) => e.toLowerCase().trim()).filter(Boolean)
+        : await this.repo.listActiveMemberEmails();
+
+    if (roster.length === 0) {
+      return { success: false, error: 'No active members to generate for', generated: [], skipped: [] };
+    }
+
+    const generated: string[] = [];
+    const skipped: Array<{ email: string; reason: string }> = [];
+
+    for (const email of roster) {
+      const result = await this.generate(email, periodType, startDate);
+      if (result.success) {
+        generated.push(email);
+      } else {
+        skipped.push({ email, reason: result.error ?? 'Generation failed' });
+      }
+    }
+
+    // Every member failing for the same structural reason (bad period) is a request error
+    if (generated.length === 0 && skipped.length > 0) {
+      const first = skipped[0].reason;
+      const structural =
+        first.includes('must be a Monday') ||
+        first.includes('must be the 1st') ||
+        first.includes('periodType must be') ||
+        first.includes('startDate must be');
+      if (structural) return { success: false, error: first, generated, skipped };
+    }
+
+    this.logger.info(
+      { periodType, startDate, generated: generated.length, skipped: skipped.length },
+      'Team timesheets generated',
+    );
+    return { success: true, generated, skipped };
+  }
+
+  // ── Day adjustments ──
+
+  /**
+   * Override a single day's worked hours. Derived data is left intact; the
+   * override, its reason, and the previous value are all recorded.
+   */
+  async adjustDay(
+    id: string,
+    date: string,
+    hours: number,
+    reason: string,
+    actorEmail: string,
+  ): Promise<ActionResult> {
+    if (!(await this.repo.isAdmin(actorEmail))) {
+      return { success: false, error: 'Admin access required', statusCode: 403 };
+    }
+    if (!Number.isFinite(hours) || hours < 0 || hours > 24) {
+      return { success: false, error: 'hours must be between 0 and 24' };
+    }
+    if (!reason.trim()) {
+      return { success: false, error: 'A reason is required for an adjustment' };
+    }
+
+    const ts = await this.repo.getById(id);
+    if (!ts) return { success: false, error: 'Timesheet not found', statusCode: 404 };
+    if (ts.status === 'approved') {
+      return { success: false, error: 'Cannot adjust an approved timesheet' };
+    }
+
+    const entry = await this.repo.getEntryByDate(id, date);
+    if (!entry) return { success: false, error: 'No entry for that date', statusCode: 404 };
+
+    const previousMinutes = entry.adjusted_minutes ?? entry.worked_minutes;
+    const newMinutes = hours * 60;
+
+    await this.repo.setAdjustment(id, date, {
+      adjustedMinutes: newMinutes,
+      reason: reason.trim(),
+      adjustedBy: actorEmail,
+    });
+    await this.repo.recomputeWorkedTotal(id);
+    await this.repo.addAdjustmentLog({
+      id: uuidv4(),
+      timesheetId: id,
+      date,
+      action: 'adjusted',
+      previousMinutes,
+      newMinutes,
+      reason: reason.trim(),
+      actorEmail,
+    });
+
+    this.logger.info({ timesheetId: id, date, hours, actorEmail }, 'Timesheet day adjusted');
+    return { success: true };
+  }
+
+  /** Drop an override so the day falls back to its derived value. */
+  async revertDay(id: string, date: string, actorEmail: string): Promise<ActionResult> {
+    if (!(await this.repo.isAdmin(actorEmail))) {
+      return { success: false, error: 'Admin access required', statusCode: 403 };
+    }
+
+    const ts = await this.repo.getById(id);
+    if (!ts) return { success: false, error: 'Timesheet not found', statusCode: 404 };
+    if (ts.status === 'approved') {
+      return { success: false, error: 'Cannot adjust an approved timesheet' };
+    }
+
+    const entry = await this.repo.getEntryByDate(id, date);
+    if (!entry) return { success: false, error: 'No entry for that date', statusCode: 404 };
+    if (entry.adjusted_minutes === null || entry.adjusted_minutes === undefined) {
+      return { success: false, error: 'That day has no adjustment to revert' };
+    }
+
+    const previousMinutes = entry.adjusted_minutes;
+
+    await this.repo.clearAdjustment(id, date);
+    await this.repo.recomputeWorkedTotal(id);
+    await this.repo.addAdjustmentLog({
+      id: uuidv4(),
+      timesheetId: id,
+      date,
+      action: 'reverted',
+      previousMinutes,
+      newMinutes: entry.worked_minutes,
+      reason: '',
+      actorEmail,
+    });
+
+    this.logger.info({ timesheetId: id, date, actorEmail }, 'Timesheet day adjustment reverted');
+    return { success: true };
+  }
+
+  // ── Authorization ──
+
+  /** Admins, HR, the owner's reporting manager, or an assigned manager may decide. */
+  async canApprove(actorEmail: string, ownerEmail: string): Promise<boolean> {
+    if (!actorEmail) return false;
+    if (actorEmail === ownerEmail) return false;
+    if (await this.repo.isAdmin(actorEmail)) return true;
+
+    const owner = await this.repo.getMember(ownerEmail);
+    if (owner?.reports_to && owner.reports_to === actorEmail) return true;
+
+    if (await this.repo.hasManagerAssignment(actorEmail, ownerEmail)) return true;
+    return this.repo.hasHrAssignment(actorEmail);
+  }
+
+  async isAdmin(email: string): Promise<boolean> {
+    return this.repo.isAdmin(email);
+  }
+
+  // ── Notifications ──
+
+  private async notifyApprover(ts: TimesheetRow): Promise<void> {
+    if (!this.dispatcher) return;
+    const owner = await this.repo.getMember(ts.email);
+    if (!owner?.reports_to) return;
+    const manager = await this.repo.getMember(owner.reports_to);
+    if (!manager) return;
+    await this.dispatcher.notify({
+      eventType: 'timesheet:submitted',
+      entityType: 'timesheet',
+      entityId: ts.id,
+      recipients: [{ email: manager.email, name: manager.name, role: 'approver' }],
+      data: {
+        timesheetId: ts.id,
+        employee: ts.name || ts.email,
+        periodType: ts.period_type,
+        startDate: ts.start_date,
+        endDate: ts.end_date,
+      },
+    });
+  }
+
+  private async notifyOwner(ts: TimesheetRow, event: string, reason?: string): Promise<void> {
+    if (!this.dispatcher) return;
+    const owner = await this.repo.getMember(ts.email);
+    if (!owner) return;
+    await this.dispatcher.notify({
+      eventType: `timesheet:${event}`,
+      entityType: 'timesheet',
+      entityId: ts.id,
+      recipients: [{ email: owner.email, name: owner.name, role: 'owner' }],
+      data: {
+        timesheetId: ts.id,
+        periodType: ts.period_type,
+        startDate: ts.start_date,
+        endDate: ts.end_date,
+        status: event,
+        reason: reason ?? '',
+      },
+    });
   }
 
   // ── Private: build daily entries from raw data ──

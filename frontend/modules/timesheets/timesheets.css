@@ -1,8 +1,8 @@
 /**
  * modules/timesheets/timesheets.css
  *
- * Weekly timesheet view with editable grid table,
- * week navigation, stats bar, status badges.
+ * Weekly timesheet grid derived from attendance, with week navigation,
+ * tabs, stats bar, status badges, adjustment markers and a detail modal.
  * All colours use CSS custom properties.
  */
 
@@ -13,6 +13,7 @@
 .theme-clean .ts-btn { color: #fff; border-radius: 10px; }
 .ts-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 .ts-btn.ghost { background: transparent; color: var(--accent); }
+.ts-btn.ghost.danger { color: var(--status-absent); border-color: var(--status-absent); }
 
 /* ── Week navigation ── */
 .ts-week-nav { display: flex; align-items: center; gap: 8px; }
@@ -21,20 +22,31 @@
 .ts-week-nav button:hover { border-color: var(--accent); color: var(--accent); }
 .ts-week-label { font-size: 12px; font-weight: 700; color: var(--tx); min-width: 180px; text-align: center; }
 
+/* ── Tabs ── */
+.ts-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.ts-tab {
+  padding: 6px 12px; font-size: 11px; font-weight: 600; border: 1px solid var(--bd);
+  border-radius: var(--r); background: var(--bg2); color: var(--tx2); cursor: pointer;
+  font-family: inherit; transition: all 0.2s ease;
+}
+.ts-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.theme-clean .ts-tab { border-radius: 10px; }
+
 /* ── Stats ── */
-.ts-stats { display: flex; gap: 12px; margin-bottom: 16px; }
-.ts-stat { flex: 1; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
+.ts-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.ts-stat { flex: 1; min-width: 100px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
 .theme-clean .ts-stat { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .ts-stat:hover { border-color: var(--accent); }
 .ts-stat-num { font-size: 24px; font-weight: 900; color: var(--tx); }
 .ts-stat-label { font-size: 9px; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-weight: 600; }
 
-/* ── Table ── */
+/* ── Grid table ── */
 .ts-table-wrap { overflow-x: auto; margin-bottom: 16px; }
-.ts-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 700px; }
+.ts-table { width: 100%; border-collapse: collapse; font-size: 11px; min-width: 760px; }
 .ts-table th { text-align: center; padding: 10px 8px; font-size: 9px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 2px solid var(--bd); background: var(--bg2); }
 .ts-table th:first-child { text-align: left; min-width: 140px; }
 .ts-table th.today { color: var(--accent); border-bottom-color: var(--accent); }
+.ts-th-date { font-weight: 400; font-size: 8px; }
 .ts-table td { padding: 8px; text-align: center; border-bottom: 1px solid var(--bd); font-variant-numeric: tabular-nums; transition: background 0.2s ease; }
 .ts-table td:first-child { text-align: left; font-weight: 600; color: var(--tx); }
 .ts-table tr:hover td { background: var(--accent-dim); }
@@ -45,6 +57,28 @@
 .ts-table .ts-off { color: var(--tx4); font-style: italic; }
 .ts-table tfoot td { border-top: 2px solid var(--accent); font-weight: 800; color: var(--accent); background: var(--accent-dim); }
 
+/* Adjusted day: derived value was overridden by an admin */
+.ts-table td.ts-adjusted { box-shadow: inset 0 -2px 0 var(--status-break); }
+.ts-adj-mark { color: var(--status-break); font-weight: 800; margin-left: 2px; }
+.ts-table td.ts-clickable { cursor: pointer; }
+.ts-table td.ts-clickable:hover { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+.ts-actions { display: flex; gap: 4px; justify-content: center; flex-wrap: wrap; }
+.ts-actions button, .ts-card-actions button { padding: 4px 10px; font-size: 10px; font-weight: 600; border: 1px solid var(--bd); border-radius: 4px; background: var(--bg3); color: var(--tx2); cursor: pointer; font-family: inherit; transition: all 0.2s ease; }
+.theme-clean .ts-actions button, .theme-clean .ts-card-actions button { border-radius: 8px; }
+.ts-actions button:hover, .ts-card-actions button:hover { border-color: var(--accent); color: var(--accent); }
+.ts-actions button.danger:hover, .ts-card-actions button.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
+
+/* ── Approvals list ── */
+.ts-list { display: flex; flex-direction: column; gap: 8px; }
+.ts-card { display: flex; align-items: center; gap: 12px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 12px 14px; flex-wrap: wrap; animation: fadeUp 0.4s var(--ease) backwards; transition: all 0.25s ease; }
+.theme-clean .ts-card { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
+.ts-card:hover { border-color: var(--accent); }
+.ts-card-main { flex: 1; min-width: 200px; }
+.ts-card-title { font-size: 12px; font-weight: 700; color: var(--tx); }
+.ts-card-sub { font-size: 10px; color: var(--tx3); margin-top: 3px; }
+.ts-card-actions { display: flex; gap: 4px; flex-wrap: wrap; }
+
 /* ── Status badges ── */
 .ts-status { font-size: 8px; font-weight: 700; padding: 2px 6px; border-radius: 3px; text-transform: uppercase; }
 .theme-clean .ts-status { border-radius: 6px; }
@@ -53,11 +87,36 @@
 .ts-status.draft { background: rgba(107, 114, 128, 0.1); color: var(--tx3); }
 .ts-status.rejected { background: rgba(239, 68, 68, 0.1); color: var(--status-absent); }
 
-/* ── Editable cell ── */
-.ts-edit-cell { width: 50px; background: var(--bg3); border: 1px solid var(--bd); border-radius: 4px; padding: 4px 6px; text-align: center; color: var(--tx); font-family: inherit; font-size: 11px; font-weight: 600; outline: none; font-variant-numeric: tabular-nums; transition: all 0.2s ease; }
-.ts-edit-cell:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-dim); }
+/* ── Modal ── */
+.ts-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.ts-modal.open { display: flex; }
+.ts-modal-box { background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 720px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
+.theme-clean .ts-modal-box { border-radius: 20px; }
+.ts-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 12px; }
+
+.ts-field { margin-bottom: 14px; }
+.ts-field label { display: block; font-size: 10px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+.ts-field input, .ts-field textarea { width: 100%; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r); padding: 10px 12px; color: var(--tx); font-family: inherit; font-size: 12px; outline: none; transition: all 0.25s ease; }
+.theme-clean .ts-field input, .theme-clean .ts-field textarea { border-radius: 10px; }
+.ts-field input:focus, .ts-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.ts-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+
+.ts-detail-meta { font-size: 11px; color: var(--tx2); margin-bottom: 12px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ts-detail-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px 16px; font-size: 12px; color: var(--tx); margin-bottom: 12px; }
+.ts-detail-label { font-size: 9px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.4px; display: block; margin-bottom: 2px; }
+.ts-detail-table { min-width: 560px; font-size: 10px; }
+.ts-detail-table td:first-child { font-weight: 600; }
+.ts-section-title { font-size: 11px; font-weight: 700; color: var(--tx); margin: 14px 0 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+.ts-history { max-height: 180px; overflow: auto; background: var(--bg3); border: 1px solid var(--bd); border-radius: var(--r); padding: 10px; }
+.ts-history-row { font-size: 11px; color: var(--tx2); padding: 6px 0; border-bottom: 1px solid var(--bd); }
+.ts-history-row:last-child { border-bottom: 0; }
+.ts-history-empty { font-size: 11px; color: var(--tx3); }
 
 /* ── Empty ── */
 .ts-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
 .ts-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }
 .ts-empty-text { font-size: 13px; font-weight: 600; }
+
+@media (max-width: 860px) {
+  .ts-detail-grid { grid-template-columns: 1fr 1fr; }
+}

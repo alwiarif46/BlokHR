@@ -9,6 +9,9 @@ describe('Automated Timesheets Module', () => {
   let db: DatabaseEngine;
 
   const EMAIL = 'alice@shaavir.com';
+  const MANAGER = 'manager@shaavir.com';
+  const ADMIN = 'admin@shaavir.com';
+  const OUTSIDER = 'bob@shaavir.com';
   // 2026-03-02 is a Monday
   const WEEK_START = '2026-03-02';
   const WEEK_END = '2026-03-08';
@@ -27,6 +30,13 @@ describe('Automated Timesheets Module', () => {
       groupShiftStart: '09:00',
       groupShiftEnd: '18:00',
     });
+    await seedMember(db, { email: MANAGER, name: 'Manager' });
+    await seedMember(db, { email: ADMIN, name: 'Admin' });
+    await seedMember(db, { email: OUTSIDER, name: 'Bob' });
+
+    // Alice reports to the manager; the admin is authorized everywhere
+    await db.run('UPDATE members SET reports_to = ? WHERE email = ?', [MANAGER, EMAIL]);
+    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', [ADMIN]);
   });
 
   afterEach(async () => {
@@ -520,6 +530,347 @@ describe('Automated Timesheets Module', () => {
         .post(`/api/timesheets/${gen.body.id}/approve`)
         .send({ approverEmail: 'manager@shaavir.com' });
       expect(res.status).toBe(400);
+    });
+  });
+
+  // ── Approver authorization ──
+
+  describe('Approver authorization', () => {
+    async function generateAndSubmit(): Promise<string> {
+      const gen = await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: EMAIL, periodType: 'weekly', startDate: WEEK_START });
+      await request(app).post(`/api/timesheets/${gen.body.id}/submit`).send({ email: EMAIL });
+      return gen.body.id as string;
+    }
+
+    it('rejects approval from an unrelated colleague', async () => {
+      const id = await generateAndSubmit();
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/approve`)
+        .send({ approverEmail: OUTSIDER });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toContain('manager');
+    });
+
+    it('rejects self-approval by the owner', async () => {
+      const id = await generateAndSubmit();
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/approve`)
+        .send({ approverEmail: EMAIL });
+      expect(res.status).toBe(403);
+    });
+
+    it('allows an admin to approve any timesheet', async () => {
+      const id = await generateAndSubmit();
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/approve`)
+        .set('X-User-Email', ADMIN);
+      expect(res.status).toBe(200);
+    });
+
+    it('lists only timesheets the caller may decide on', async () => {
+      await generateAndSubmit();
+
+      const forManager = await request(app)
+        .get('/api/timesheets/pending-approvals')
+        .set('X-User-Email', MANAGER);
+      expect(forManager.status).toBe(200);
+      expect(forManager.body.timesheets).toHaveLength(1);
+      expect(forManager.body.timesheets[0].email).toBe(EMAIL);
+
+      const forOutsider = await request(app)
+        .get('/api/timesheets/pending-approvals')
+        .set('X-User-Email', OUTSIDER);
+      expect(forOutsider.body.timesheets).toHaveLength(0);
+    });
+
+    it('requires authentication for pending approvals', async () => {
+      const res = await request(app).get('/api/timesheets/pending-approvals');
+      expect(res.status).toBe(401);
+    });
+  });
+
+  // ── Week view ──
+
+  describe('GET /api/timesheets/week', () => {
+    it('returns the week with daily entries attached', async () => {
+      await seedAttendance(EMAIL, '2026-03-02', 'out', 480);
+      await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: EMAIL, periodType: 'weekly', startDate: WEEK_START });
+
+      const res = await request(app).get(`/api/timesheets/week?startDate=${WEEK_START}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.startDate).toBe(WEEK_START);
+      expect(res.body.endDate).toBe(WEEK_END);
+      expect(res.body.timesheets).toHaveLength(1);
+      expect(res.body.timesheets[0].entries).toHaveLength(7);
+      expect(res.body.timesheets[0].entries[0].date).toBe(WEEK_START);
+    });
+
+    it('snaps a mid-week date back to that week Monday', async () => {
+      await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: EMAIL, periodType: 'weekly', startDate: WEEK_START });
+
+      // 2026-03-05 is the Thursday of the same week
+      const res = await request(app).get('/api/timesheets/week?startDate=2026-03-05');
+      expect(res.body.startDate).toBe(WEEK_START);
+      expect(res.body.timesheets).toHaveLength(1);
+    });
+
+    it('scopes to the caller when scope=mine', async () => {
+      await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: EMAIL, periodType: 'weekly', startDate: WEEK_START });
+      await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: OUTSIDER, periodType: 'weekly', startDate: WEEK_START });
+
+      const all = await request(app).get(`/api/timesheets/week?startDate=${WEEK_START}`);
+      expect(all.body.timesheets).toHaveLength(2);
+
+      const mine = await request(app)
+        .get(`/api/timesheets/week?startDate=${WEEK_START}&scope=mine`)
+        .set('X-User-Email', EMAIL);
+      expect(mine.body.timesheets).toHaveLength(1);
+      expect(mine.body.timesheets[0].email).toBe(EMAIL);
+    });
+  });
+
+  // ── Team generation ──
+
+  describe('POST /api/timesheets/generate-team', () => {
+    it('generates one timesheet per active member', async () => {
+      const res = await request(app)
+        .post('/api/timesheets/generate-team')
+        .send({ periodType: 'weekly', startDate: WEEK_START });
+
+      expect(res.status).toBe(201);
+      expect(res.body.generated).toContain(EMAIL);
+      expect(res.body.generated).toContain(MANAGER);
+      expect(res.body.skipped).toHaveLength(0);
+    });
+
+    it('skips members that already have a timesheet instead of failing', async () => {
+      await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: EMAIL, periodType: 'weekly', startDate: WEEK_START });
+
+      const res = await request(app)
+        .post('/api/timesheets/generate-team')
+        .send({ periodType: 'weekly', startDate: WEEK_START });
+
+      expect(res.status).toBe(201);
+      expect(res.body.generated).not.toContain(EMAIL);
+      expect(res.body.skipped.some((s: { email: string }) => s.email === EMAIL)).toBe(true);
+    });
+
+    it('rejects a non-Monday start for the whole batch', async () => {
+      const res = await request(app)
+        .post('/api/timesheets/generate-team')
+        .send({ periodType: 'weekly', startDate: '2026-03-04' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('Monday');
+    });
+
+    it('honours an explicit member list', async () => {
+      const res = await request(app)
+        .post('/api/timesheets/generate-team')
+        .send({ periodType: 'weekly', startDate: WEEK_START, emails: [EMAIL] });
+
+      expect(res.body.generated).toEqual([EMAIL]);
+    });
+  });
+
+  // ── Day adjustments ──
+
+  describe('Day adjustments', () => {
+    async function generateSheet(): Promise<string> {
+      await seedAttendance(EMAIL, '2026-03-02', 'out', 480);
+      const gen = await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: EMAIL, periodType: 'weekly', startDate: WEEK_START });
+      return gen.body.id as string;
+    }
+
+    it('overrides a day and recomputes the worked total', async () => {
+      const id = await generateSheet();
+
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/adjust`)
+        .set('X-User-Email', ADMIN)
+        .send({ date: '2026-03-02', hours: 6, reason: 'Left early, pre-approved' });
+
+      expect(res.status).toBe(200);
+
+      const detail = await request(app).get(`/api/timesheets/${id}`);
+      expect(detail.body.timesheet.total_worked_minutes).toBe(360);
+
+      const monday = detail.body.entries.find(
+        (e: { date: string }) => e.date === '2026-03-02',
+      );
+      // The derived value is preserved alongside the override
+      expect(monday.worked_minutes).toBe(480);
+      expect(monday.adjusted_minutes).toBe(360);
+      expect(monday.adjustment_reason).toBe('Left early, pre-approved');
+      expect(monday.adjusted_by).toBe(ADMIN);
+
+      expect(detail.body.adjustments).toHaveLength(1);
+      expect(detail.body.adjustments[0].action).toBe('adjusted');
+      expect(detail.body.adjustments[0].previous_minutes).toBe(480);
+      expect(detail.body.adjustments[0].new_minutes).toBe(360);
+    });
+
+    it('requires a reason', async () => {
+      const id = await generateSheet();
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/adjust`)
+        .set('X-User-Email', ADMIN)
+        .send({ date: '2026-03-02', hours: 6, reason: '   ' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('reason');
+    });
+
+    it('rejects hours outside 0–24', async () => {
+      const id = await generateSheet();
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/adjust`)
+        .set('X-User-Email', ADMIN)
+        .send({ date: '2026-03-02', hours: 30, reason: 'typo' });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('rejects an adjustment from a non-admin', async () => {
+      const id = await generateSheet();
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/adjust`)
+        .set('X-User-Email', MANAGER)
+        .send({ date: '2026-03-02', hours: 6, reason: 'nope' });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('requires authentication', async () => {
+      const id = await generateSheet();
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/adjust`)
+        .send({ date: '2026-03-02', hours: 6, reason: 'anon' });
+
+      expect(res.status).toBe(401);
+    });
+
+    it('cannot adjust an approved timesheet', async () => {
+      const id = await generateSheet();
+      await request(app).post(`/api/timesheets/${id}/submit`).send({ email: EMAIL });
+      await request(app).post(`/api/timesheets/${id}/approve`).set('X-User-Email', ADMIN);
+
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/adjust`)
+        .set('X-User-Email', ADMIN)
+        .send({ date: '2026-03-02', hours: 6, reason: 'too late' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('approved');
+    });
+
+    it('reverts an override back to the derived value', async () => {
+      const id = await generateSheet();
+      await request(app)
+        .post(`/api/timesheets/${id}/adjust`)
+        .set('X-User-Email', ADMIN)
+        .send({ date: '2026-03-02', hours: 6, reason: 'Left early' });
+
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/adjust/revert`)
+        .set('X-User-Email', ADMIN)
+        .send({ date: '2026-03-02' });
+
+      expect(res.status).toBe(200);
+
+      const detail = await request(app).get(`/api/timesheets/${id}`);
+      expect(detail.body.timesheet.total_worked_minutes).toBe(480);
+      const monday = detail.body.entries.find((e: { date: string }) => e.date === '2026-03-02');
+      expect(monday.adjusted_minutes).toBeNull();
+      expect(detail.body.adjustments).toHaveLength(2);
+    });
+
+    it('refuses to revert a day that was never adjusted', async () => {
+      const id = await generateSheet();
+      const res = await request(app)
+        .post(`/api/timesheets/${id}/adjust/revert`)
+        .set('X-User-Email', ADMIN)
+        .send({ date: '2026-03-03' });
+
+      expect(res.status).toBe(400);
+    });
+
+    it('keeps overrides when the timesheet is regenerated', async () => {
+      const id = await generateSheet();
+      await request(app)
+        .post(`/api/timesheets/${id}/adjust`)
+        .set('X-User-Email', ADMIN)
+        .send({ date: '2026-03-02', hours: 6, reason: 'Left early' });
+
+      // Fresh attendance arrives for another day, then the sheet is refreshed
+      await seedAttendance(EMAIL, '2026-03-03', 'out', 480);
+      const regen = await request(app).post(`/api/timesheets/${id}/regenerate`);
+      expect(regen.status).toBe(200);
+
+      const detail = await request(app).get(`/api/timesheets/${id}`);
+      const monday = detail.body.entries.find((e: { date: string }) => e.date === '2026-03-02');
+      expect(monday.adjusted_minutes).toBe(360);
+      expect(monday.adjustment_reason).toBe('Left early');
+      // Monday override (360) + Tuesday derived (480)
+      expect(detail.body.timesheet.total_worked_minutes).toBe(840);
+    });
+  });
+
+  // ── Batch approvals go through the service ──
+
+  describe('Batch approval', () => {
+    it('applies the same guards and audit fields as the single-item route', async () => {
+      const gen = await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: EMAIL, periodType: 'weekly', startDate: WEEK_START });
+      await request(app).post(`/api/timesheets/${gen.body.id}/submit`).send({ email: EMAIL });
+
+      const res = await request(app)
+        .post('/api/approvals/batch')
+        .set('X-User-Email', MANAGER)
+        .send({ items: [{ type: 'timesheet', id: gen.body.id, action: 'approve' }] });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results[0].success).toBe(true);
+
+      const detail = await request(app).get(`/api/timesheets/${gen.body.id}`);
+      expect(detail.body.timesheet.status).toBe('approved');
+      // The raw-SQL path used to leave these empty
+      expect(detail.body.timesheet.approved_by).toBe(MANAGER);
+      expect(detail.body.timesheet.approved_at).toBeTruthy();
+    });
+
+    it('refuses a batch approval of a draft timesheet', async () => {
+      const gen = await request(app)
+        .post('/api/timesheets/generate')
+        .send({ email: EMAIL, periodType: 'weekly', startDate: WEEK_START });
+
+      const res = await request(app)
+        .post('/api/approvals/batch')
+        .set('X-User-Email', MANAGER)
+        .send({ items: [{ type: 'timesheet', id: gen.body.id, action: 'approve' }] });
+
+      expect(res.body.results[0].success).toBe(false);
+      expect(res.body.results[0].error).toContain('draft');
+
+      const detail = await request(app).get(`/api/timesheets/${gen.body.id}`);
+      expect(detail.body.timesheet.status).toBe('draft');
     });
   });
 });

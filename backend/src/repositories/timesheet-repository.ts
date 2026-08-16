@@ -47,6 +47,40 @@ export interface TimesheetEntryRow {
   leave_days: number;
   billable_hours: number;
   non_billable_hours: number;
+  /** Admin override for the day. NULL means the derived worked_minutes stands. */
+  adjusted_minutes: number | null;
+  adjustment_reason: string;
+  adjusted_by: string;
+  adjusted_at: string | null;
+}
+
+export interface TimesheetAdjustmentRow {
+  [key: string]: unknown;
+  id: string;
+  timesheet_id: string;
+  date: string;
+  action: string;
+  previous_minutes: number;
+  new_minutes: number;
+  reason: string;
+  actor_email: string;
+  acted_at: string;
+}
+
+/** A preserved override, carried across a regenerate. */
+export interface PreservedAdjustment {
+  date: string;
+  adjustedMinutes: number;
+  reason: string;
+  adjustedBy: string;
+  adjustedAt: string | null;
+}
+
+export interface MemberLookupRow {
+  [key: string]: unknown;
+  email: string;
+  name: string;
+  reports_to: string | null;
 }
 
 /** Raw attendance row for aggregation. */
@@ -348,8 +382,122 @@ export class TimesheetRepository {
     );
   }
 
+  /** Fetch entries for many timesheets at once (week grid). */
+  async getEntriesForTimesheetIds(ids: string[]): Promise<TimesheetEntryRow[]> {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => '?').join(', ');
+    return this.db.all<TimesheetEntryRow>(
+      `SELECT * FROM timesheet_entries WHERE timesheet_id IN (${placeholders}) ORDER BY timesheet_id, date`,
+      ids,
+    );
+  }
+
+  async getEntryByDate(timesheetId: string, date: string): Promise<TimesheetEntryRow | null> {
+    return this.db.get<TimesheetEntryRow>(
+      'SELECT * FROM timesheet_entries WHERE timesheet_id = ? AND date = ?',
+      [timesheetId, date],
+    );
+  }
+
   async deleteEntries(timesheetId: string): Promise<void> {
     await this.db.run('DELETE FROM timesheet_entries WHERE timesheet_id = ?', [timesheetId]);
+  }
+
+  // ── Day adjustments ──
+
+  /** Read every active override on a timesheet, so a regenerate can restore them. */
+  async getAdjustedEntries(timesheetId: string): Promise<PreservedAdjustment[]> {
+    const rows = await this.db.all<TimesheetEntryRow>(
+      'SELECT * FROM timesheet_entries WHERE timesheet_id = ? AND adjusted_minutes IS NOT NULL',
+      [timesheetId],
+    );
+    return rows.map((r) => ({
+      date: r.date,
+      adjustedMinutes: r.adjusted_minutes ?? 0,
+      reason: r.adjustment_reason,
+      adjustedBy: r.adjusted_by,
+      adjustedAt: r.adjusted_at,
+    }));
+  }
+
+  async setAdjustment(
+    timesheetId: string,
+    date: string,
+    data: { adjustedMinutes: number; reason: string; adjustedBy: string; adjustedAt?: string },
+  ): Promise<void> {
+    await this.db.run(
+      `UPDATE timesheet_entries
+       SET adjusted_minutes = ?, adjustment_reason = ?, adjusted_by = ?, adjusted_at = ?
+       WHERE timesheet_id = ? AND date = ?`,
+      [
+        data.adjustedMinutes,
+        data.reason,
+        data.adjustedBy,
+        data.adjustedAt ?? new Date().toISOString(),
+        timesheetId,
+        date,
+      ],
+    );
+  }
+
+  async clearAdjustment(timesheetId: string, date: string): Promise<void> {
+    await this.db.run(
+      `UPDATE timesheet_entries
+       SET adjusted_minutes = NULL, adjustment_reason = '', adjusted_by = '', adjusted_at = NULL
+       WHERE timesheet_id = ? AND date = ?`,
+      [timesheetId, date],
+    );
+  }
+
+  async addAdjustmentLog(data: {
+    id: string;
+    timesheetId: string;
+    date: string;
+    action: string;
+    previousMinutes: number;
+    newMinutes: number;
+    reason: string;
+    actorEmail: string;
+  }): Promise<void> {
+    await this.db.run(
+      `INSERT INTO timesheet_adjustments (
+        id, timesheet_id, date, action, previous_minutes, new_minutes, reason, actor_email
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        data.id,
+        data.timesheetId,
+        data.date,
+        data.action,
+        data.previousMinutes,
+        data.newMinutes,
+        data.reason,
+        data.actorEmail,
+      ],
+    );
+  }
+
+  async listAdjustments(timesheetId: string): Promise<TimesheetAdjustmentRow[]> {
+    return this.db.all<TimesheetAdjustmentRow>(
+      'SELECT * FROM timesheet_adjustments WHERE timesheet_id = ? ORDER BY acted_at DESC, date',
+      [timesheetId],
+    );
+  }
+
+  /**
+   * Recompute the header worked total from the effective per-day minutes,
+   * where an override replaces the derived value.
+   */
+  async recomputeWorkedTotal(timesheetId: string): Promise<void> {
+    await this.db.run(
+      `UPDATE timesheets SET
+        total_worked_minutes = (
+          SELECT COALESCE(SUM(COALESCE(adjusted_minutes, worked_minutes)), 0)
+          FROM timesheet_entries WHERE timesheet_id = ?
+        ),
+        updated_at = datetime('now')
+      WHERE id = ?`,
+      [timesheetId, timesheetId],
+    );
   }
 
   // ── Aggregation: pull raw data for timesheet generation ──
@@ -445,5 +593,52 @@ export class TimesheetRepository {
       [email],
     );
     return row?.name ?? '';
+  }
+
+  // ── Roster & authorization lookups ──
+
+  async getMember(email: string): Promise<MemberLookupRow | null> {
+    return this.db.get<MemberLookupRow>(
+      'SELECT email, name, reports_to FROM members WHERE email = ?',
+      [email],
+    );
+  }
+
+  /** Active roster used by team generation. */
+  async listActiveMemberEmails(): Promise<string[]> {
+    const rows = await this.db.all<{ email: string; [key: string]: unknown }>(
+      "SELECT email FROM members WHERE COALESCE(active, 1) = 1 AND email <> '' ORDER BY email",
+      [],
+    );
+    return rows.map((r) => r.email);
+  }
+
+  async isAdmin(email: string): Promise<boolean> {
+    if (!email) return false;
+    const row = await this.db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+      email,
+    ]);
+    return !!row;
+  }
+
+  /** Manager role over a specific subject, via global, member, or group scope. */
+  async hasManagerAssignment(actorEmail: string, subjectEmail: string): Promise<boolean> {
+    const row = await this.db.get<{ id: number }>(
+      `SELECT id FROM role_assignments
+       WHERE assignee_email = ? AND role_type = 'manager'
+         AND (scope_type = 'global'
+           OR (scope_type = 'member' AND scope_value = ?)
+           OR scope_type = 'group')`,
+      [actorEmail, subjectEmail],
+    );
+    return !!row;
+  }
+
+  async hasHrAssignment(actorEmail: string): Promise<boolean> {
+    const row = await this.db.get<{ id: number }>(
+      "SELECT id FROM role_assignments WHERE assignee_email = ? AND role_type = 'hr'",
+      [actorEmail],
+    );
+    return !!row;
   }
 }
