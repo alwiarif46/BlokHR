@@ -140,6 +140,14 @@
   line-height: 14px;
 }
 
+.pf-verify-note {
+  font-size: 11px;
+  color: var(--tx2);
+  line-height: 1.45;
+  margin: -6px 0 14px;
+  max-width: 900px;
+}
+
 /* ── Missing fields bar ── */
 .pf-missing {
   background: rgba(239, 68, 68, 0.08);

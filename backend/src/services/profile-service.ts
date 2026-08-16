@@ -14,6 +14,21 @@ interface MemberRow {
   certified_by: string;
   profile_unlocked: number;
   active: number;
+  designation?: string;
+  joining_date?: string;
+  google_email?: string;
+  phone?: string;
+  emergency_contact?: string;
+  ac_parentage?: string;
+  pan_number?: string;
+  aadhaar_number?: string;
+  uan_number?: string;
+  bank_account_number?: string;
+  bank_ifsc?: string;
+  bank_name?: string;
+  individual_shift_start?: string;
+  individual_shift_end?: string;
+  updated_at?: string;
 }
 
 interface MemberNotifInfo {
@@ -85,6 +100,35 @@ const FIELD_TO_COLUMN: Record<string, string> = {
   certifiedBy: 'certified_by',
 };
 
+/** Snake_case / form keys → camelCase service keys. */
+const INCOMING_FIELD_ALIASES: Record<string, string> = {
+  pan: 'panNumber',
+  aadhaar: 'aadhaarNumber',
+  uan: 'uanNumber',
+  bank_account: 'bankAccountNumber',
+  bankAcc: 'bankAccountNumber',
+  ifsc: 'bankIfsc',
+  bank_name: 'bankName',
+  emergency_contact: 'emergencyContact',
+  parentage: 'acParentage',
+  google_email: 'googleEmail',
+  joining_date: 'joiningDate',
+  member_type: 'memberType',
+  individual_shift_start: 'individualShiftStart',
+  individual_shift_end: 'individualShiftEnd',
+};
+
+/** Normalize request body keys to camelCase FIELD_TO_COLUMN keys. */
+export function normalizeProfileFields(raw: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(raw)) {
+    if (val === undefined) continue;
+    const mapped = INCOMING_FIELD_ALIASES[key] ?? key;
+    out[mapped] = val;
+  }
+  return out;
+}
+
 /**
  * Profile service — employee self-service with field-level access control.
  *
@@ -103,11 +147,73 @@ export class ProfileService {
     private readonly eventBus?: EventBus,
   ) {}
 
+  /** Resolve member by id, exact email, or unique local-part (OAuth UPN). */
+  async resolveMember(memberIdOrEmail: string): Promise<MemberRow | null> {
+    let member = await this.db.get<MemberRow>('SELECT * FROM members WHERE id = ?', [
+      memberIdOrEmail,
+    ]);
+    if (member) return member;
+
+    member = await this.db.get<MemberRow>(
+      'SELECT * FROM members WHERE lower(email) = lower(?)',
+      [memberIdOrEmail],
+    );
+    if (member) return member;
+
+    const at = memberIdOrEmail.indexOf('@');
+    if (at <= 0) return null;
+    const local = memberIdOrEmail.slice(0, at).toLowerCase();
+    const matches = await this.db.all<MemberRow>(
+      `SELECT * FROM members
+       WHERE active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
+      [local],
+    );
+    if (matches.length === 1) return matches[0];
+    return null;
+  }
+
+  /** Load profile for GET /api/profiles/me (snake_case keys for the frontend form). */
+  async getProfile(memberIdOrEmail: string): Promise<Record<string, unknown> | null> {
+    const member = await this.resolveMember(memberIdOrEmail);
+    if (!member) return null;
+
+    const group = await this.db.get<{ name: string }>(
+      'SELECT name FROM groups WHERE id = ?',
+      [member.group_id],
+    );
+
+    return {
+      id: member.id,
+      member_id: member.id,
+      email: member.email,
+      name: member.name,
+      department: group?.name ?? member.group_id ?? '',
+      designation: member.designation ?? '',
+      employee_id: member.id,
+      joining_date: member.joining_date ?? '',
+      google_email: member.google_email ?? '',
+      phone: member.phone ?? '',
+      emergency_contact: member.emergency_contact ?? '',
+      parentage: member.ac_parentage ?? '',
+      pan: member.pan_number ?? '',
+      aadhaar: member.aadhaar_number ?? '',
+      uan: member.uan_number ?? '',
+      bank_account: member.bank_account_number ?? '',
+      ifsc: member.bank_ifsc ?? '',
+      bank_name: member.bank_name ?? '',
+      shift_start: member.individual_shift_start ?? '',
+      shift_end: member.individual_shift_end ?? '',
+      updated_at: member.updated_at ?? '',
+      certified_at: member.certified_at ?? '',
+      profile_unlocked: member.profile_unlocked === 1,
+    };
+  }
+
   /**
    * Update a member's profile with field-level access control.
    *
    * @param memberId  — member ID or email
-   * @param fields    — fields to update (camelCase keys)
+   * @param fields    — fields to update (camelCase or snake_case form keys)
    * @param callerEmail — the email of the person making the request
    * @param isAdmin   — whether the caller is an admin
    */
@@ -122,16 +228,20 @@ export class ProfileService {
     autoFilledBankName?: string;
     error?: string;
   }> {
-    // Find the member
-    let member = await this.db.get<MemberRow>('SELECT * FROM members WHERE id = ?', [memberId]);
-    if (!member) {
-      member = await this.db.get<MemberRow>('SELECT * FROM members WHERE email = ?', [memberId]);
-    }
+    fields = normalizeProfileFields(fields);
+
+    // Find the member (exact id/email or UPN local-part)
+    const member = await this.resolveMember(memberId);
     if (!member) {
       return { success: false, error: 'Member not found' };
     }
 
-    const isSelf = callerEmail.toLowerCase() === member.email.toLowerCase();
+    // Self check: caller may use OAuth UPN while member has HR email
+    const callerMember = await this.resolveMember(callerEmail);
+    const isSelf =
+      callerEmail.toLowerCase() === member.email.toLowerCase() ||
+      (!!callerMember && callerMember.id === member.id);
+
     const isLocked = !!(member.certified_at && member.profile_unlocked !== 1);
 
     // ── Field-level access control ──
@@ -235,10 +345,7 @@ export class ProfileService {
     memberId: string,
     callerEmail: string,
   ): Promise<{ success: boolean; error?: string }> {
-    let member = await this.db.get<MemberRow>('SELECT * FROM members WHERE id = ?', [memberId]);
-    if (!member) {
-      member = await this.db.get<MemberRow>('SELECT * FROM members WHERE email = ?', [memberId]);
-    }
+    const member = await this.resolveMember(memberId);
     if (!member) return { success: false, error: 'Member not found' };
 
     if (member.certified_at && member.profile_unlocked !== 1) {
@@ -279,10 +386,7 @@ export class ProfileService {
    * Admin unlocks a certified profile so the employee can re-edit.
    */
   async unlockProfile(memberId: string): Promise<{ success: boolean; error?: string }> {
-    let member = await this.db.get<MemberRow>('SELECT * FROM members WHERE id = ?', [memberId]);
-    if (!member) {
-      member = await this.db.get<MemberRow>('SELECT * FROM members WHERE email = ?', [memberId]);
-    }
+    const member = await this.resolveMember(memberId);
     if (!member) return { success: false, error: 'Member not found' };
 
     await this.db.run(
@@ -300,25 +404,25 @@ export class ProfileService {
     found: boolean;
     isLocked: boolean;
     certifiedAt: string | null;
+    certified_at: string | null;
     profileUnlocked: boolean;
   }> {
-    let member = await this.db.get<MemberRow>(
-      'SELECT id, certified_at, profile_unlocked FROM members WHERE id = ?',
-      [memberId],
-    );
-    if (!member) {
-      member = await this.db.get<MemberRow>(
-        'SELECT id, certified_at, profile_unlocked FROM members WHERE email = ?',
-        [memberId],
-      );
-    }
+    const member = await this.resolveMember(memberId);
     if (!member)
-      return { found: false, isLocked: false, certifiedAt: null, profileUnlocked: false };
+      return {
+        found: false,
+        isLocked: false,
+        certifiedAt: null,
+        certified_at: null,
+        profileUnlocked: false,
+      };
 
+    const certifiedAt = member.certified_at || null;
     return {
       found: true,
       isLocked: !!(member.certified_at && member.profile_unlocked !== 1),
-      certifiedAt: member.certified_at || null,
+      certifiedAt,
+      certified_at: certifiedAt,
       profileUnlocked: member.profile_unlocked === 1,
     };
   }

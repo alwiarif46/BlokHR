@@ -370,4 +370,170 @@ describe('Employee Profile Module', () => {
       expect(res.body.success).toBe(true);
     });
   });
+
+  // ── /api/profiles/me aliases + verify / IFSC ──
+
+  describe('GET/PUT /api/profiles/me', () => {
+    const originalFetch = globalThis.fetch;
+
+    beforeEach(() => {
+      globalThis.fetch = (async () =>
+        new Response(
+          JSON.stringify({
+            BANK: 'HDFC BANK',
+            BRANCH: 'TEST',
+            CITY: 'MUMBAI',
+            STATE: 'MH',
+            ADDRESS: '',
+            IFSC: 'HDFC0001234',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        )) as typeof fetch;
+    });
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it('returns snake_case profile for the caller', async () => {
+      await request(app)
+        .put('/api/profile/alice@shaavir.com')
+        .send({
+          panNumber: 'ABCDE1234F',
+          bankAccountNumber: '123456789012',
+          bankIfsc: 'HDFC0001234',
+          bankName: 'HDFC - Test',
+        })
+        .set('X-User-Email', 'alice@shaavir.com');
+
+      const res = await request(app)
+        .get('/api/profiles/me')
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.email).toBe('alice@shaavir.com');
+      expect(res.body.pan).toBe('ABCDE1234F');
+      expect(res.body.bank_account).toBe('123456789012');
+      expect(res.body.ifsc).toBe('HDFC0001234');
+      expect(res.body.bank_name).toBe('HDFC - Test');
+    });
+
+    it('maps snake_case body on PUT /api/profiles/me', async () => {
+      const res = await request(app)
+        .put('/api/profiles/me')
+        .send({
+          pan: 'ABCDE1234F',
+          bank_account: '987654321098',
+          ifsc: 'HDFC0001234',
+          bank_name: 'SBI Main',
+          phone: '9876543210',
+        })
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      const get = await request(app)
+        .get('/api/profiles/me')
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(get.body.pan).toBe('ABCDE1234F');
+      expect(get.body.bank_account).toBe('987654321098');
+      expect(get.body.ifsc).toBe('HDFC0001234');
+    });
+
+    it('returns status via /api/profiles/me/status', async () => {
+      const res = await request(app)
+        .get('/api/profiles/me/status')
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.found).toBe(true);
+      expect(res.body.isLocked).toBe(false);
+    });
+  });
+
+  describe('POST /api/profiles/me/verify', () => {
+    it('returns Format OK for valid PAN', async () => {
+      const res = await request(app)
+        .post('/api/profiles/me/verify')
+        .send({ field: 'pan', value: 'ABCDE1234F' })
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(res.body.level).toBe('format');
+      expect(res.body.message).toMatch(/Format OK/i);
+    });
+
+    it('rejects invalid bank account', async () => {
+      const res = await request(app)
+        .post('/api/profiles/me/verify')
+        .send({ field: 'bankAcc', value: '123' })
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(false);
+      expect(res.body.level).toBe('format');
+    });
+
+    it('rejects unknown field', async () => {
+      const res = await request(app)
+        .post('/api/profiles/me/verify')
+        .send({ field: 'ssn', value: 'x' })
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /api/profiles/ifsc/:code', () => {
+    const originalFetch = globalThis.fetch;
+
+    afterEach(() => {
+      globalThis.fetch = originalFetch;
+    });
+
+    it('returns bank details from Razorpay mock', async () => {
+      globalThis.fetch = (async (input: RequestInfo | URL) => {
+        const url = String(input);
+        expect(url).toContain('ifsc.razorpay.com/HDFC0001234');
+        return new Response(
+          JSON.stringify({
+            BANK: 'HDFC BANK',
+            BRANCH: 'TEST BRANCH',
+            CITY: 'MUMBAI',
+            STATE: 'MAHARASHTRA',
+            ADDRESS: 'Somewhere',
+            IFSC: 'HDFC0001234',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        );
+      }) as typeof fetch;
+
+      const { clearIfscCache } = await import('../../src/services/identity-verify');
+      clearIfscCache();
+
+      const res = await request(app)
+        .get('/api/profiles/ifsc/HDFC0001234')
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.bankName).toBe('HDFC BANK');
+      expect(res.body.branch).toBe('TEST BRANCH');
+      expect(res.body.displayName).toMatch(/HDFC/);
+    });
+
+    it('returns 404 for unknown IFSC', async () => {
+      globalThis.fetch = (async () =>
+        new Response('Not Found', { status: 404 })) as typeof fetch;
+
+      const { clearIfscCache } = await import('../../src/services/identity-verify');
+      clearIfscCache();
+
+      const res = await request(app)
+        .get('/api/profiles/ifsc/ABCD0123456')
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(404);
+      expect(res.body.valid).toBe(false);
+    });
+
+    it('requires auth', async () => {
+      const res = await request(app).get('/api/profiles/ifsc/HDFC0001234');
+      expect(res.status).toBe(401);
+    });
+  });
 });

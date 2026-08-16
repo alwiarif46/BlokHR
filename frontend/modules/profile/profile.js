@@ -234,7 +234,11 @@ export async function profileLoadData() {
     };
   }
 
-  _locked = !!(statusData && !statusData._error && statusData.certified_at);
+  _locked = !!(
+    statusData &&
+    !statusData._error &&
+    (statusData.isLocked || statusData.certified_at || statusData.certifiedAt)
+  );
 
   profileRenderStats();
   profileRender();
@@ -299,6 +303,7 @@ export function profileRender() {
     _field('ifsc', 'IFSC', p.ifsc || '', 'ABCD0123456', false, true, 11),
     _field('bankName', 'Bank Name &amp; Branch', p.bank_name || '', 'Auto-filled from IFSC', false, true),
   ]);
+  h += '<p class="pf-verify-note">Bank branch filled from IFSC. Identity numbers are format-checked; live government KYC is not enabled on this plan.</p>';
 
   /* Section: Account */
   h += _section('Account', [
@@ -362,20 +367,36 @@ function _bindProfileEvents(form) {
   editableIds.forEach(function (id) {
     const input = form.querySelector('#pf-' + id);
     if (!input || input.disabled) return;
-    input.addEventListener('blur', function () { _validateField(id); _updateMissingBar(); _checkSaveable(); });
-    input.addEventListener('input', function () { _validateField(id); _updateMissingBar(); _checkSaveable(); });
+    input.addEventListener('blur', function () {
+      _validateField(id);
+      if (id === 'pan' || id === 'aadhaar' || id === 'uan' || id === 'bankAcc') {
+        _serverVerifyField(id);
+      }
+      if (id === 'ifsc') {
+        _lookupIFSC();
+      }
+      _updateMissingBar();
+      _checkSaveable();
+    });
+    input.addEventListener('input', function () {
+      _validateField(id);
+      _updateMissingBar();
+      _checkSaveable();
+    });
   });
-
-  /* IFSC auto-fill on blur */
-  const ifscInput = form.querySelector('#pf-ifsc');
-  if (ifscInput && !ifscInput.disabled) {
-    ifscInput.addEventListener('blur', function () { _lookupIFSC(); });
-  }
 
   /* bankName input change */
   const bankNameInput = form.querySelector('#pf-bankName');
   if (bankNameInput && !bankNameInput.disabled) {
-    bankNameInput.addEventListener('input', function () { _updateMissingBar(); _checkSaveable(); });
+    bankNameInput.addEventListener('input', function () {
+      _updateMissingBar();
+      _checkSaveable();
+    });
+    bankNameInput.addEventListener('blur', function () {
+      _serverVerifyField('bankName');
+      _updateMissingBar();
+      _checkSaveable();
+    });
   }
 
   /* Certification checkbox */
@@ -437,8 +458,64 @@ function _validateField(id) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   IFSC RAZORPAY LOOKUP
+   SERVER VERIFY + IFSC LOOKUP
    ══════════════════════════════════════════════════════════════ */
+
+function _setFieldFeedback(id, ok, message, hint) {
+  const icon = _container && _container.querySelector('#pf-icon-' + id);
+  const err = _container && _container.querySelector('#pf-err-' + id);
+  if (ok) {
+    if (icon) {
+      icon.textContent = '\u2714';
+      icon.className = 'pf-field-icon valid';
+      icon.title = hint || message || 'Format OK';
+    }
+    if (err) err.textContent = '';
+    delete _fieldErrors[id];
+  } else {
+    if (icon) {
+      icon.textContent = '\u2718';
+      icon.className = 'pf-field-icon invalid';
+      icon.title = message || 'Invalid';
+    }
+    if (err) err.textContent = message || 'Invalid';
+    _fieldErrors[id] = message || 'Invalid';
+  }
+}
+
+/**
+ * Call POST /api/profiles/me/verify for format/lookup feedback.
+ * @param {string} id — form field id
+ */
+async function _serverVerifyField(id) {
+  const input = _container && _container.querySelector('#pf-' + id);
+  if (!input || input.disabled) return;
+
+  const value = input.value.trim();
+  if (!value) return;
+
+  /* Client format gate first — avoid noisy API calls */
+  const validator = _validators[id];
+  if (validator) {
+    const local = validator(value);
+    if (!local.valid) return;
+  }
+
+  const result = await api.post('/api/profiles/me/verify', { field: id, value: value });
+  if (!result || result._error) {
+    return;
+  }
+
+  if (result.ok) {
+    const hint =
+      result.level === 'lookup' ? 'IFSC verified' : result.message || 'Format OK';
+    _setFieldFeedback(id, true, result.message || 'OK', hint);
+  } else {
+    _setFieldFeedback(id, false, result.message || 'Invalid');
+  }
+  _updateMissingBar();
+  _checkSaveable();
+}
 
 async function _lookupIFSC() {
   const ifscInput = _container && _container.querySelector('#pf-ifsc');
@@ -446,27 +523,33 @@ async function _lookupIFSC() {
   if (!ifscInput || !bankInput) return;
 
   const ifsc = ifscInput.value.trim().toUpperCase();
+  ifscInput.value = ifsc;
   const result = validateIFSC(ifsc);
   if (!result.valid) return;
 
-  try {
-    const response = await fetch('https://ifsc.razorpay.com/' + ifsc);
-    if (response.ok) {
-      const data = await response.json();
-      if (data && data.BANK && data.BRANCH) {
-        bankInput.value = data.BANK + ' - ' + data.BRANCH;
-        const bankIcon = _container.querySelector('#pf-icon-bankName');
-        if (bankIcon) { bankIcon.textContent = '\u2714'; bankIcon.className = 'pf-field-icon valid'; }
-        const bankErr = _container.querySelector('#pf-err-bankName');
-        if (bankErr) bankErr.textContent = '';
-        delete _fieldErrors['bankName'];
-        _updateMissingBar();
-        _checkSaveable();
-      }
-    }
-  } catch (_e) {
-    /* Razorpay lookup failed — user can still fill manually */
+  const data = await api.get('/api/profiles/ifsc/' + encodeURIComponent(ifsc));
+  if (!data || data._error || data.valid === false) {
+    const msg =
+      (data && (data.message || data.error)) || 'IFSC lookup failed — enter bank name manually';
+    _setFieldFeedback('ifsc', false, msg);
+    return;
   }
+
+  if (data.lookupFailed) {
+    _setFieldFeedback('ifsc', true, 'Format OK', 'Format OK (lookup unavailable)');
+    return;
+  }
+
+  const display =
+    data.displayName ||
+    [data.bankName, data.branch].filter(Boolean).join(' - ');
+  if (display) {
+    bankInput.value = display;
+    _setFieldFeedback('bankName', true, 'OK', 'IFSC verified');
+  }
+  _setFieldFeedback('ifsc', true, 'IFSC verified', 'IFSC verified');
+  _updateMissingBar();
+  _checkSaveable();
 }
 
 /* ══════════════════════════════════════════════════════════════
