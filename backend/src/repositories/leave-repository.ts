@@ -157,10 +157,24 @@ export class LeaveRepository {
 
   /** Get member info needed for leave calculations. */
   async getMemberForLeave(email: string): Promise<MemberForLeave | null> {
-    return this.db.get<MemberForLeave>(
-      'SELECT email, name, member_type_id, joining_date FROM members WHERE email = ? AND active = 1',
+    const exact = await this.db.get<MemberForLeave>(
+      'SELECT email, name, member_type_id, joining_date FROM members WHERE lower(email) = lower(?) AND active = 1',
       [email],
     );
+    if (exact) return exact;
+
+    // OAuth UPNs (e.g. user@tenant.onmicrosoft.com) often differ from HR email
+    // (user@company.com). If exactly one active member shares the local-part, use it.
+    const at = email.indexOf('@');
+    if (at <= 0) return null;
+    const local = email.slice(0, at).toLowerCase();
+    const matches = await this.db.all<MemberForLeave>(
+      `SELECT email, name, member_type_id, joining_date FROM members
+       WHERE active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
+      [local],
+    );
+    if (matches.length === 1) return matches[0];
+    return null;
   }
 
   /** Get PTO balance for an employee, leave type, and year. */
@@ -177,6 +191,37 @@ export class LeaveRepository {
       email,
       year,
     ]);
+  }
+
+  /**
+   * Active leave types for the apply/balance UI.
+   * Prefer policies matching the member type; if none, fall back to all active policies
+   * so newly configured types appear before the first accrual run.
+   */
+  async getApplicableLeaveTypes(
+    memberTypeId: string,
+  ): Promise<Array<{ leave_type: string; method: string }>> {
+    const matched = await this.db.all<{ leave_type: string; method: string }>(
+      `SELECT leave_type,
+              CASE WHEN SUM(CASE WHEN method = 'unlimited' THEN 1 ELSE 0 END) > 0
+                   THEN 'unlimited' ELSE MAX(method) END AS method
+       FROM leave_policies
+       WHERE active = 1 AND member_type_id = ?
+       GROUP BY leave_type
+       ORDER BY leave_type`,
+      [memberTypeId],
+    );
+    if (matched.length > 0) return matched;
+
+    return this.db.all<{ leave_type: string; method: string }>(
+      `SELECT leave_type,
+              CASE WHEN SUM(CASE WHEN method = 'unlimited' THEN 1 ELSE 0 END) > 0
+                   THEN 'unlimited' ELSE MAX(method) END AS method
+       FROM leave_policies
+       WHERE active = 1
+       GROUP BY leave_type
+       ORDER BY leave_type`,
+    );
   }
 
   /** Upsert PTO balance — create or update accrued/used. */

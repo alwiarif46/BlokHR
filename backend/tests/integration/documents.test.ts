@@ -37,6 +37,21 @@ describe('Document Management Module', () => {
       expect(res.body.document.version).toBe(1);
     });
 
+    it('stores fileId on create', async () => {
+      const res = await request(app)
+        .post('/api/documents')
+        .send({
+          title: 'Signed Policy PDF',
+          category: 'policy',
+          content: '',
+          fileId: 'file-upload-abc',
+          ackRequired: true,
+        })
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(res.status).toBe(201);
+      expect(res.body.document.file_id).toBe('file-upload-abc');
+    });
+
     it('rejects missing title', async () => {
       const res = await request(app)
         .post('/api/documents')

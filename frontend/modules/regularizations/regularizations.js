@@ -16,7 +16,10 @@ import { registerModule } from '../../shared/router.js';
 /* ── Module state ── */
 let _container = null;
 let _regTab = 'my';
-let _regList = [];
+/** @type {any[]} */
+let _regMine = [];
+/** @type {any[]} */
+let _regPending = [];
 
 /* ══════════════════════════════════════════════════════════════
    RENDER PAGE
@@ -50,14 +53,100 @@ export function renderRegularizationsPage(container) {
    ══════════════════════════════════════════════════════════════ */
 
 export async function regLoadData() {
-  const data = await api.get('/api/regularizations');
-  _regList = (data && !data._error)
-    ? (data.regularizations || data || [])
-    : [];
-  if (!Array.isArray(_regList)) _regList = [];
+  const session = getSession();
+  const email = (session && session.email) || '';
+  const q = email ? '?email=' + encodeURIComponent(email) : '';
+
+  const [mineRes, pendingRes] = await Promise.all([
+    email ? api.get('/api/regularizations' + q) : Promise.resolve({ regularizations: [] }),
+    api.get('/api/pending-actions-detail'),
+  ]);
+
+  if (mineRes && mineRes._error) {
+    toast(mineRes.message || 'Could not load regularizations', 'error');
+    _regMine = [];
+  } else {
+    const rows = (mineRes && (mineRes.regularizations || mineRes)) || [];
+    _regMine = (Array.isArray(rows) ? rows : []).map(_normalizeReg);
+  }
+
+  if (pendingRes && pendingRes._error) {
+    _regPending = [];
+  } else {
+    const rows = (pendingRes && pendingRes.regularizations) || [];
+    _regPending = (Array.isArray(rows) ? rows : []).map(_normalizeReg);
+  }
 
   regRenderStats();
   regRender();
+}
+
+/** Map API rows (snake_case or slim pending detail) to UI shape. */
+function _normalizeReg(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+  const status = raw.status || '';
+  const inTime = raw.inTime || raw.in_time || raw.correctedClockIn || '';
+  const outTime = raw.outTime || raw.out_time || raw.correctedClockOut || '';
+  return {
+    id: raw.id,
+    email: raw.email || '',
+    name: raw.name || '',
+    date: raw.date || '',
+    correctionType: raw.correctionType || raw.correction_type || raw.type || '',
+    status: status,
+    statusKey: String(status).toLowerCase(),
+    originalClockIn: raw.originalClockIn || '—',
+    correctedClockIn: inTime || '—',
+    originalClockOut: raw.originalClockOut || '—',
+    correctedClockOut: outTime || '—',
+    reason: raw.reason || '',
+    submittedOn: raw.submittedOn || (raw.created_at ? String(raw.created_at).slice(0, 10) : ''),
+    approvedByName:
+      raw.approvedByName ||
+      raw.hr_approver_email ||
+      raw.manager_approver_email ||
+      '',
+    rejectionReason: raw.rejectionReason || raw.rejection_comments || '',
+    tier: status === 'manager_approved' ? 2 : status === 'pending' ? 1 : null,
+  };
+}
+
+function _mergedList() {
+  const byId = Object.create(null);
+  _regMine.forEach(function (r) {
+    if (r && r.id) byId[r.id] = r;
+  });
+  _regPending.forEach(function (r) {
+    if (r && r.id) byId[r.id] = r;
+  });
+  return Object.keys(byId).map(function (k) { return byId[k]; });
+}
+
+function _emailsMatch(a, b) {
+  const x = (a || '').toLowerCase();
+  const y = (b || '').toLowerCase();
+  if (!x || !y) return !x && !y;
+  if (x === y) return true;
+  const lx = x.split('@')[0];
+  const ly = y.split('@')[0];
+  return !!lx && lx === ly;
+}
+
+function _itemsForTab() {
+  const session = getSession();
+  const email = (session && session.email) || '';
+
+  if (_regTab === 'my') {
+    return _regMine.filter(function (r) {
+      return !email || _emailsMatch(r.email, email);
+    });
+  }
+  if (_regTab === 'pending') {
+    return _regPending.filter(function (r) {
+      return r.statusKey === 'pending' || r.statusKey === 'manager_approved';
+    });
+  }
+  return _mergedList();
 }
 
 /* ══════════════════════════════════════════════════════════════
@@ -68,11 +157,12 @@ export function regRenderStats() {
   const el = _container && _container.querySelector('#regStats');
   if (!el) return;
 
+  const source = _regTab === 'pending' ? _regPending : _regTab === 'all' ? _mergedList() : _regMine;
   let pending = 0, approved = 0, rejected = 0;
-  _regList.forEach(function (r) {
-    if (r.status === 'pending') pending++;
-    else if (r.status === 'approved') approved++;
-    else if (r.status === 'rejected') rejected++;
+  source.forEach(function (r) {
+    if (r.statusKey === 'pending' || r.statusKey === 'manager_approved') pending++;
+    else if (r.statusKey === 'approved') approved++;
+    else if (r.statusKey === 'rejected') rejected++;
   });
 
   el.innerHTML =
@@ -89,18 +179,12 @@ export function regRender() {
   const el = _container && _container.querySelector('#regContent');
   if (!el) return;
 
-  const session = getSession();
-  const email = (session && session.email) || '';
-  let items = _regList;
-
-  if (_regTab === 'my') {
-    items = items.filter(function (r) { return r.email === email || !email; });
-  } else if (_regTab === 'pending') {
-    items = items.filter(function (r) { return r.status === 'pending'; });
-  }
+  const items = _itemsForTab();
 
   const submitBtn = _container.querySelector('#regSubmitBtn');
   if (submitBtn) submitBtn.style.display = _regTab === 'my' ? '' : 'none';
+
+  regRenderStats();
 
   if (!items.length) {
     el.innerHTML = '<div class="reg-empty"><div class="reg-empty-icon">&#128221;</div><div class="reg-empty-text">No regularization requests</div></div>';
@@ -111,11 +195,12 @@ export function regRender() {
   let html = '<div class="reg-grid">';
 
   items.forEach(function (r, i) {
+    const badgeClass = (r.statusKey || r.status || '').replace(/\s+/g, '_');
     html += '<div class="reg-card" style="animation-delay:' + i * 0.04 + 's">';
     html += '<div class="reg-card-hdr">';
     html += '<div><div class="reg-card-name">' + (showName ? _esc(r.name) : 'Correction for ' + _esc(r.date)) + '</div>';
     html += '<div class="reg-card-date">' + (showName ? _esc(r.date) + ' &middot; ' : '') + 'Submitted ' + _esc(r.submittedOn || '') + '</div></div>';
-    html += '<span class="reg-card-badge ' + _esc(r.status) + '">' + _esc(r.status) + (r.tier ? ' (T' + r.tier + ')' : '') + '</span>';
+    html += '<span class="reg-card-badge ' + _esc(badgeClass) + '">' + _esc(r.status) + (r.tier ? ' (T' + r.tier + ')' : '') + '</span>';
     html += '</div>';
 
     html += '<div class="reg-card-body">';
@@ -128,8 +213,9 @@ export function regRender() {
     if (r.rejectionReason) html += '<div style="font-size:9px;color:var(--status-absent);margin-top:4px">Rejected: ' + _esc(r.rejectionReason) + '</div>';
 
     html += '<div class="reg-card-actions">';
-    if (r.status === 'pending' && _regTab === 'pending') {
-      html += '<button class="approve" data-reg-action="approve" data-reg-id="' + _esc(r.id) + '">&#10003; Approve</button>';
+    if (_regTab === 'pending' && (r.statusKey === 'pending' || r.statusKey === 'manager_approved')) {
+      const roleLabel = r.statusKey === 'pending' ? 'Manager approve' : 'HR approve';
+      html += '<button class="approve" data-reg-action="approve" data-reg-id="' + _esc(r.id) + '" data-reg-status="' + _esc(r.status) + '">&#10003; ' + roleLabel + '</button>';
       html += '<button class="danger" data-reg-action="reject" data-reg-id="' + _esc(r.id) + '">&#10005; Reject</button>';
     }
     html += '</div></div>';
@@ -142,6 +228,12 @@ export function regRender() {
 /** Alias for pattern consistency */
 export function regRenderPending() {
   _regTab = 'pending';
+  const tabs = _container && _container.querySelector('#regTabs');
+  if (tabs) {
+    tabs.querySelectorAll('.reg-tab').forEach(function (t) {
+      t.classList.toggle('active', t.dataset.regt === 'pending');
+    });
+  }
   regRender();
 }
 
@@ -149,10 +241,16 @@ export function regRenderPending() {
    CRUD
    ══════════════════════════════════════════════════════════════ */
 
-export async function regApprove(id) {
-  const result = await api.put('/api/regularizations/' + id + '/approve', {});
+export async function regApprove(id, statusHint) {
+  const row =
+    _regPending.find(function (r) { return r.id === id; }) ||
+    _regMine.find(function (r) { return r.id === id; });
+  const status = statusHint || (row && row.status) || 'pending';
+  const role = status === 'manager_approved' ? 'hr' : 'manager';
+
+  const result = await api.put('/api/regularizations/' + id + '/approve', { role: role });
   if (result && !result._error) {
-    toast('Regularization approved', 'success');
+    toast(role === 'manager' ? 'Manager approved' : 'HR approved', 'success');
     regLoadData();
     return;
   }
@@ -163,7 +261,7 @@ export async function regReject(id) {
   const reason = prompt('Rejection reason:');
   if (reason === null) return;
 
-  const result = await api.put('/api/regularizations/' + id + '/reject', { reason: reason });
+  const result = await api.put('/api/regularizations/' + id + '/reject', { comments: reason });
   if (result && !result._error) {
     toast('Regularization rejected', 'success');
     regLoadData();
@@ -184,8 +282,8 @@ export function regShowForm() {
     '<div class="reg-modal-title">Submit Regularization</div>' +
     '<div class="reg-field"><label>Date *</label><input type="date" id="regDate"></div>' +
     '<div style="display:flex;gap:8px">' +
-      '<div class="reg-field" style="flex:1"><label>Corrected Clock In *</label><input type="time" id="regClockIn"></div>' +
-      '<div class="reg-field" style="flex:1"><label>Corrected Clock Out *</label><input type="time" id="regClockOut"></div>' +
+      '<div class="reg-field" style="flex:1"><label>Corrected Clock In</label><input type="time" id="regClockIn"></div>' +
+      '<div class="reg-field" style="flex:1"><label>Corrected Clock Out</label><input type="time" id="regClockOut"></div>' +
     '</div>' +
     '<div class="reg-field"><label>Reason *</label><textarea id="regReason" style="min-height:50px"></textarea></div>' +
     '<div class="reg-form-actions"><button class="reg-btn ghost" data-reg-action="close-modal">Cancel</button><button class="reg-btn" id="regSaveBtn">Submit</button></div>';
@@ -209,17 +307,30 @@ async function _saveReg() {
   if (!clockIn && !clockOut) { toast('At least one corrected time is required', 'error'); return; }
   if (!reason) { toast('Reason is required', 'error'); return; }
 
+  let correctionType = 'both';
+  if (clockIn && !clockOut) correctionType = 'clock-in';
+  else if (!clockIn && clockOut) correctionType = 'clock-out';
+
   const session = getSession() || {};
+  const saveBtn = box.querySelector('#regSaveBtn');
+  if (saveBtn) {
+    if (saveBtn.disabled) return;
+    saveBtn.disabled = true;
+  }
+
   const body = {
     date: date,
-    correctedClockIn: clockIn || null,
-    correctedClockOut: clockOut || null,
+    inTime: clockIn || '',
+    outTime: clockOut || '',
+    correctionType: correctionType,
     reason: reason,
     email: session.email || '',
     name: session.name || 'User',
   };
 
   const result = await api.post('/api/regularizations', body);
+  if (saveBtn) saveBtn.disabled = false;
+
   if (result && !result._error) {
     toast('Regularization submitted', 'success');
     regCloseModal();
@@ -274,7 +385,7 @@ function _bindEvents(container) {
       if (!btn) return;
       const action = btn.dataset.regAction;
       const id = btn.dataset.regId;
-      if (action === 'approve') regApprove(id);
+      if (action === 'approve') regApprove(id, btn.dataset.regStatus);
       else if (action === 'reject') regReject(id);
     });
   }
@@ -289,14 +400,20 @@ function _bindEvents(container) {
 function _esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 
 /* ── Test helpers ── */
-export function _getRegs() { return _regList; }
-export function _setRegs(list) { _regList = list; }
+export function _getRegs() { return _mergedList(); }
+export function _setRegs(list) {
+  _regMine = Array.isArray(list) ? list.map(_normalizeReg) : [];
+  _regPending = [];
+}
 export function _getTab() { return _regTab; }
+export function _getMine() { return _regMine; }
+export function _getPending() { return _regPending; }
 
 export function _resetState() {
   _container = null;
   _regTab = 'my';
-  _regList = [];
+  _regMine = [];
+  _regPending = [];
 }
 
 /* ── Register ── */

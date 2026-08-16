@@ -39,13 +39,17 @@ export function createLeaveRouter(
         reason?: string;
       };
 
-      if (!personEmail || !leaveType || !startDate || !endDate) {
+      // Prefer authenticated identity — do not trust a spoofed applicant email from the body.
+      const identityEmail = (req.identity?.email ?? '').toLowerCase().trim();
+      const applicantEmail = identityEmail || (personEmail ?? '').toLowerCase().trim();
+
+      if (!applicantEmail || !leaveType || !startDate || !endDate) {
         throw new AppError('personEmail, leaveType, startDate, and endDate are required', 400);
       }
 
       const result = await service.submit({
-        personName: personName ?? personEmail,
-        personEmail: personEmail.toLowerCase().trim(),
+        personName: personName ?? applicantEmail,
+        personEmail: applicantEmail,
         leaveType,
         kind: kind ?? 'FullDay',
         startDate,
@@ -179,7 +183,8 @@ export function createLeaveRouter(
 
   /**
    * GET /api/leaves/balances?email=
-   * Per-type PTO balances for the leave UI. Returns only rows that exist — never invented types.
+   * Per-type balances for the leave UI. Merges active leave policies with pto_balances
+   * so configured types appear in Apply Leave even before the first accrual run.
    */
   router.get(
     '/leaves/balances',
@@ -192,20 +197,7 @@ export function createLeaveRouter(
         throw new AppError('email query parameter required', 400);
       }
 
-      const year = new Date().getFullYear();
-      const rows = await repo.getAllPtoBalances(email.toLowerCase().trim(), year);
-      const balances = rows.map((b) => {
-        const total = b.accrued + b.carry_forward;
-        return {
-          type: b.leave_type,
-          total,
-          used: b.used,
-          remaining: total - b.used,
-          accrued: b.accrued,
-          carryForward: b.carry_forward,
-          year: b.year,
-        };
-      });
+      const balances = await service.getUiBalances(email.toLowerCase().trim());
       res.json({ balances });
     }),
   );

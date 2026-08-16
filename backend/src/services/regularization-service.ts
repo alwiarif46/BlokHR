@@ -52,10 +52,18 @@ export class RegularizationService {
       return { success: false, error: 'Reason is required for correction requests' };
     }
 
-    const reg = await this.repo.create(data);
+    const member = await this.repo.resolveMemberEmail(data.email);
+    const email = (member?.email ?? data.email).toLowerCase().trim();
+    const name = data.name || member?.name || email;
+
+    const reg = await this.repo.create({
+      ...data,
+      email,
+      name,
+    });
 
     this.logger.info(
-      { regId: reg.id, email: data.email, date: data.date, type: data.correctionType },
+      { regId: reg.id, email, date: data.date, type: data.correctionType },
       'Regularization submitted',
     );
 
@@ -66,7 +74,11 @@ export class RegularizationService {
       });
     }
 
-    this.eventBus?.emit('regularization.submitted', { regularizationId: String(reg.id), email: data.email, date: data.date });
+    this.eventBus?.emit('regularization.submitted', {
+      regularizationId: String(reg.id),
+      email,
+      date: data.date,
+    });
 
     return { success: true, regularization: reg };
   }

@@ -18,6 +18,18 @@ export interface PtoBalanceResult {
   tenureYears: number;
 }
 
+/** Per-type balance row for the leave apply UI / balance cards. */
+export interface LeaveUiBalance {
+  type: string;
+  total: number | null;
+  used: number;
+  remaining: number | null;
+  accrued: number;
+  carryForward: number;
+  year: number;
+  unlimited: boolean;
+}
+
 /** Calculate days between two date strings, accounting for half-day kinds. */
 function calculateDaysRequested(startDate: string, endDate: string, kind: string): number {
   const start = new Date(startDate + 'T00:00:00');
@@ -116,10 +128,14 @@ export class LeaveService {
       return { success: false, error: 'End date cannot be before start date' };
     }
 
-    // Get member
+    // Get member (resolves OAuth UPN → HR email when local-part uniquely matches)
     const member = await this.repo.getMemberForLeave(data.personEmail);
     if (!member) {
-      return { success: false, error: 'Employee not found or inactive' };
+      return {
+        success: false,
+        error:
+          'Employee not found or inactive. Your login email must match an active employee profile.',
+      };
     }
 
     // Get policy
@@ -134,9 +150,13 @@ export class LeaveService {
       paidType = policy.is_paid === 1 ? 'paid' : 'unpaid';
     }
 
+    // Persist against the canonical member email (not a mismatched OAuth UPN)
+    const personEmail = member.email;
+    const personName = data.personName || member.name || personEmail;
+
     const leave = await this.repo.createLeaveRequest({
-      personName: data.personName,
-      personEmail: data.personEmail,
+      personName,
+      personEmail,
       leaveType: data.leaveType,
       kind: data.kind,
       startDate: data.startDate,
@@ -148,7 +168,7 @@ export class LeaveService {
     });
 
     this.logger.info(
-      { leaveId: leave.id, email: data.personEmail, type: data.leaveType, days: daysRequested },
+      { leaveId: leave.id, email: personEmail, type: data.leaveType, days: daysRequested },
       'Leave submitted',
     );
 
@@ -159,7 +179,15 @@ export class LeaveService {
       });
     }
 
-    this.eventBus?.emit('leave.submitted', { leaveId: leave.id, email: data.personEmail, name: data.personName, leaveType: data.leaveType, startDate: data.startDate, endDate: data.endDate, days: daysRequested });
+    this.eventBus?.emit('leave.submitted', {
+      leaveId: leave.id,
+      email: personEmail,
+      name: personName,
+      leaveType: data.leaveType,
+      startDate: data.startDate,
+      endDate: data.endDate,
+      days: daysRequested,
+    });
 
     return { success: true, leave, paidType };
   }
@@ -310,7 +338,64 @@ export class LeaveService {
 
   /** Get all leaves for an employee. */
   async getLeaves(email: string): Promise<LeaveRequest[]> {
-    return this.repo.getLeavesByEmail(email);
+    const member = await this.repo.getMemberForLeave(email);
+    return this.repo.getLeavesByEmail(member?.email ?? email);
+  }
+
+  /**
+   * Leave types + balances for the employee UI.
+   * Includes configured policy types even when no pto_balances row exists yet
+   * (common after configuring policies before the first accrual).
+   */
+  async getUiBalances(email: string): Promise<LeaveUiBalance[]> {
+    const year = new Date().getFullYear();
+    const member = await this.repo.getMemberForLeave(email);
+    const memberTypeId = member?.member_type_id || 'fte';
+    const balanceEmail = member?.email ?? email;
+    const policyTypes = await this.repo.getApplicableLeaveTypes(memberTypeId);
+    const rows = await this.repo.getAllPtoBalances(balanceEmail, year);
+    const byType = new Map(rows.map((r) => [r.leave_type, r]));
+
+    const result: LeaveUiBalance[] = [];
+    const seen = new Set<string>();
+
+    for (const p of policyTypes) {
+      seen.add(p.leave_type);
+      const b = byType.get(p.leave_type);
+      const unlimited = p.method === 'unlimited';
+      const accrued = b?.accrued ?? 0;
+      const carryForward = b?.carry_forward ?? 0;
+      const used = b?.used ?? 0;
+      const total = unlimited ? null : accrued + carryForward;
+      result.push({
+        type: p.leave_type,
+        total,
+        used,
+        remaining: unlimited || total === null ? null : total - used,
+        accrued,
+        carryForward,
+        year,
+        unlimited,
+      });
+    }
+
+    // Keep any orphan balance rows (legacy types no longer in active policies)
+    for (const b of rows) {
+      if (seen.has(b.leave_type)) continue;
+      const total = b.accrued + b.carry_forward;
+      result.push({
+        type: b.leave_type,
+        total,
+        used: b.used,
+        remaining: total - b.used,
+        accrued: b.accrued,
+        carryForward: b.carry_forward,
+        year: b.year,
+        unlimited: false,
+      });
+    }
+
+    return result;
   }
 
   /** Calculate PTO balance for an employee. */

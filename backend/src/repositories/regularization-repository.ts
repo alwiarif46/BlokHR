@@ -63,11 +63,33 @@ export class RegularizationRepository {
     return this.db.get<Regularization>('SELECT * FROM regularizations WHERE id = ?', [id]);
   }
 
-  /** Get all regularizations for an employee. */
-  async getByEmail(email: string): Promise<Regularization[]> {
-    return this.db.all<Regularization>(
-      'SELECT * FROM regularizations WHERE email = ? ORDER BY created_at DESC',
+  /** Resolve login/UPN email to the canonical members.email when unique. */
+  async resolveMemberEmail(email: string): Promise<{ email: string; name: string } | null> {
+    const exact = await this.db.get<{ email: string; name: string }>(
+      'SELECT email, name FROM members WHERE lower(email) = lower(?) AND active = 1',
       [email],
+    );
+    if (exact) return exact;
+
+    const at = email.indexOf('@');
+    if (at <= 0) return null;
+    const local = email.slice(0, at).toLowerCase();
+    const matches = await this.db.all<{ email: string; name: string }>(
+      `SELECT email, name FROM members
+       WHERE active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
+      [local],
+    );
+    if (matches.length === 1) return matches[0];
+    return null;
+  }
+
+  /** Get all regularizations for an employee (resolves OAuth UPN → HR email). */
+  async getByEmail(email: string): Promise<Regularization[]> {
+    const member = await this.resolveMemberEmail(email);
+    const canonical = (member?.email ?? email).toLowerCase();
+    return this.db.all<Regularization>(
+      'SELECT * FROM regularizations WHERE lower(email) = ? ORDER BY created_at DESC',
+      [canonical],
     );
   }
 

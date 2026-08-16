@@ -24,6 +24,44 @@ describe('Leave Module', () => {
     await db.close();
   });
 
+  // ── Balances for apply UI ──
+
+  describe('GET /api/leaves/balances', () => {
+    it('returns configured policy leave types before any accrual', async () => {
+      const res = await request(app)
+        .get('/api/leaves/balances?email=alice@shaavir.com')
+        .set('X-User-Email', 'alice@shaavir.com');
+
+      expect(res.status).toBe(200);
+      expect(res.body.balances.length).toBeGreaterThan(0);
+      const types = res.body.balances.map((b: { type: string }) => b.type);
+      expect(types).toContain('Casual');
+      expect(types).toContain('Sick');
+
+      const casual = res.body.balances.find((b: { type: string }) => b.type === 'Casual');
+      expect(casual.remaining).toBe(0);
+      expect(casual.total).toBe(0);
+      expect(casual.used).toBe(0);
+    });
+
+    it('overlays accrued balances onto policy types', async () => {
+      const year = new Date().getFullYear();
+      await db.run(
+        'INSERT INTO pto_balances (email, leave_type, year, accrued, used, carry_forward) VALUES (?, ?, ?, ?, ?, ?)',
+        ['alice@shaavir.com', 'Casual', year, 12, 2, 0],
+      );
+
+      const res = await request(app)
+        .get('/api/leaves/balances?email=alice@shaavir.com')
+        .set('X-User-Email', 'alice@shaavir.com');
+
+      const casual = res.body.balances.find((b: { type: string }) => b.type === 'Casual');
+      expect(casual.total).toBe(12);
+      expect(casual.used).toBe(2);
+      expect(casual.remaining).toBe(10);
+    });
+  });
+
   // ── Submission ──
 
   describe('POST /api/leave-submit', () => {
@@ -46,6 +84,24 @@ describe('Leave Module', () => {
       expect(res.body.leave.status).toBe('Pending');
       expect(res.body.leave.days_requested).toBe(1);
       expect(res.body.paidType).toBe('paid');
+    });
+
+    it('resolves OAuth UPN to HR member email by unique local-part', async () => {
+      const res = await request(app)
+        .post('/api/leave-submit')
+        .send({
+          personName: 'Alice',
+          personEmail: 'alice@tenant.onmicrosoft.com',
+          leaveType: 'Casual',
+          kind: 'FullDay',
+          startDate: '2026-05-01',
+          endDate: '2026-05-01',
+          reason: 'UPN login',
+        })
+        .set('X-User-Email', 'alice@tenant.onmicrosoft.com');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.leave.person_email).toBe('alice@shaavir.com');
     });
 
     it('calculates half-day as 0.5', async () => {

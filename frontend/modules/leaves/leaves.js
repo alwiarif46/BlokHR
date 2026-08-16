@@ -61,19 +61,24 @@ export async function lvLoadData() {
   const email = (session && session.email) || '';
   const q = email ? '?email=' + encodeURIComponent(email) : '';
 
-  const [leavesData, balancesData] = await Promise.all([
+  const [leavesData, balancesData, policiesData, typesData] = await Promise.all([
     email ? api.get('/api/leaves' + q) : Promise.resolve({ leaves: [] }),
     email ? api.get('/api/leaves/balances' + q) : Promise.resolve({ balances: [] }),
+    api.get('/api/leave-policies'),
+    api.get('/api/leave-types'),
   ]);
 
   _lvList = (leavesData && !leavesData._error)
     ? (leavesData.leaves || leavesData || [])
     : [];
-  _lvBalances = (balancesData && !balancesData._error)
-    ? (balancesData.balances || balancesData || [])
-    : [];
-
   if (!Array.isArray(_lvList)) _lvList = [];
+  _lvList = _lvList.map(_normalizeLeave);
+
+  const fromBalances = (balancesData && !balancesData._error)
+    ? (balancesData.balances || [])
+    : [];
+  _lvBalances = _mergeLeaveTypeOptions(fromBalances, policiesData, typesData);
+
   if (!Array.isArray(_lvBalances)) _lvBalances = [];
 
   if (leavesData && leavesData._error) {
@@ -87,6 +92,74 @@ export async function lvLoadData() {
   lvRender();
 }
 
+/**
+ * Merge balance rows with configured leave policies/types so Apply Leave
+ * always lists types admins created — even before accrual or if balances is empty.
+ */
+function _mergeLeaveTypeOptions(balances, policiesData, typesData) {
+  const byType = Object.create(null);
+  (Array.isArray(balances) ? balances : []).forEach(function (b) {
+    if (!b || !b.type) return;
+    byType[b.type] = Object.assign({}, b);
+  });
+
+  const policies = (policiesData && !policiesData._error && policiesData.policies) || [];
+  if (Array.isArray(policies)) {
+    policies.forEach(function (p) {
+      if (!p || p.active === false) return;
+      const type = p.leaveType || p.leave_type;
+      if (!type) return;
+      const unlimited = p.method === 'unlimited';
+      if (!byType[type]) {
+        byType[type] = {
+          type: type,
+          total: unlimited ? null : 0,
+          used: 0,
+          remaining: unlimited ? null : 0,
+          unlimited: unlimited,
+        };
+      } else if (unlimited) {
+        byType[type].unlimited = true;
+        byType[type].total = null;
+        byType[type].remaining = null;
+      }
+    });
+  }
+
+  const types = (typesData && !typesData._error && typesData.types) || [];
+  if (Array.isArray(types)) {
+    types.forEach(function (t) {
+      if (!t || byType[t]) return;
+      byType[t] = { type: t, total: 0, used: 0, remaining: 0, unlimited: false };
+    });
+  }
+
+  return Object.keys(byType).sort().map(function (k) { return byType[k]; });
+}
+
+/** Map API leave_request rows to the UI card shape. */
+function _normalizeLeave(raw) {
+  if (!raw || typeof raw !== 'object') return raw;
+  const status = raw.status || '';
+  const statusKey = String(status).toLowerCase();
+  return {
+    id: raw.id,
+    email: raw.email || raw.person_email || '',
+    name: raw.name || raw.person_name || '',
+    type: raw.type || raw.leave_type || '',
+    startDate: raw.startDate || raw.start_date || '',
+    endDate: raw.endDate || raw.end_date || '',
+    days: raw.days != null ? raw.days : raw.days_requested,
+    halfDay: !!(raw.halfDay || raw.kind === 'FirstHalf' || raw.kind === 'SecondHalf'),
+    reason: raw.reason || '',
+    status: status,
+    statusKey: statusKey,
+    appliedOn: raw.appliedOn || (raw.created_at ? String(raw.created_at).slice(0, 10) : ''),
+    approvedByName: raw.approvedByName || raw.manager_approver_email || raw.hr_approver_email || '',
+    rejectionReason: raw.rejectionReason || raw.rejection_reason || '',
+  };
+}
+
 /* ══════════════════════════════════════════════════════════════
    STATS (balance cards)
    ══════════════════════════════════════════════════════════════ */
@@ -98,21 +171,31 @@ export function lvRenderStats() {
   if (!_lvBalances.length) {
     el.innerHTML =
       '<div class="lv-empty" style="padding:12px 0">' +
-        '<div class="lv-empty-text" style="font-size:12px">No leave balances yet</div>' +
-        '<div class="lv-empty-text" style="font-size:11px;opacity:0.7;margin-top:4px">Balances appear after leave policies accrue for your account</div>' +
+        '<div class="lv-empty-text" style="font-size:12px">No leave types configured</div>' +
+        '<div class="lv-empty-text" style="font-size:11px;opacity:0.7;margin-top:4px">In Settings → Leave Configuration, use <b>Leave policies → + Add leave type</b> (saving the toggles alone does not create types). Then refresh this page.</div>' +
       '</div>';
     return;
   }
 
   let html = '<div class="lv-balances">';
   _lvBalances.forEach(function (b) {
-    const pct = b.total ? Math.round(b.used / b.total * 100) : 0;
+    const unlimited = !!b.unlimited;
+    const remaining = unlimited
+      ? '∞'
+      : (b.remaining != null ? b.remaining : (b.total || 0) - (b.used || 0));
+    const pct = !unlimited && b.total ? Math.round((b.used || 0) / b.total * 100) : 0;
     html +=
       '<div class="lv-bal">' +
         '<div class="lv-bal-type">' + _esc(b.type) + '</div>' +
-        '<div class="lv-bal-num" style="color:' + (b.color || 'var(--accent)') + '">' + (b.remaining != null ? b.remaining : b.total - b.used) + '</div>' +
-        '<div class="lv-bal-of">of ' + b.total + ' remaining (' + b.used + ' used)</div>' +
-        '<div class="lv-bal-bar"><div class="lv-bal-fill" style="width:' + pct + '%;background:' + (b.color || 'var(--accent)') + '"></div></div>' +
+        '<div class="lv-bal-num" style="color:' + (b.color || 'var(--accent)') + '">' + remaining + '</div>' +
+        '<div class="lv-bal-of">' +
+          (unlimited
+            ? 'Unlimited' + ((b.used || 0) ? ' (' + b.used + ' used)' : '')
+            : 'of ' + (b.total != null ? b.total : 0) + ' remaining (' + (b.used || 0) + ' used)') +
+        '</div>' +
+        (unlimited
+          ? ''
+          : '<div class="lv-bal-bar"><div class="lv-bal-fill" style="width:' + pct + '%;background:' + (b.color || 'var(--accent)') + '"></div></div>') +
       '</div>';
   });
   html += '</div>';
@@ -133,9 +216,13 @@ export function lvRender() {
 
   /* Tab filtering */
   if (_lvTab === 'my') {
-    items = items.filter(function (l) { return l.email === email || !email; });
+    items = items.filter(function (l) {
+      return !email || (l.email || '').toLowerCase() === email.toLowerCase();
+    });
   } else if (_lvTab === 'team') {
-    items = items.filter(function (l) { return l.status === 'pending'; });
+    items = items.filter(function (l) {
+      return (l.statusKey || String(l.status || '').toLowerCase()) === 'pending';
+    });
   }
 
   /* Search filtering */
@@ -176,7 +263,7 @@ export function lvRender() {
       (showName ? _esc(l.name) : _esc(l.type) + ' Leave') + '</div>';
     html += '<div class="lv-card-type">' +
       (showName ? _esc(l.type) + ' &middot; ' : '') + 'Applied ' + _esc(l.appliedOn || '') + '</div></div>';
-    html += '<span class="lv-card-badge ' + _esc(l.status) + '">' + _esc(l.status) + '</span>';
+    html += '<span class="lv-card-badge ' + _esc((l.statusKey || l.status || '').replace(/\s+/g, '-')) + '">' + _esc(l.status) + '</span>';
     html += '</div>';
 
     /* Dates + days */
@@ -196,11 +283,11 @@ export function lvRender() {
 
     /* Actions */
     html += '<div class="lv-card-actions">';
-    if (l.status === 'pending' && _lvTab === 'team') {
+    if ((l.statusKey === 'pending' || l.status === 'Pending') && _lvTab === 'team') {
       html += '<button class="approve" data-lv-action="approve" data-lv-id="' + _esc(l.id) + '">&#10003; Approve</button>';
       html += '<button class="danger" data-lv-action="reject" data-lv-id="' + _esc(l.id) + '">&#10005; Reject</button>';
     }
-    if (l.status === 'pending' && _lvTab === 'my') {
+    if ((l.statusKey === 'pending' || l.status === 'Pending') && _lvTab === 'my') {
       html += '<button class="danger" data-lv-action="cancel" data-lv-id="' + _esc(l.id) + '">Cancel</button>';
     }
     html += '</div></div>';
@@ -215,7 +302,7 @@ export function lvRender() {
    ══════════════════════════════════════════════════════════════ */
 
 export async function lvApprove(id) {
-  const result = await api.post('/api/leaves/' + id + '/approve', {});
+  const result = await api.post('/api/leave-approve', { leaveId: id });
   if (result && !result._error) {
     toast('Leave approved', 'success');
     lvLoadData();
@@ -228,7 +315,7 @@ export async function lvReject(id) {
   const reason = prompt('Rejection reason:');
   if (reason === null) return;
 
-  const result = await api.post('/api/leaves/' + id + '/reject', { reason: reason });
+  const result = await api.post('/api/leave-reject', { leaveId: id, reason: reason });
   if (result && !result._error) {
     toast('Leave rejected', 'success');
     lvLoadData();
@@ -240,7 +327,11 @@ export async function lvReject(id) {
 export async function lvCancel(id) {
   if (!confirm('Cancel this leave application?')) return;
 
-  const result = await api.post('/api/leaves/' + id + '/cancel', {});
+  const session = getSession() || {};
+  const result = await api.post('/api/leave-delete', {
+    leaveId: id,
+    cancelledBy: session.email || '',
+  });
   if (result && !result._error) {
     toast('Leave cancelled', 'success');
     lvLoadData();
@@ -256,17 +347,28 @@ export async function lvCancel(id) {
 export function lvShowForm(lv) {
   const isEdit = !!lv;
   const typeOpts = _lvBalances.map(function (b) {
+    let label = _esc(b.type);
+    if (b.unlimited) {
+      label += ' (unlimited)';
+    } else {
+      const rem = b.remaining != null ? b.remaining : ((b.total || 0) - (b.used || 0));
+      label += ' (' + rem + ' remaining)';
+    }
     return '<option value="' + _esc(b.type) + '"' +
-      (lv && lv.type === b.type ? ' selected' : '') + '>' +
-      _esc(b.type) + ' (' + (b.remaining != null ? b.remaining : b.total - b.used) + ' remaining)</option>';
+      (lv && lv.type === b.type ? ' selected' : '') + '>' + label + '</option>';
   }).join('');
 
   const box = _container && _container.querySelector('#lvModalBox');
   if (!box) return;
 
+  const typeField = _lvBalances.length
+    ? '<div class="lv-field"><label>Leave Type *</label><select id="lvType"><option value="">\u2014</option>' + typeOpts + '</select></div>'
+    : '<div class="lv-field"><label>Leave Type *</label><select id="lvType" disabled><option value="">No leave types configured</option></select>' +
+      '<div style="font-size:11px;color:var(--tx3);margin-top:6px">Ask an admin to add leave policies in Settings, then use Accrue now if balances should be credited.</div></div>';
+
   box.innerHTML =
     '<div class="lv-modal-title">' + (isEdit ? 'Edit' : 'Apply for') + ' Leave</div>' +
-    '<div class="lv-field"><label>Leave Type *</label><select id="lvType"><option value="">\u2014</option>' + typeOpts + '</select></div>' +
+    typeField +
     '<div style="display:flex;gap:8px">' +
       '<div class="lv-field" style="flex:1"><label>Start Date *</label><input type="date" id="lvStart" value="' + _esc((lv && lv.startDate) || '') + '"></div>' +
       '<div class="lv-field" style="flex:1"><label>End Date *</label><input type="date" id="lvEnd" value="' + _esc((lv && lv.endDate) || '') + '"></div>' +
@@ -318,33 +420,39 @@ async function _saveLeave(lv, isEdit) {
   if (!start || !end) { toast('Start and end dates are required', 'error'); return; }
   if (!reason) { toast('Reason is required', 'error'); return; }
 
+  if (isEdit) {
+    toast('Edit is not supported — cancel the leave and apply again', 'error');
+    return;
+  }
+
   const halfDay = box.querySelector('#lvHalf').checked;
-  let days = halfDay ? 0.5 : Math.round((new Date(end + 'T00:00:00') - new Date(start + 'T00:00:00')) / 86400000) + 1;
-  if (days < 0.5) days = 0.5;
+  const saveBtn = box.querySelector('#lvSaveBtn');
+  if (saveBtn) {
+    if (saveBtn.disabled) return;
+    saveBtn.disabled = true;
+  }
 
   const session = getSession() || {};
-  const body = {
-    type: type, startDate: start, endDate: end, days: days,
-    halfDay: halfDay, reason: reason, status: 'pending',
-    email: session.email || '', name: session.name || 'User',
-    appliedOn: new Date().toISOString().split('T')[0],
-  };
+  const result = await api.post('/api/leave-submit', {
+    personName: session.name || session.email || 'User',
+    personEmail: session.email || '',
+    leaveType: type,
+    kind: halfDay ? 'FirstHalf' : 'FullDay',
+    startDate: start,
+    endDate: end,
+    reason: reason,
+  });
 
-  const method = isEdit ? 'PUT' : 'POST';
-  const path = isEdit ? '/api/leaves/' + lv.id : '/api/leaves';
-
-  const result = isEdit
-    ? await api.put(path, body)
-    : await api.post(path, body);
+  if (saveBtn) saveBtn.disabled = false;
 
   if (result && !result._error) {
-    toast('Leave ' + (isEdit ? 'updated' : 'submitted'), 'success');
+    toast('Leave submitted', 'success');
     lvCloseModal();
     lvLoadData();
     return;
   }
 
-  toast((result && result.message) || 'Failed', 'error');
+  toast((result && result.message) || 'Failed to submit leave', 'error');
 }
 
 /* ══════════════════════════════════════════════════════════════

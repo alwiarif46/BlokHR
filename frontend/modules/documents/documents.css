@@ -5,10 +5,19 @@
 .doc-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
 .doc-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .doc-spacer { flex: 1; }
+.doc-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+.doc-tab {
+  padding: 6px 12px; font-size: 11px; font-weight: 600; border: 1px solid var(--bd);
+  border-radius: var(--r); background: var(--bg2); color: var(--tx2); cursor: pointer;
+  font-family: inherit; transition: all 0.2s ease;
+}
+.doc-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+.theme-clean .doc-tab { border-radius: 10px; }
 .doc-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
 .theme-clean .doc-btn { color: #fff; border-radius: 10px; }
 .doc-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 .doc-btn.ghost { background: transparent; color: var(--accent); }
+.doc-btn.sm { padding: 4px 10px; font-size: 10px; }
 .doc-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .doc-stat { flex: 1; min-width: 100px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
 .theme-clean .doc-stat { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
@@ -34,13 +43,35 @@
 .doc-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .doc-modal.open { display: flex; }
 .doc-modal-box { background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
+.doc-modal-box.wide { width: 640px; }
 .theme-clean .doc-modal-box { border-radius: 20px; }
 .doc-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
 .doc-field { margin-bottom: 14px; }
 .doc-field label { display: block; font-size: 10px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+.doc-field-hint { font-size: 10px; color: var(--tx3); margin-top: 6px; line-height: 1.4; }
 .doc-field input, .doc-field select, .doc-field textarea { width: 100%; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r); padding: 10px 12px; color: var(--tx); font-family: inherit; font-size: 12px; outline: none; transition: all 0.25s ease; }
 .theme-clean .doc-field input, .theme-clean .doc-field select, .theme-clean .doc-field textarea { border-radius: 10px; }
 .doc-field input:focus, .doc-field select:focus, .doc-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.doc-field input[type="checkbox"] { width: auto; margin-right: 6px; }
+.doc-upload { position: relative; }
+.doc-upload-input { position: absolute; width: 0.1px; height: 0.1px; opacity: 0; overflow: hidden; z-index: -1; }
+.doc-upload-zone {
+  border: 1.5px dashed var(--bd); border-radius: var(--r); padding: 18px 14px; text-align: center;
+  cursor: pointer; background: var(--bg3); transition: all 0.2s ease;
+}
+.doc-upload-zone:hover { border-color: var(--accent); background: var(--accent-dim); }
+.doc-upload-icon { font-size: 22px; opacity: 0.55; margin-bottom: 4px; }
+.doc-upload-text { font-size: 12px; font-weight: 600; color: var(--tx); }
+.doc-upload-hint { font-size: 10px; color: var(--tx3); margin-top: 4px; }
+.doc-upload-meta { display: flex; gap: 6px; margin-top: 8px; }
+.doc-viewer { margin: 8px 0 12px; min-height: 320px; background: var(--bg3); border: 1px solid var(--bd); border-radius: var(--r); overflow: hidden; }
+.doc-viewer-frame { width: 100%; height: 58vh; min-height: 360px; border: 0; background: #fff; }
+.doc-viewer-media { display: block; max-width: 100%; max-height: 58vh; margin: 0 auto; }
+.doc-viewer-fallback { padding: 40px 20px; text-align: center; color: var(--tx2); display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.doc-preview {
+  margin-top: 14px; padding: 12px; background: var(--bg3); border: 1px solid var(--bd);
+  border-radius: var(--r); font-size: 11px; white-space: pre-wrap; max-height: 240px; overflow: auto; color: var(--tx2);
+}
 .doc-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 .doc-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
 .doc-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }

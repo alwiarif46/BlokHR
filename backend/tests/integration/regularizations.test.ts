@@ -66,12 +66,27 @@ describe('Regularization Module', () => {
       expect(res.body.regularization.correction_type).toBe('clock-in');
     });
 
-    it('rejects missing email', async () => {
+    it('rejects missing email when identity is absent', async () => {
       const res = await request(app)
         .post('/api/regularizations')
-        .send({ date: '2026-03-20', reason: 'test' })
-        .set('X-User-Email', 'alice@shaavir.com');
+        .send({ date: '2026-03-20', reason: 'test' });
       expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/email/i);
+    });
+
+    it('uses identity email when body email is omitted', async () => {
+      const res = await request(app)
+        .post('/api/regularizations')
+        .send({
+          date: '2026-03-21',
+          reason: 'Forgot punch',
+          correctionType: 'clock-in',
+          inTime: '09:00',
+        })
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.regularization.email).toBe('alice@shaavir.com');
     });
 
     it('rejects missing reason', async () => {

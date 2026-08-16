@@ -57,6 +57,8 @@ export interface AckWithDocumentRow extends AcknowledgmentRow {
   title: string;
   category: string;
   version: number;
+  file_id?: string | null;
+  content?: string;
 }
 
 /** Acknowledgment status per employee for a given document. */
@@ -288,7 +290,7 @@ export class DocumentRepository {
   /** Get pending acknowledgments for an employee (published, ack_required, not yet acked). */
   async getPendingAcknowledgments(email: string): Promise<AckWithDocumentRow[]> {
     return this.db.all<AckWithDocumentRow>(
-      `SELECT ea_stub.document_id, d.title, d.category, d.version,
+      `SELECT ea_stub.document_id, d.title, d.category, d.version, d.file_id, d.content,
               NULL AS id, ? AS email, NULL AS acked_at
        FROM documents d
        INNER JOIN (

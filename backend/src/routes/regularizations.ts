@@ -38,13 +38,16 @@ export function createRegularizationRouter(
         reason?: string;
       };
 
-      if (!email) throw new AppError('email is required', 400);
+      const identityEmail = (req.identity?.email ?? '').toLowerCase().trim();
+      const applicantEmail = identityEmail || (email ?? '').toLowerCase().trim();
+
+      if (!applicantEmail) throw new AppError('email is required', 400);
       if (!date) throw new AppError('date is required', 400);
       if (!reason) throw new AppError('reason is required', 400);
 
       const result = await service.submit({
-        email: email.toLowerCase().trim(),
-        name: name ?? email,
+        email: applicantEmail,
+        name: name ?? applicantEmail,
         date,
         correctionType: correctionType ?? 'both',
         inTime: inTime ?? '',
@@ -64,7 +67,10 @@ export function createRegularizationRouter(
   router.get(
     '/regularizations',
     asyncHandler(async (req: Request, res: Response) => {
-      const email = req.query.email as string | undefined;
+      const email =
+        (req.query.email as string | undefined) ||
+        req.identity?.email ||
+        (req.headers['x-user-email'] as string | undefined);
       if (!email) throw new AppError('email query parameter required', 400);
 
       const regularizations = await service.getByEmail(email.toLowerCase().trim());
