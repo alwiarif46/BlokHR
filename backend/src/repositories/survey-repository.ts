@@ -16,14 +16,19 @@ export interface SurveyRow {
   closed_at: string | null;
   created_at: string;
   updated_at: string;
+  audience: string;
+  min_responses: number;
 }
+
 export interface SurveyResponseRow {
   [key: string]: unknown;
   id: string;
   survey_id: string;
   answers_json: string;
   submitted_at: string;
+  subject_email: string;
 }
+
 export interface SurveyActionItemRow {
   [key: string]: unknown;
   id: string;
@@ -37,6 +42,15 @@ export interface SurveyActionItemRow {
   updated_at: string;
 }
 
+export interface SurveyPeerAssignmentRow {
+  [key: string]: unknown;
+  survey_id: string;
+  reviewer_email: string;
+  subject_email: string;
+  completed_at: string | null;
+  created_at: string;
+}
+
 export class SurveyRepository {
   constructor(private readonly db: DatabaseEngine) {}
 
@@ -47,11 +61,21 @@ export class SurveyRepository {
     anonymous?: boolean;
     recurrence?: string;
     targetGroupIds?: string;
+    audience?: string;
+    minResponses?: number;
     createdBy: string;
   }): Promise<SurveyRow> {
     const id = uuidv4();
+    const audience = data.audience === 'peer' ? 'peer' : 'employee';
+    const minResponses =
+      data.minResponses !== undefined
+        ? data.minResponses
+        : audience === 'peer'
+          ? 3
+          : 1;
     await this.db.run(
-      `INSERT INTO surveys (id, title, description, questions_json, anonymous, recurrence, target_group_ids, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO surveys (id, title, description, questions_json, anonymous, recurrence, target_group_ids, created_by, audience, min_responses)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         data.title,
@@ -61,6 +85,8 @@ export class SurveyRepository {
         data.recurrence ?? 'none',
         data.targetGroupIds ?? '',
         data.createdBy,
+        audience,
+        minResponses,
       ],
     );
     const row = await this.db.get<SurveyRow>('SELECT * FROM surveys WHERE id = ?', [id]);
@@ -95,6 +121,8 @@ export class SurveyRepository {
         | 'target_group_ids'
         | 'published_at'
         | 'closed_at'
+        | 'audience'
+        | 'min_responses'
       >
     >,
   ): Promise<void> {
@@ -116,11 +144,15 @@ export class SurveyRepository {
   }
 
   // ── Responses (anonymous) ──
-  async submitResponse(surveyId: string, answersJson: string): Promise<SurveyResponseRow> {
+  async submitResponse(
+    surveyId: string,
+    answersJson: string,
+    subjectEmail = '',
+  ): Promise<SurveyResponseRow> {
     const id = uuidv4();
     await this.db.run(
-      'INSERT INTO survey_responses_anonymous (id, survey_id, answers_json) VALUES (?, ?, ?)',
-      [id, surveyId, answersJson],
+      'INSERT INTO survey_responses_anonymous (id, survey_id, answers_json, subject_email) VALUES (?, ?, ?, ?)',
+      [id, surveyId, answersJson, subjectEmail],
     );
     const row = await this.db.get<SurveyResponseRow>(
       'SELECT * FROM survey_responses_anonymous WHERE id = ?',
@@ -130,19 +162,45 @@ export class SurveyRepository {
     return row;
   }
 
-  async getResponses(surveyId: string): Promise<SurveyResponseRow[]> {
+  async getResponses(surveyId: string, subjectEmail?: string): Promise<SurveyResponseRow[]> {
+    if (subjectEmail) {
+      return this.db.all<SurveyResponseRow>(
+        `SELECT * FROM survey_responses_anonymous
+         WHERE survey_id = ? AND subject_email = ?
+         ORDER BY submitted_at DESC`,
+        [surveyId, subjectEmail],
+      );
+    }
     return this.db.all<SurveyResponseRow>(
       'SELECT * FROM survey_responses_anonymous WHERE survey_id = ? ORDER BY submitted_at DESC',
       [surveyId],
     );
   }
 
-  async getResponseCount(surveyId: string): Promise<number> {
+  async getResponseCount(surveyId: string, subjectEmail?: string): Promise<number> {
+    if (subjectEmail) {
+      const row = await this.db.get<{ cnt: number; [key: string]: unknown }>(
+        `SELECT COUNT(*) AS cnt FROM survey_responses_anonymous
+         WHERE survey_id = ? AND subject_email = ?`,
+        [surveyId, subjectEmail],
+      );
+      return row?.cnt ?? 0;
+    }
     const row = await this.db.get<{ cnt: number; [key: string]: unknown }>(
       'SELECT COUNT(*) AS cnt FROM survey_responses_anonymous WHERE survey_id = ?',
       [surveyId],
     );
     return row?.cnt ?? 0;
+  }
+
+  async listSubjects(surveyId: string): Promise<string[]> {
+    const rows = await this.db.all<{ subject_email: string; [key: string]: unknown }>(
+      `SELECT DISTINCT subject_email FROM survey_responses_anonymous
+       WHERE survey_id = ? AND subject_email != ''
+       ORDER BY subject_email`,
+      [surveyId],
+    );
+    return rows.map((r) => r.subject_email);
   }
 
   // ── Completions ──
@@ -170,11 +228,116 @@ export class SurveyRepository {
   }
 
   async getPendingSurveys(email: string): Promise<SurveyRow[]> {
-    return this.db.all<SurveyRow>(
-      `SELECT s.* FROM surveys s WHERE s.status = 'active'
-       AND NOT EXISTS (SELECT 1 FROM survey_completions sc WHERE sc.survey_id = s.id AND sc.email = ?)
-       ORDER BY s.published_at DESC`,
+    const member = await this.db.get<{ group_id: string | null; [key: string]: unknown }>(
+      'SELECT group_id FROM members WHERE email = ?',
       [email],
+    );
+    const groupId = (member?.group_id ?? '').trim();
+
+    // Empty target_group_ids = all employees. Otherwise require member group in the list.
+    if (!groupId) {
+      return this.db.all<SurveyRow>(
+        `SELECT s.* FROM surveys s
+         WHERE s.status = 'active'
+           AND COALESCE(s.audience, 'employee') = 'employee'
+           AND TRIM(COALESCE(s.target_group_ids, '')) = ''
+           AND NOT EXISTS (
+             SELECT 1 FROM survey_completions sc
+             WHERE sc.survey_id = s.id AND sc.email = ?
+           )
+         ORDER BY s.published_at DESC`,
+        [email],
+      );
+    }
+
+    return this.db.all<SurveyRow>(
+      `SELECT s.* FROM surveys s
+       WHERE s.status = 'active'
+         AND COALESCE(s.audience, 'employee') = 'employee'
+         AND NOT EXISTS (
+           SELECT 1 FROM survey_completions sc
+           WHERE sc.survey_id = s.id AND sc.email = ?
+         )
+         AND (
+           TRIM(COALESCE(s.target_group_ids, '')) = ''
+           OR (',' || REPLACE(REPLACE(s.target_group_ids, ' ', ''), ';', ',') || ',')
+                LIKE '%,' || ? || ',%'
+         )
+       ORDER BY s.published_at DESC`,
+      [email, groupId],
+    );
+  }
+
+  // ── Peer assignments ──
+  async createPeerAssignments(
+    surveyId: string,
+    assignments: Array<{ reviewerEmail: string; subjectEmail: string }>,
+  ): Promise<void> {
+    for (const a of assignments) {
+      await this.db.run(
+        `INSERT OR IGNORE INTO survey_peer_assignments
+         (survey_id, reviewer_email, subject_email) VALUES (?, ?, ?)`,
+        [surveyId, a.reviewerEmail.toLowerCase(), a.subjectEmail.toLowerCase()],
+      );
+    }
+  }
+
+  async getPendingPeerAssignments(email: string): Promise<
+    Array<SurveyRow & { subject_email: string }>
+  > {
+    return this.db.all<SurveyRow & { subject_email: string }>(
+      `SELECT s.*, spa.subject_email AS subject_email
+       FROM survey_peer_assignments spa
+       INNER JOIN surveys s ON s.id = spa.survey_id
+       WHERE spa.reviewer_email = ? AND spa.completed_at IS NULL AND s.status = 'active'
+       ORDER BY s.published_at DESC`,
+      [email.toLowerCase()],
+    );
+  }
+
+  async hasPeerAssignment(
+    surveyId: string,
+    reviewerEmail: string,
+    subjectEmail: string,
+  ): Promise<boolean> {
+    const row = await this.db.get<{ survey_id: string; [key: string]: unknown }>(
+      `SELECT survey_id FROM survey_peer_assignments
+       WHERE survey_id = ? AND reviewer_email = ? AND subject_email = ?`,
+      [surveyId, reviewerEmail.toLowerCase(), subjectEmail.toLowerCase()],
+    );
+    return !!row;
+  }
+
+  async isPeerAssignmentComplete(
+    surveyId: string,
+    reviewerEmail: string,
+    subjectEmail: string,
+  ): Promise<boolean> {
+    const row = await this.db.get<{ completed_at: string | null; [key: string]: unknown }>(
+      `SELECT completed_at FROM survey_peer_assignments
+       WHERE survey_id = ? AND reviewer_email = ? AND subject_email = ?`,
+      [surveyId, reviewerEmail.toLowerCase(), subjectEmail.toLowerCase()],
+    );
+    return !!(row && row.completed_at);
+  }
+
+  async markPeerAssignmentComplete(
+    surveyId: string,
+    reviewerEmail: string,
+    subjectEmail: string,
+  ): Promise<void> {
+    await this.db.run(
+      `UPDATE survey_peer_assignments
+       SET completed_at = datetime('now')
+       WHERE survey_id = ? AND reviewer_email = ? AND subject_email = ?`,
+      [surveyId, reviewerEmail.toLowerCase(), subjectEmail.toLowerCase()],
+    );
+  }
+
+  async listPeerAssignments(surveyId: string): Promise<SurveyPeerAssignmentRow[]> {
+    return this.db.all<SurveyPeerAssignmentRow>(
+      `SELECT * FROM survey_peer_assignments WHERE survey_id = ? ORDER BY reviewer_email, subject_email`,
+      [surveyId],
     );
   }
 
