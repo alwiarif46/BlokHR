@@ -3,6 +3,7 @@ import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import type { AppConfig } from '../config';
 import { AppError, asyncHandler } from '../app';
+import { FeatureFlagService } from '../services/feature-flags';
 import {
   AgentService,
   AnthropicLlmClient,
@@ -15,7 +16,7 @@ import {
   EMPLOYEE_TOOLS,
   ADMIN_TOOLS,
 } from '../services/llm';
-import type { LlmClient } from '../services/llm';
+import type { LlmClient, ToolSchema } from '../services/llm';
 
 /**
  * AI Agent routes:
@@ -33,13 +34,12 @@ export function createChatbotRouter(
   config: AppConfig,
   logger: Logger,
   llmOverride?: LlmClient,
+  featureFlags?: FeatureFlagService,
 ): Router {
   const router = Router();
 
-  // Build handler map (always available — tools work even without LLM)
   const handlers = buildHandlerMap(db, logger);
 
-  // Build LLM client: override (tests) → anthropic → ollama → null
   let llmClient: LlmClient | null;
   if (llmOverride) {
     llmClient = llmOverride;
@@ -61,14 +61,31 @@ export function createChatbotRouter(
     llmClient = null;
   }
 
-  // Agent service — only if LLM is configured (tool execution still works without it)
+  const filterTools = (tools: ToolSchema[]): ToolSchema[] => {
+    if (!featureFlags) return tools;
+    return featureFlags.filterTools(tools);
+  };
+
   const agentService = llmClient
-    ? new AgentService(db, llmClient, handlers, logger)
+    ? new AgentService(db, llmClient, handlers, logger, filterTools)
     : null;
+
+  async function requireAuth(req: Request): Promise<string> {
+    const email = (req.identity?.email ?? '').toLowerCase().trim();
+    if (!email) throw new AppError('Authentication required', 401);
+    return email;
+  }
+
+  async function resolveIsAdmin(email: string): Promise<boolean> {
+    const row = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+      email,
+    ]);
+    return !!row;
+  }
 
   /**
    * POST /api/chat — conversational AI agent
-   * Body: { email?, message, sessionId?, isAdmin? }
+   * Body: { message, sessionId? }
    */
   router.post(
     '/chat',
@@ -80,13 +97,12 @@ export function createChatbotRouter(
         );
       }
 
+      const email = await requireAuth(req);
       const body = req.body as Record<string, unknown>;
-      const email = req.identity?.email ?? ((body.email as string) ?? '').toLowerCase().trim();
       const message = ((body.message as string) ?? '').trim();
       const sessionId = (body.sessionId as string) || undefined;
-      const isAdmin = body.isAdmin === true;
+      const isAdmin = await resolveIsAdmin(email);
 
-      if (!email) throw new AppError('email is required', 400);
       if (!message) throw new AppError('message is required', 400);
 
       const result = await agentService.chat(email, message, sessionId, isAdmin);
@@ -96,27 +112,30 @@ export function createChatbotRouter(
 
   /**
    * POST /api/chat/tool — direct tool execution (no LLM needed)
-   * Body: { email?, toolName, params?, isAdmin? }
+   * Body: { toolName, params? }
    */
   router.post(
     '/chat/tool',
     asyncHandler(async (req: Request, res: Response) => {
+      const email = await requireAuth(req);
       const body = req.body as Record<string, unknown>;
-      const email = req.identity?.email ?? ((body.email as string) ?? '').toLowerCase().trim();
       const toolName = (body.toolName as string) ?? '';
       const params = (body.params as Record<string, unknown>) ?? {};
-      const isAdmin = body.isAdmin === true;
+      const isAdmin = await resolveIsAdmin(email);
 
-      if (!email) throw new AppError('email is required', 400);
       if (!toolName) throw new AppError('toolName is required', 400);
 
       const handler = handlers.get(toolName);
       if (!handler) throw new AppError(`Unknown tool: ${toolName}`, 400);
 
-      // Check scope
-      const toolDef = ALL_TOOLS.find(t => t.name === toolName);
+      const toolDef = ALL_TOOLS.find((t) => t.name === toolName);
       if (toolDef?.scope === 'admin' && !isAdmin) {
         throw new AppError(`Tool "${toolName}" requires admin privileges`, 403);
+      }
+
+      const allowed = filterTools(isAdmin ? ALL_TOOLS : EMPLOYEE_TOOLS);
+      if (!allowed.find((t) => t.name === toolName)) {
+        throw new AppError(`Tool "${toolName}" is not available`, 403);
       }
 
       try {
@@ -151,11 +170,10 @@ export function createChatbotRouter(
         throw new AppError('Could not determine employee email from the provider payload', 400);
       }
 
-      // If the provider sends a tool call, we can execute it even without LLM
       if (request.toolName) {
         const handler = handlers.get(request.toolName);
         if (!handler) throw new AppError(`Unknown tool: ${request.toolName}`, 400);
-        const toolDef = ALL_TOOLS.find(t => t.name === request.toolName);
+        const toolDef = ALL_TOOLS.find((t) => t.name === request.toolName);
         if (toolDef?.scope === 'admin' && !request.isAdmin) {
           throw new AppError(`Tool "${request.toolName}" requires admin privileges`, 403);
         }
@@ -169,9 +187,11 @@ export function createChatbotRouter(
         return;
       }
 
-      // If message, need agent service
       if (!agentService) {
-        throw new AppError('AI Chat is not configured. External providers can still use toolName for direct tool execution.', 503);
+        throw new AppError(
+          'AI Chat is not configured. External providers can still use toolName for direct tool execution.',
+          503,
+        );
       }
 
       const response = await handleExternalRequest(request, agentService, logger);
@@ -180,20 +200,20 @@ export function createChatbotRouter(
   );
 
   /**
-   * GET /api/chat/tools — list available tools
-   * Query: isAdmin=true for admin tools
+   * GET /api/chat/tools — list available tools for the authenticated user
    */
   router.get(
     '/chat/tools',
     asyncHandler(async (req: Request, res: Response) => {
-      const isAdmin = req.query.isAdmin === 'true';
-      const tools = isAdmin ? ALL_TOOLS : EMPLOYEE_TOOLS;
-      const adminOnly = ADMIN_TOOLS.length;
+      const email = await requireAuth(req);
+      const isAdmin = await resolveIsAdmin(email);
+      const base = isAdmin ? ALL_TOOLS : EMPLOYEE_TOOLS;
+      const tools = filterTools(base);
       res.json({
         total: tools.length,
-        employeeTools: EMPLOYEE_TOOLS.length,
-        adminTools: adminOnly,
-        tools: tools.map(t => ({
+        employeeTools: filterTools(EMPLOYEE_TOOLS).length,
+        adminTools: ADMIN_TOOLS.length,
+        tools: tools.map((t) => ({
           name: t.name,
           description: t.description,
           scope: t.scope,
@@ -211,7 +231,7 @@ export function createChatbotRouter(
     '/chat/providers',
     asyncHandler(async (_req: Request, res: Response) => {
       res.json({
-        providers: SUPPORTED_PROVIDERS.map(p => ({
+        providers: SUPPORTED_PROVIDERS.map((p) => ({
           id: p,
           webhookEndpoint: `/api/chat/external/${p}`,
         })),
@@ -220,14 +240,13 @@ export function createChatbotRouter(
   );
 
   /**
-   * GET /api/chat/sessions — list user's sessions
+   * GET /api/chat/sessions — list caller's sessions
    */
   router.get(
     '/chat/sessions',
     asyncHandler(async (req: Request, res: Response) => {
       if (!agentService) throw new AppError('AI Chat not configured', 503);
-      const email = req.identity?.email ?? ((req.query.email as string) ?? '').toLowerCase().trim();
-      if (!email) throw new AppError('email is required', 400);
+      const email = await requireAuth(req);
       const sessions = await agentService.listSessions(email);
       res.json({ sessions });
     }),
@@ -240,7 +259,8 @@ export function createChatbotRouter(
     '/chat/sessions/:id',
     asyncHandler(async (req: Request, res: Response) => {
       if (!agentService) throw new AppError('AI Chat not configured', 503);
-      const detail = await agentService.getSessionDetail(req.params.id);
+      const email = await requireAuth(req);
+      const detail = await agentService.getSessionDetail(req.params.id, email);
       if (!detail) throw new AppError('Session not found', 404);
       res.json(detail);
     }),
@@ -253,7 +273,8 @@ export function createChatbotRouter(
     '/chat/sessions/:id',
     asyncHandler(async (req: Request, res: Response) => {
       if (!agentService) throw new AppError('AI Chat not configured', 503);
-      const deleted = await agentService.deleteSession(req.params.id);
+      const email = await requireAuth(req);
+      const deleted = await agentService.deleteSession(req.params.id, email);
       if (!deleted) throw new AppError('Session not found', 404);
       res.json({ success: true });
     }),

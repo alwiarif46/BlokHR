@@ -64,6 +64,7 @@ export class AgentService {
     private readonly llm: LlmClient,
     handlers: Map<string, (params: Record<string, unknown>, callerEmail: string) => Promise<unknown>>,
     private readonly logger: Logger,
+    private readonly filterToolsFn?: (tools: ToolSchema[]) => ToolSchema[],
   ) {
     this.handlerMap = handlers;
   }
@@ -84,6 +85,9 @@ export class AgentService {
       const existing = await this.getSession(sessionId);
       if (existing && existing.email === email) {
         sid = sessionId;
+      } else if (existing && existing.email !== email) {
+        // Do not hijack another user's session — start a new one
+        sid = await this.createSession(email, message.slice(0, 80));
       } else {
         sid = await this.createSession(email, message.slice(0, 80));
       }
@@ -94,8 +98,11 @@ export class AgentService {
     // Store user message
     await this.insertMessage(sid, 'user', message);
 
-    // Determine available tools based on role
-    const availableTools = isAdmin ? ALL_TOOLS : EMPLOYEE_TOOLS;
+    // Determine available tools based on role + feature flags
+    let availableTools = isAdmin ? ALL_TOOLS : EMPLOYEE_TOOLS;
+    if (this.filterToolsFn) {
+      availableTools = this.filterToolsFn(availableTools);
+    }
 
     // Build system prompt
     const systemPrompt = this.buildSystemPrompt(email, isAdmin, availableTools);
@@ -238,7 +245,9 @@ export class AgentService {
 
   /** List available tools (for external providers to discover capabilities). */
   getAvailableTools(isAdmin = false): ToolSchema[] {
-    return isAdmin ? ALL_TOOLS : EMPLOYEE_TOOLS;
+    let tools = isAdmin ? ALL_TOOLS : EMPLOYEE_TOOLS;
+    if (this.filterToolsFn) tools = this.filterToolsFn(tools);
+    return tools;
   }
 
   // ── Session management ──
@@ -249,18 +258,23 @@ export class AgentService {
     );
   }
 
-  async getSessionDetail(sessionId: string): Promise<SessionDetail | null> {
+  async getSessionDetail(
+    sessionId: string,
+    callerEmail?: string,
+  ): Promise<SessionDetail | null> {
     const session = await this.getSession(sessionId);
     if (!session) return null;
+    if (callerEmail && session.email !== callerEmail) return null;
     const messages = await this.db.all<ChatMessageRow>(
       'SELECT * FROM chat_messages WHERE session_id = ? ORDER BY created_at', [sessionId],
     );
     return { session, messages };
   }
 
-  async deleteSession(sessionId: string): Promise<boolean> {
+  async deleteSession(sessionId: string, callerEmail?: string): Promise<boolean> {
     const session = await this.getSession(sessionId);
     if (!session) return false;
+    if (callerEmail && session.email !== callerEmail) return false;
     await this.db.run('DELETE FROM chat_sessions WHERE id = ?', [sessionId]);
     return true;
   }

@@ -4,19 +4,28 @@ import type { Express } from 'express';
 import type { DatabaseEngine } from '../../src/db/engine';
 import { createTestApp, seedMember } from '../helpers/setup';
 import type { MockLlmClient } from '../../src/services/llm';
+import type { FeatureFlagService } from '../../src/services/feature-flags';
 
 describe('AI Agent / Chatbot Module', () => {
   let app: Express;
   let db: DatabaseEngine;
   let mockLlm: MockLlmClient;
+  let featureFlags: FeatureFlagService;
 
   const EMAIL = 'alice@shaavir.com';
+  const ADMIN = 'admin@shaavir.com';
+  const OTHER = 'bob@shaavir.com';
+
+  function asUser(email: string) {
+    return { 'X-User-Email': email };
+  }
 
   beforeEach(async () => {
     const setup = await createTestApp();
     app = setup.app;
     db = setup.db;
     mockLlm = setup.mockLlm;
+    featureFlags = setup.featureFlags;
 
     await seedMember(db, {
       email: EMAIL,
@@ -26,6 +35,9 @@ describe('AI Agent / Chatbot Module', () => {
       groupShiftStart: '00:00',
       groupShiftEnd: '23:59',
     });
+    await seedMember(db, { email: ADMIN, name: 'Admin' });
+    await seedMember(db, { email: OTHER, name: 'Bob' });
+    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', [ADMIN]);
   });
 
   afterEach(async () => {
@@ -37,7 +49,6 @@ describe('AI Agent / Chatbot Module', () => {
 
   describe('POST /api/chat/tool', () => {
     it('executes an employee tool directly', async () => {
-      // Seed attendance
       await db.run(
         `INSERT INTO attendance_daily (email, name, date, status, total_worked_minutes, group_id)
          VALUES (?, 'Alice', '2026-03-21', 'out', 480, 'engineering')`,
@@ -46,7 +57,8 @@ describe('AI Agent / Chatbot Module', () => {
 
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'my_attendance_for_date', params: { date: '2026-03-21' } });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'my_attendance_for_date', params: { date: '2026-03-21' } });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -58,7 +70,8 @@ describe('AI Agent / Chatbot Module', () => {
     it('executes clock_in tool', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'clock_in' });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'clock_in' });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -68,18 +81,19 @@ describe('AI Agent / Chatbot Module', () => {
     it('executes my_leave_balance tool', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'my_leave_balance' });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'my_leave_balance' });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
-      // Returns array (may be empty if no PTO seeded)
       expect(Array.isArray(res.body.result)).toBe(true);
     });
 
     it('executes my_shift tool', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'my_shift' });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'my_shift' });
 
       expect(res.status).toBe(200);
       expect(res.body.result.type).toBe('group');
@@ -89,7 +103,8 @@ describe('AI Agent / Chatbot Module', () => {
     it('executes my_department tool', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'my_department' });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'my_department' });
 
       expect(res.status).toBe(200);
       expect(res.body.result.departmentId).toBe('engineering');
@@ -99,26 +114,37 @@ describe('AI Agent / Chatbot Module', () => {
     it('executes list_projects tool', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'list_projects' });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'list_projects' });
 
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.result)).toBe(true);
-      // Default seeded projects exist
       expect(res.body.result.length).toBeGreaterThanOrEqual(3);
     });
 
     it('blocks admin tool for non-admin', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'who_is_late_today', isAdmin: false });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'who_is_late_today', isAdmin: true });
 
       expect(res.status).toBe(403);
     });
 
-    it('allows admin tool with isAdmin flag', async () => {
+    it('rejects spoofed isAdmin in body', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'who_is_present_today', isAdmin: true });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'employee_count', isAdmin: true });
+
+      expect(res.status).toBe(403);
+    });
+
+    it('allows admin tool for real admin', async () => {
+      const res = await request(app)
+        .post('/api/chat/tool')
+        .set(asUser(ADMIN))
+        .send({ toolName: 'who_is_present_today' });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -127,7 +153,8 @@ describe('AI Agent / Chatbot Module', () => {
     it('executes all_pending_approvals for admin', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'all_pending_approvals', isAdmin: true });
+        .set(asUser(ADMIN))
+        .send({ toolName: 'all_pending_approvals' });
 
       expect(res.status).toBe(200);
       expect(res.body.result).toHaveProperty('pendingLeaves');
@@ -137,7 +164,8 @@ describe('AI Agent / Chatbot Module', () => {
     it('executes employee_count admin tool', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'employee_count', isAdmin: true });
+        .set(asUser(ADMIN))
+        .send({ toolName: 'employee_count' });
 
       expect(res.status).toBe(200);
       expect(res.body.result.count).toBeGreaterThanOrEqual(1);
@@ -146,23 +174,25 @@ describe('AI Agent / Chatbot Module', () => {
     it('rejects unknown tool', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'nonexistent_tool' });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'nonexistent_tool' });
 
       expect(res.status).toBe(400);
     });
 
-    it('rejects missing email', async () => {
+    it('rejects missing auth', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
         .send({ toolName: 'my_shift' });
 
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
     });
 
     it('rejects missing toolName', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL });
+        .set(asUser(EMAIL))
+        .send({});
 
       expect(res.status).toBe(400);
     });
@@ -176,7 +206,8 @@ describe('AI Agent / Chatbot Module', () => {
 
       const res = await request(app)
         .post('/api/chat')
-        .send({ email: EMAIL, message: 'Hi' });
+        .set(asUser(EMAIL))
+        .send({ message: 'Hi' });
 
       expect(res.status).toBe(200);
       expect(res.body.reply).toBe('Hello Alice! How can I help you today?');
@@ -185,12 +216,10 @@ describe('AI Agent / Chatbot Module', () => {
     });
 
     it('handles tool calls from the LLM', async () => {
-      // Mock LLM returns a tool call first, then a final response
       let callCount = 0;
       mockLlm.setConfig({});
-      // Override chat to simulate multi-turn
       const originalChat = mockLlm.chat.bind(mockLlm);
-      mockLlm.chat = async (messages) => {
+      mockLlm.chat = async () => {
         callCount++;
         if (callCount === 1) {
           return { content: '<tool_call>{"tool": "my_worked_hours_today", "params": {}}</tool_call>', tokensUsed: 30 };
@@ -200,14 +229,14 @@ describe('AI Agent / Chatbot Module', () => {
 
       const res = await request(app)
         .post('/api/chat')
-        .send({ email: EMAIL, message: 'How many hours have I worked today?' });
+        .set(asUser(EMAIL))
+        .send({ message: 'How many hours have I worked today?' });
 
       expect(res.status).toBe(200);
       expect(res.body.reply).toBe('You have worked 0 hours today so far.');
       expect(res.body.toolsCalled).toHaveLength(1);
       expect(res.body.toolsCalled[0].tool).toBe('my_worked_hours_today');
 
-      // Restore
       mockLlm.chat = originalChat;
     });
 
@@ -215,12 +244,14 @@ describe('AI Agent / Chatbot Module', () => {
       mockLlm.setConfig({ responseContent: 'First response' });
       const first = await request(app)
         .post('/api/chat')
-        .send({ email: EMAIL, message: 'Hello' });
+        .set(asUser(EMAIL))
+        .send({ message: 'Hello' });
 
       mockLlm.setConfig({ responseContent: 'Second response' });
       const second = await request(app)
         .post('/api/chat')
-        .send({ email: EMAIL, message: 'Follow up', sessionId: first.body.sessionId });
+        .set(asUser(EMAIL))
+        .send({ message: 'Follow up', sessionId: first.body.sessionId });
 
       expect(second.body.sessionId).toBe(first.body.sessionId);
       expect(second.body.reply).toBe('Second response');
@@ -230,7 +261,8 @@ describe('AI Agent / Chatbot Module', () => {
       mockLlm.setConfig({ responseContent: 'New session' });
       const res = await request(app)
         .post('/api/chat')
-        .send({ email: EMAIL, message: 'Hello', sessionId: 'nonexistent' });
+        .set(asUser(EMAIL))
+        .send({ message: 'Hello', sessionId: 'nonexistent' });
 
       expect(res.status).toBe(200);
       expect(res.body.sessionId).not.toBe('nonexistent');
@@ -241,7 +273,8 @@ describe('AI Agent / Chatbot Module', () => {
 
       const res = await request(app)
         .post('/api/chat')
-        .send({ email: EMAIL, message: 'Hello' });
+        .set(asUser(EMAIL))
+        .send({ message: 'Hello' });
 
       expect(res.status).toBe(200);
       expect(res.body.reply).toContain('unable to process');
@@ -250,9 +283,18 @@ describe('AI Agent / Chatbot Module', () => {
     it('rejects missing message', async () => {
       const res = await request(app)
         .post('/api/chat')
-        .send({ email: EMAIL });
+        .set(asUser(EMAIL))
+        .send({});
 
       expect(res.status).toBe(400);
+    });
+
+    it('rejects missing auth', async () => {
+      const res = await request(app)
+        .post('/api/chat')
+        .send({ message: 'Hi' });
+
+      expect(res.status).toBe(401);
     });
   });
 
@@ -344,25 +386,47 @@ describe('AI Agent / Chatbot Module', () => {
   // ── Tool Discovery ──
 
   describe('GET /api/chat/tools', () => {
-    it('returns employee tools by default', async () => {
-      const res = await request(app).get('/api/chat/tools');
+    it('returns employee tools for non-admin', async () => {
+      const res = await request(app).get('/api/chat/tools').set(asUser(EMAIL));
 
       expect(res.status).toBe(200);
       expect(res.body.total).toBeGreaterThan(0);
       expect(res.body.employeeTools).toBeGreaterThan(0);
-      // All returned tools should be employee or both scope
       for (const tool of res.body.tools) {
         expect(['employee', 'both']).toContain(tool.scope);
       }
     });
 
-    it('returns all tools with isAdmin=true', async () => {
-      const res = await request(app).get('/api/chat/tools?isAdmin=true');
+    it('returns admin tools for real admin (ignores query isAdmin)', async () => {
+      const spoof = await request(app).get('/api/chat/tools?isAdmin=true').set(asUser(EMAIL));
+      expect(spoof.status).toBe(200);
+      expect(spoof.body.tools.every((t: { scope: string }) => t.scope !== 'admin')).toBe(true);
 
+      const res = await request(app).get('/api/chat/tools').set(asUser(ADMIN));
       expect(res.status).toBe(200);
       expect(res.body.total).toBeGreaterThan(res.body.employeeTools);
       const adminTools = res.body.tools.filter((t: { scope: string }) => t.scope === 'admin');
       expect(adminTools.length).toBeGreaterThan(0);
+    });
+
+    it('shrinks tools when a mapped feature flag is off', async () => {
+      const before = await request(app).get('/api/chat/tools').set(asUser(EMAIL));
+      expect(before.status).toBe(200);
+      const beforeOt = before.body.tools.filter((t: { category: string }) => t.category === 'overtime');
+      expect(beforeOt.length).toBeGreaterThan(0);
+
+      await featureFlags.toggle('overtime', false, ADMIN);
+
+      const after = await request(app).get('/api/chat/tools').set(asUser(EMAIL));
+      expect(after.status).toBe(200);
+      expect(after.body.total).toBeLessThan(before.body.total);
+      const afterOt = after.body.tools.filter((t: { category: string }) => t.category === 'overtime');
+      expect(afterOt.length).toBe(0);
+    });
+
+    it('requires auth', async () => {
+      const res = await request(app).get('/api/chat/tools');
+      expect(res.status).toBe(401);
     });
   });
 
@@ -387,39 +451,74 @@ describe('AI Agent / Chatbot Module', () => {
   // ── Session Management ──
 
   describe('Session management', () => {
-    it('lists sessions for a user', async () => {
+    it('lists sessions for the authenticated user only', async () => {
       mockLlm.setConfig({ responseContent: 'Hi' });
-      await request(app).post('/api/chat').send({ email: EMAIL, message: 'Hello' });
-      await request(app).post('/api/chat').send({ email: EMAIL, message: 'Another chat' });
+      await request(app).post('/api/chat').set(asUser(EMAIL)).send({ message: 'Hello' });
+      await request(app).post('/api/chat').set(asUser(EMAIL)).send({ message: 'Another chat' });
+      await request(app).post('/api/chat').set(asUser(OTHER)).send({ message: 'Bob chat' });
 
-      const res = await request(app).get(`/api/chat/sessions?email=${EMAIL}`);
+      const res = await request(app).get('/api/chat/sessions').set(asUser(EMAIL));
       expect(res.status).toBe(200);
       expect(res.body.sessions.length).toBeGreaterThanOrEqual(2);
+      expect(res.body.sessions.every((s: { email: string }) => s.email === EMAIL)).toBe(true);
     });
 
     it('gets session detail with messages', async () => {
       mockLlm.setConfig({ responseContent: 'Hello back!' });
-      const chat = await request(app).post('/api/chat').send({ email: EMAIL, message: 'Hello' });
+      const chat = await request(app).post('/api/chat').set(asUser(EMAIL)).send({ message: 'Hello' });
 
-      const res = await request(app).get(`/api/chat/sessions/${chat.body.sessionId}`);
+      const res = await request(app)
+        .get(`/api/chat/sessions/${chat.body.sessionId}`)
+        .set(asUser(EMAIL));
       expect(res.status).toBe(200);
       expect(res.body.session.id).toBe(chat.body.sessionId);
-      expect(res.body.messages.length).toBeGreaterThanOrEqual(2); // user + assistant
+      expect(res.body.messages.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('rejects cross-user session read', async () => {
+      mockLlm.setConfig({ responseContent: 'Secret' });
+      const chat = await request(app).post('/api/chat').set(asUser(EMAIL)).send({ message: 'Hello' });
+
+      const res = await request(app)
+        .get(`/api/chat/sessions/${chat.body.sessionId}`)
+        .set(asUser(OTHER));
+      expect(res.status).toBe(404);
+    });
+
+    it('rejects cross-user session delete', async () => {
+      mockLlm.setConfig({ responseContent: 'Bye' });
+      const chat = await request(app).post('/api/chat').set(asUser(EMAIL)).send({ message: 'Hello' });
+
+      const del = await request(app)
+        .delete(`/api/chat/sessions/${chat.body.sessionId}`)
+        .set(asUser(OTHER));
+      expect(del.status).toBe(404);
+
+      const still = await request(app)
+        .get(`/api/chat/sessions/${chat.body.sessionId}`)
+        .set(asUser(EMAIL));
+      expect(still.status).toBe(200);
     });
 
     it('deletes a session', async () => {
       mockLlm.setConfig({ responseContent: 'Bye' });
-      const chat = await request(app).post('/api/chat').send({ email: EMAIL, message: 'Hello' });
+      const chat = await request(app).post('/api/chat').set(asUser(EMAIL)).send({ message: 'Hello' });
 
-      const del = await request(app).delete(`/api/chat/sessions/${chat.body.sessionId}`);
+      const del = await request(app)
+        .delete(`/api/chat/sessions/${chat.body.sessionId}`)
+        .set(asUser(EMAIL));
       expect(del.status).toBe(200);
 
-      const get = await request(app).get(`/api/chat/sessions/${chat.body.sessionId}`);
+      const get = await request(app)
+        .get(`/api/chat/sessions/${chat.body.sessionId}`)
+        .set(asUser(EMAIL));
       expect(get.status).toBe(404);
     });
 
     it('returns 404 for nonexistent session', async () => {
-      const res = await request(app).get('/api/chat/sessions/nonexistent');
+      const res = await request(app)
+        .get('/api/chat/sessions/nonexistent')
+        .set(asUser(EMAIL));
       expect(res.status).toBe(404);
     });
   });
@@ -428,7 +527,6 @@ describe('AI Agent / Chatbot Module', () => {
 
   describe('Target tools', () => {
     it('my_attendance_target computes correctly', async () => {
-      // Seed 3 present days
       for (const d of ['2026-03-02', '2026-03-03', '2026-03-04']) {
         await db.run(
           `INSERT INTO attendance_daily (email, name, date, status, total_worked_minutes, group_id)
@@ -438,8 +536,9 @@ describe('AI Agent / Chatbot Module', () => {
 
       const res = await request(app)
         .post('/api/chat/tool')
+        .set(asUser(EMAIL))
         .send({
-          email: EMAIL, toolName: 'my_attendance_target',
+          toolName: 'my_attendance_target',
           params: { startDate: '2026-03-02', endDate: '2026-03-06' },
         });
 
@@ -447,14 +546,15 @@ describe('AI Agent / Chatbot Module', () => {
       const r = res.body.result;
       expect(r.workdays).toBe(5);
       expect(r.presentDays).toBe(3);
-      expect(r.actualHours).toBe(24); // 3 × 480 min = 24 hrs
+      expect(r.actualHours).toBe(24);
       expect(r.achievementPct).toBeGreaterThan(0);
     });
 
     it('my_ot_cap_status returns remaining quarter hours', async () => {
       const res = await request(app)
         .post('/api/chat/tool')
-        .send({ email: EMAIL, toolName: 'my_ot_cap_status' });
+        .set(asUser(EMAIL))
+        .send({ toolName: 'my_ot_cap_status' });
 
       expect(res.status).toBe(200);
       expect(res.body.result.capHours).toBe(125);

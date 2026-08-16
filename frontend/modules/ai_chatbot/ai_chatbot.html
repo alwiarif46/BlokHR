@@ -1,10 +1,16 @@
 <!--
   modules/ai_chatbot/ai_chatbot.html
-  AI Chatbot. Rendered by renderAiChatbotPage().
+  AI Chatbot. Rendered by renderAiChatbotPage() — session list, thread, composer.
 -->
 <div class="chat-wrap" id="chatWrap">
   <div class="chat-toolbar" id="chatToolbar"></div>
   <div class="chat-stats" id="chatStats"></div>
-  <div id="chatContent"></div>
-  <div class="chat-modal" id="chatModal"><div class="chat-modal-box" id="chatModalBox"></div></div>
+  <div class="chat-layout" id="chatLayout">
+    <aside class="chat-sidebar" id="chatSidebar"></aside>
+    <section class="chat-main">
+      <div class="chat-thread" id="chatThread"></div>
+      <div class="chat-suggestions" id="chatSuggestions"></div>
+      <form class="chat-composer" id="chatComposer"></form>
+    </section>
+  </div>
 </div>
