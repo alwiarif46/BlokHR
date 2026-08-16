@@ -7,8 +7,9 @@ import {
   type DeviceTokenRow,
   type BiometricCredentialRow,
   type LocationBreadcrumbRow,
-  type ExpenseReceiptRow,
 } from '../repositories/mobile-repository';
+import { TimesheetRepository } from '../repositories/timesheet-repository';
+import { TimesheetService } from './timesheet-service';
 
 // ── Result types ──
 
@@ -65,17 +66,6 @@ export function generateDeepLink(
   return { appLink, webLink };
 }
 
-// ── Expense category validation ──
-
-const VALID_EXPENSE_CATEGORIES = [
-  'travel',
-  'meals',
-  'accommodation',
-  'supplies',
-  'client',
-  'other',
-];
-
 const VALID_PLATFORMS = ['android', 'ios', 'web'];
 
 /**
@@ -85,6 +75,7 @@ const VALID_PLATFORMS = ['android', 'ios', 'web'];
  */
 export class MobileService {
   private readonly repo: MobileRepository;
+  private readonly timesheetService: TimesheetService;
 
   constructor(
     private readonly db: DatabaseEngine,
@@ -92,6 +83,7 @@ export class MobileService {
     private readonly auditService?: AuditService,
   ) {
     this.repo = new MobileRepository(db);
+    this.timesheetService = new TimesheetService(new TimesheetRepository(db), logger);
   }
 
   // ── Device registration ──
@@ -297,106 +289,6 @@ export class MobileService {
     return { success: true };
   }
 
-  // ── Expense receipts ──
-
-  async createReceipt(data: {
-    email: string;
-    fileId?: string | null;
-    vendor?: string;
-    amount?: number;
-    currency?: string;
-    receiptDate?: string;
-    category?: string;
-    description?: string;
-  }): Promise<ServiceResult<ExpenseReceiptRow>> {
-    if (data.category && !VALID_EXPENSE_CATEGORIES.includes(data.category)) {
-      return {
-        success: false,
-        error: `Invalid category. Must be one of: ${VALID_EXPENSE_CATEGORIES.join(', ')}`,
-      };
-    }
-
-    const member = await this.db.get<MemberRow>(
-      'SELECT email FROM members WHERE email = ? AND active = 1',
-      [data.email],
-    );
-    if (!member) return { success: false, error: 'Employee not found or inactive' };
-
-    // Stub OCR: in production, this would call an OCR service on the uploaded image
-    const ocrRawJson = JSON.stringify({
-      extracted: true,
-      vendor: data.vendor ?? '',
-      amount: data.amount ?? 0,
-      date: data.receiptDate ?? '',
-    });
-
-    const receipt = await this.repo.createReceipt({
-      ...data,
-      ocrRawJson,
-    });
-
-    this.logger.info({ receiptId: receipt.id, email: data.email }, 'Expense receipt created');
-    return { success: true, data: receipt };
-  }
-
-  async submitReceipt(id: string, actorEmail: string): Promise<ServiceResult> {
-    const receipt = await this.repo.getReceiptById(id);
-    if (!receipt) return { success: false, error: 'Receipt not found' };
-    if (receipt.status !== 'draft')
-      return { success: false, error: 'Only draft receipts can be submitted' };
-
-    await this.repo.updateReceipt(id, { status: 'submitted' });
-    this.logAudit('expense_receipt', id, 'submitted', actorEmail, {});
-    return { success: true };
-  }
-
-  async approveReceipt(id: string, approverEmail: string): Promise<ServiceResult> {
-    const receipt = await this.repo.getReceiptById(id);
-    if (!receipt) return { success: false, error: 'Receipt not found' };
-    if (receipt.status !== 'submitted')
-      return {
-        success: false,
-        error: 'Only submitted receipts can be approved',
-      };
-
-    await this.repo.updateReceipt(id, {
-      status: 'approved',
-      approver_email: approverEmail,
-    });
-    this.logAudit('expense_receipt', id, 'approved', approverEmail, {});
-    return { success: true };
-  }
-
-  async rejectReceipt(id: string, rejectorEmail: string, reason: string): Promise<ServiceResult> {
-    const receipt = await this.repo.getReceiptById(id);
-    if (!receipt) return { success: false, error: 'Receipt not found' };
-    if (receipt.status !== 'submitted')
-      return {
-        success: false,
-        error: 'Only submitted receipts can be rejected',
-      };
-
-    await this.repo.updateReceipt(id, {
-      status: 'rejected',
-      approver_email: rejectorEmail,
-      rejection_reason: reason,
-    });
-    this.logAudit('expense_receipt', id, 'rejected', rejectorEmail, { reason });
-    return { success: true };
-  }
-
-  async getReceiptById(id: string): Promise<ExpenseReceiptRow | null> {
-    return this.repo.getReceiptById(id);
-  }
-
-  async getReceiptsByEmail(email: string): Promise<ExpenseReceiptRow[]> {
-    return this.repo.getReceiptsByEmail(email);
-  }
-
-  async listReceipts(status?: string): Promise<ExpenseReceiptRow[]> {
-    return this.repo.listReceipts(status);
-  }
-
   // ── Batch approvals ──
 
   /**
@@ -428,7 +320,7 @@ export class MobileService {
           success = r.success;
           error = r.error;
         } else if (item.type === 'timesheet') {
-          const r = await this.approveOrRejectGeneric('timesheets', item, approverEmail);
+          const r = await this.approveOrRejectTimesheet(item, approverEmail);
           success = r.success;
           error = r.error;
         } else {
@@ -467,6 +359,31 @@ export class MobileService {
   }
 
   /**
+   * Timesheets go through TimesheetService so a batch decision applies the same
+   * status guards, approver checks, audit fields, and events as the single-item route.
+   */
+  private async approveOrRejectTimesheet(
+    item: BatchApprovalItem,
+    approverEmail: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    let result: { success: boolean; error?: string };
+    if (item.action === 'approve') {
+      result = await this.timesheetService.approve(item.id, approverEmail);
+    } else if (item.action === 'reject') {
+      result = await this.timesheetService.reject(item.id, approverEmail, item.reason ?? '');
+    } else {
+      return { success: false, error: 'Invalid action' };
+    }
+
+    if (result.success) {
+      this.logAudit(item.type, item.id, `batch_${item.action}`, approverEmail, {
+        reason: item.reason ?? '',
+      });
+    }
+    return result;
+  }
+
+  /**
    * Generic approve/reject for tables that use a status column.
    * For leaves and regularizations, the actual approval logic should go through
    * the existing LeaveService/RegularizationService. This is a simplified path
@@ -491,7 +408,6 @@ export class MobileService {
       leave_requests: { approve: 'Approved', reject: 'Rejected' },
       regularizations: { approve: 'approved', reject: 'rejected' },
       overtime_records: { approve: 'approved', reject: 'rejected' },
-      timesheets: { approve: 'approved', reject: 'rejected' },
     };
     const statuses = statusMap[table] ?? { approve: 'approved', reject: 'rejected' };
 

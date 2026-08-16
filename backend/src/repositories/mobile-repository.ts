@@ -1,4 +1,3 @@
-import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseEngine } from '../db/engine';
 
 // ── Row types ──
@@ -34,25 +33,6 @@ export interface LocationBreadcrumbRow {
   longitude: number;
   accuracy: number;
   recorded_at: string;
-}
-
-export interface ExpenseReceiptRow {
-  [key: string]: unknown;
-  id: string;
-  email: string;
-  file_id: string | null;
-  vendor: string;
-  amount: number;
-  currency: string;
-  receipt_date: string;
-  category: string;
-  description: string;
-  status: string;
-  ocr_raw_json: string;
-  approver_email: string;
-  rejection_reason: string;
-  created_at: string;
-  updated_at: string;
 }
 
 export class MobileRepository {
@@ -202,97 +182,5 @@ export class MobileRepository {
       'SELECT * FROM location_breadcrumbs WHERE email = ? ORDER BY recorded_at DESC, id DESC LIMIT 1',
       [email],
     );
-  }
-
-  // ── Expense receipts ──
-
-  async createReceipt(data: {
-    email: string;
-    fileId?: string | null;
-    vendor?: string;
-    amount?: number;
-    currency?: string;
-    receiptDate?: string;
-    category?: string;
-    description?: string;
-    ocrRawJson?: string;
-  }): Promise<ExpenseReceiptRow> {
-    const id = uuidv4();
-    await this.db.run(
-      `INSERT INTO expense_receipts (id, email, file_id, vendor, amount, currency,
-        receipt_date, category, description, ocr_raw_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        data.email,
-        data.fileId ?? null,
-        data.vendor ?? '',
-        data.amount ?? 0,
-        data.currency ?? 'INR',
-        data.receiptDate ?? '',
-        data.category ?? 'other',
-        data.description ?? '',
-        data.ocrRawJson ?? '{}',
-      ],
-    );
-    const row = await this.db.get<ExpenseReceiptRow>(
-      'SELECT * FROM expense_receipts WHERE id = ?',
-      [id],
-    );
-    if (!row) throw new Error('Failed to create receipt');
-    return row;
-  }
-
-  async getReceiptById(id: string): Promise<ExpenseReceiptRow | null> {
-    return this.db.get<ExpenseReceiptRow>('SELECT * FROM expense_receipts WHERE id = ?', [id]);
-  }
-
-  async getReceiptsByEmail(email: string): Promise<ExpenseReceiptRow[]> {
-    return this.db.all<ExpenseReceiptRow>(
-      'SELECT * FROM expense_receipts WHERE email = ? ORDER BY created_at DESC',
-      [email],
-    );
-  }
-
-  async listReceipts(status?: string): Promise<ExpenseReceiptRow[]> {
-    if (status) {
-      return this.db.all<ExpenseReceiptRow>(
-        'SELECT * FROM expense_receipts WHERE status = ? ORDER BY created_at DESC',
-        [status],
-      );
-    }
-    return this.db.all<ExpenseReceiptRow>(
-      'SELECT * FROM expense_receipts ORDER BY created_at DESC',
-    );
-  }
-
-  async updateReceipt(
-    id: string,
-    fields: Partial<
-      Pick<
-        ExpenseReceiptRow,
-        | 'vendor'
-        | 'amount'
-        | 'currency'
-        | 'receipt_date'
-        | 'category'
-        | 'description'
-        | 'status'
-        | 'approver_email'
-        | 'rejection_reason'
-      >
-    >,
-  ): Promise<void> {
-    const sets: string[] = [];
-    const vals: unknown[] = [];
-    for (const [key, val] of Object.entries(fields)) {
-      if (val === undefined) continue;
-      sets.push(`${key} = ?`);
-      vals.push(val);
-    }
-    if (sets.length === 0) return;
-    sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE expense_receipts SET ${sets.join(', ')} WHERE id = ?`, vals);
   }
 }

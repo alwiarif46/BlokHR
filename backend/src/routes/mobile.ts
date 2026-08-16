@@ -30,15 +30,6 @@ import {
  *   GET    /api/mobile/location/settings       — tracking settings
  *   PUT    /api/mobile/location/settings       — update tracking settings
  *
- * Expense receipts:
- *   POST   /api/expenses/receipt              — create receipt (photo capture + OCR)
- *   GET    /api/expenses/receipts             — list receipts
- *   GET    /api/expenses/receipts/mine        — my receipts
- *   GET    /api/expenses/receipts/:id         — get receipt
- *   POST   /api/expenses/receipts/:id/submit  — submit receipt
- *   POST   /api/expenses/receipts/:id/approve — approve receipt
- *   POST   /api/expenses/receipts/:id/reject  — reject receipt
- *
  * Batch approvals:
  *   POST   /api/approvals/batch               — batch approve/reject
  *
@@ -225,88 +216,6 @@ export function createMobileRouter(db: DatabaseEngine, logger: Logger): Router {
       };
       if (enabled === undefined) throw new AppError('enabled is required', 400);
       const result = await service.updateTrackingSettings(enabled, intervalSeconds, actor);
-      if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
-      res.json({ success: true });
-    }),
-  );
-
-  // ── Expense receipts ──
-
-  router.post(
-    '/expenses/receipt',
-    asyncHandler(async (req: Request, res: Response) => {
-      const email = req.identity?.email;
-      if (!email) throw new AppError('Authentication required', 401);
-      const b = req.body as Record<string, unknown>;
-      const result = await service.createReceipt({
-        email,
-        fileId: b.fileId as string | null | undefined,
-        vendor: b.vendor as string | undefined,
-        amount: b.amount as number | undefined,
-        currency: b.currency as string | undefined,
-        receiptDate: b.receiptDate as string | undefined,
-        category: b.category as string | undefined,
-        description: b.description as string | undefined,
-      });
-      if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
-      res.status(201).json({ receipt: result.data });
-    }),
-  );
-
-  router.get(
-    '/expenses/receipts',
-    asyncHandler(async (req: Request, res: Response) => {
-      const status = req.query.status as string | undefined;
-      const receipts = await service.listReceipts(status);
-      res.json({ receipts });
-    }),
-  );
-
-  router.get(
-    '/expenses/receipts/mine',
-    asyncHandler(async (req: Request, res: Response) => {
-      const email = req.identity?.email;
-      if (!email) throw new AppError('Authentication required', 401);
-      const receipts = await service.getReceiptsByEmail(email);
-      res.json({ receipts });
-    }),
-  );
-
-  router.get(
-    '/expenses/receipts/:id',
-    asyncHandler(async (req: Request, res: Response) => {
-      const receipt = await service.getReceiptById(req.params.id);
-      if (!receipt) throw new AppError('Receipt not found', 404);
-      res.json({ receipt });
-    }),
-  );
-
-  router.post(
-    '/expenses/receipts/:id/submit',
-    asyncHandler(async (req: Request, res: Response) => {
-      const actor = req.identity?.email ?? '';
-      const result = await service.submitReceipt(req.params.id, actor);
-      if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
-      res.json({ success: true });
-    }),
-  );
-
-  router.post(
-    '/expenses/receipts/:id/approve',
-    asyncHandler(async (req: Request, res: Response) => {
-      const approver = req.identity?.email ?? '';
-      const result = await service.approveReceipt(req.params.id, approver);
-      if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
-      res.json({ success: true });
-    }),
-  );
-
-  router.post(
-    '/expenses/receipts/:id/reject',
-    asyncHandler(async (req: Request, res: Response) => {
-      const rejector = req.identity?.email ?? '';
-      const { reason } = req.body as { reason?: string };
-      const result = await service.rejectReceipt(req.params.id, rejector, reason ?? '');
       if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
       res.json({ success: true });
     }),
