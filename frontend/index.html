@@ -490,10 +490,10 @@
             <div class="sb-item role-gated" data-module="visitors" data-flag="visitor_mgmt" style="display: none">
               <span class="sb-icon">&#128100;</span><span class="sb-label">Visitors</span>
             </div>
-            <div class="sb-item role-gated" data-module="expenses" style="display: none">
+            <div class="sb-item role-gated" data-module="expenses" data-flag="expense_mgmt" style="display: none">
               <span class="sb-icon">&#128176;</span><span class="sb-label">Expenses</span>
             </div>
-            <div class="sb-item role-gated" data-module="timesheets" style="display: none">
+            <div class="sb-item role-gated" data-module="timesheets" data-flag="timesheets" style="display: none">
               <span class="sb-icon">&#128203;</span><span class="sb-label">Timesheets</span>
             </div>
             <div class="sb-divider role-gated" style="display: none"></div>
@@ -853,7 +853,23 @@
       }
 
       /* ── Auth: Logout — FIX #4: reset role gates on logout ── */
-      function doLogout() {
+      async function doLogout() {
+        try {
+          const { handleRollCallLogout } = await import('./modules/school_roll_call/queue.js');
+          const { getSchoolTenantId } = await import('./shared/api.js');
+          const remaining = await handleRollCallLogout(getSchoolTenantId());
+          if (remaining > 0) {
+            toast(
+              remaining +
+                ' unsent period' +
+                (remaining === 1 ? '' : 's') +
+                ' will sync on next login',
+              'info',
+            );
+          }
+        } catch (_e) {
+          /* queue optional */
+        }
         disconnectSSE();
         clearSession();
         _userRoles = { isAdmin: false, isGlobalManager: false, isGlobalHR: false, managerOf: [], hrOf: [] };

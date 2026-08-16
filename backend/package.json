@@ -25,11 +25,12 @@
     "@azure/storage-blob": "^12.25.0",
     "@blokhr/billing": "file:../services/billing",
     "@blokhr/capture": "file:../services/capture",
+    "@blokhr/capture-rollcall": "file:../services/capture-rollcall",
     "@blokhr/consent": "file:../services/consent",
     "@blokhr/directory": "file:../services/directory",
     "@blokhr/entitlements": "file:../services/entitlements",
     "@blokhr/kiosk": "file:../services/kiosk",
-    "@blokhr/capture-rollcall": "file:../services/capture-rollcall",
+    "@blokhr/learning": "file:../services/learning",
     "@blokhr/transport": "file:../services/transport",
     "bcryptjs": "^3.0.3",
     "botbuilder": "^4.23.1",
@@ -45,7 +46,8 @@
     "pino": "^9.4.0",
     "pino-pretty": "^11.2.0",
     "sql.js": "^1.11.0",
-    "uuid": "^10.0.0"
+    "uuid": "^10.0.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

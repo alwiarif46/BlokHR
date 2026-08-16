@@ -26,6 +26,7 @@ describe('EventBus Module', () => {
       groupShiftStart: '00:00',
       groupShiftEnd: '23:59',
     });
+    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
   });
 
   afterEach(async () => {
@@ -201,11 +202,10 @@ describe('EventBus Module', () => {
       // The createMember method is on SettingsService — test via chat/tool
       const res = await request(app)
         .post('/api/chat/tool')
+        .set('X-User-Email', 'admin@shaavir.com')
         .send({
-          email: 'admin@shaavir.com',
           toolName: 'employee_info',
           params: { email: EMAIL },
-          isAdmin: true,
         });
 
       expect(res.status).toBe(200);

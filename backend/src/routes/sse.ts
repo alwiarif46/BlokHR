@@ -29,5 +29,13 @@ export function createSseRouter(broadcaster: SseBroadcaster): Router {
     // The broadcaster handles cleanup on disconnect.
   });
 
+  // Alias used by older clients
+  router.get('/sse/stream', (req: Request, res: Response) => {
+    req.socket.setTimeout(0);
+    req.socket.setNoDelay(true);
+    req.socket.setKeepAlive(true);
+    broadcaster.addClient(res);
+  });
+
   return router;
 }

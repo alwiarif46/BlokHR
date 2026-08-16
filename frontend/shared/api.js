@@ -13,7 +13,7 @@
  *  - Error wrapping: returns { _error: true, status, message } on failure
  */
 
-import { getSession, clearSession } from './session.js';
+import { getSession, clearSession, getGuardianSession, clearGuardianSession } from './session.js';
 
 let _base = '';
 let _mockMode = false;
@@ -178,4 +178,194 @@ api.put = function apiPut(path, body) {
  */
 api.delete = function apiDelete(path) {
   return api(path, { method: 'DELETE' });
+};
+
+/**
+ * PATCH helper
+ * @param {string} path
+ * @param {any} body
+ * @returns {Promise<any>}
+ */
+api.patch = function apiPatch(path, body) {
+  return api(path, { method: 'PATCH', body: body });
+};
+
+/**
+ * School service map — gateway `/svc/<name>` → default dev port.
+ * Single source of truth shared with services/gateway SERVICE_MAP.
+ */
+export const SCHOOL_SERVICES = {
+  'school-identity': 3011,
+  'school-timetable': 3012,
+  'school-attendance': 3013,
+  'school-academics': 3014,
+  'school-assessment': 3015,
+  'school-engagement': 3016,
+  'school-fees': 3017,
+  'school-transport': 3018,
+  'school-compliance': 3019,
+  'school-library': 3020,
+  'school-surveys': 3022,
+};
+
+let _schoolTenantId = 'default';
+
+/**
+ * Set tenant id used by `api.school(..., tenantScoped=true)`.
+ * @param {string} tenantId
+ */
+export function setSchoolTenantId(tenantId) {
+  _schoolTenantId = (tenantId && String(tenantId).trim()) || 'default';
+}
+
+/** @returns {string} */
+export function getSchoolTenantId() {
+  return _schoolTenantId;
+}
+
+/**
+ * Domain path segment for a school service (`school-attendance` → `attendance`).
+ * @param {string} service
+ * @returns {string}
+ */
+export function schoolServiceDomain(service) {
+  return String(service || '').replace(/^school-/, '');
+}
+
+/**
+ * Scoped client for a school microservice via the gateway `/svc/` prefix.
+ * Reuses `api()` auth headers and 401 handling — no separate fetch stack.
+ *
+ * @param {keyof typeof SCHOOL_SERVICES | string} service
+ * @param {boolean} [tenantScoped=true]
+ * @returns {{ get: Function, post: Function, put: Function, patch: Function, del: Function, prefix: Function }}
+ */
+api.school = function apiSchool(service, tenantScoped) {
+  const scoped = tenantScoped !== false;
+  if (!Object.prototype.hasOwnProperty.call(SCHOOL_SERVICES, service)) {
+    throw new Error('Unknown school service: ' + service);
+  }
+  const domain = schoolServiceDomain(service);
+
+  function prefix(path) {
+    const rel = !path || path === '/' ? '' : path.startsWith('/') ? path : '/' + path;
+    if (scoped) {
+      return (
+        '/svc/' +
+        service +
+        '/api/' +
+        domain +
+        '/' +
+        encodeURIComponent(_schoolTenantId) +
+        rel
+      );
+    }
+    return '/svc/' + service + '/api/' + domain + rel;
+  }
+
+  return {
+    prefix: prefix,
+    get: function (path) {
+      return api.get(prefix(path));
+    },
+    post: function (path, body) {
+      return api.post(prefix(path), body);
+    },
+    put: function (path, body) {
+      return api.put(prefix(path), body);
+    },
+    patch: function (path, body) {
+      return api.patch(prefix(path), body);
+    },
+    del: function (path) {
+      return api.delete(prefix(path));
+    },
+  };
+};
+
+/**
+ * Guardian parent-portal HTTP helper — uses `guardian_session` Bearer token.
+ * Paths are gateway `/guardian/*` routes (never call school services directly).
+ *
+ * @param {string} path
+ * @param {RequestInit} [opts]
+ * @returns {Promise<any>}
+ */
+export async function guardianApi(path, opts) {
+  if (_mockMode) return null;
+
+  const session = getGuardianSession();
+  const headers = Object.assign({}, (opts && opts.headers) || {});
+
+  if (opts && opts.method && opts.method !== 'GET') {
+    if (!headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json';
+    }
+  }
+
+  const isLogin = path.indexOf('/guardian/login') === 0;
+  if (!isLogin && session && session.token) {
+    headers['Authorization'] = 'Bearer ' + session.token;
+  }
+
+  const fetchOpts = Object.assign({}, opts || {}, { headers: headers });
+  if (
+    fetchOpts.body &&
+    typeof fetchOpts.body === 'object' &&
+    !(fetchOpts.body instanceof FormData) &&
+    !(fetchOpts.body instanceof Blob) &&
+    !(fetchOpts.body instanceof ArrayBuffer)
+  ) {
+    fetchOpts.body = JSON.stringify(fetchOpts.body);
+  }
+
+  try {
+    const response = await fetch(_base + path, fetchOpts);
+
+    if (response.status === 401) {
+      if (!isLogin) {
+        clearGuardianSession();
+        if (typeof document !== 'undefined') {
+          document.dispatchEvent(
+            new CustomEvent('blokhr:guardian:auth:expired', { detail: { path: path } }),
+          );
+        }
+      }
+      var authMessage = isLogin ? 'Invalid phone or password' : 'Session expired';
+      try {
+        var text401 = await response.text();
+        if (text401 && text401.charAt(0) === '{') {
+          var parsed401 = JSON.parse(text401);
+          authMessage = parsed401.error || parsed401.message || authMessage;
+        }
+      } catch (_e) {
+        /* leave default */
+      }
+      return { _error: true, status: 401, message: authMessage };
+    }
+
+    if (!response.ok) {
+      let message = 'Request failed';
+      try {
+        const text = await response.text();
+        const parsed = JSON.parse(text);
+        message = parsed.error || parsed.message || text;
+      } catch (_e) {
+        /* leave default */
+      }
+      return { _error: true, status: response.status, message: message };
+    }
+
+    if (response.status === 204) return {};
+    return await response.json();
+  } catch (err) {
+    return { _error: true, status: 0, message: (err && err.message) || 'Network error' };
+  }
+}
+
+guardianApi.get = function (path) {
+  return guardianApi(path, { method: 'GET' });
+};
+guardianApi.post = function (path, body) {
+  return guardianApi(path, { method: 'POST', body: body });
 };

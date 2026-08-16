@@ -1,12 +1,12 @@
 /**
  * shared/session.js — Session Management
  *
- * THE ONE piece of data that stays in localStorage.
+ * THE approved localStorage surface for the frontend:
+ *   - Staff/HR: session_{tenantId} (default: session_default)
+ *   - Guardian parent portal: guardian_session (P9-04)
  * Every other preference goes to the database via shared/prefs.js.
  *
- * Storage key: session_{tenantId}  (default: session_default)
- *
- * Session shape:
+ * Staff session shape:
  *   { name, email, source, sessionToken, mustChangePassword, vertical? }
  */
 
@@ -114,4 +114,79 @@ export function updateSession(key, value) {
   } catch (_e) {
     /* noop */
   }
+}
+
+/* ── Guardian parent portal session (distinct key: guardian_session) ── */
+
+const GUARDIAN_STORAGE_KEY = 'guardian_session';
+let _guardianSession = null;
+
+/**
+ * @typedef {{
+ *   token: string,
+ *   tenantId: string,
+ *   guardianId: string,
+ *   expiresAt: string,
+ *   phone?: string,
+ * }} GuardianSession
+ */
+
+/**
+ * Save guardian session to memory + localStorage under key `guardian_session`.
+ * @param {GuardianSession} session
+ */
+export function saveGuardianSession(session) {
+  _guardianSession = {
+    token: session.token || '',
+    tenantId: session.tenantId || '',
+    guardianId: session.guardianId || '',
+    expiresAt: session.expiresAt || '',
+    phone: session.phone || '',
+  };
+  try {
+    localStorage.setItem(GUARDIAN_STORAGE_KEY, JSON.stringify(_guardianSession));
+  } catch (_e) {
+    /* memory only */
+  }
+}
+
+/**
+ * Load guardian session from localStorage into memory.
+ * @returns {GuardianSession | null}
+ */
+export function loadGuardianSession() {
+  if (_guardianSession && _guardianSession.token) return _guardianSession;
+  try {
+    const raw = localStorage.getItem(GUARDIAN_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.token) {
+        _guardianSession = parsed;
+        return _guardianSession;
+      }
+    }
+  } catch (_e) {
+    /* corrupted */
+  }
+  return null;
+}
+
+/**
+ * Clear guardian session from memory + localStorage.
+ */
+export function clearGuardianSession() {
+  _guardianSession = null;
+  try {
+    localStorage.removeItem(GUARDIAN_STORAGE_KEY);
+  } catch (_e) {
+    /* noop */
+  }
+}
+
+/**
+ * In-memory guardian session (no localStorage read).
+ * @returns {GuardianSession | null}
+ */
+export function getGuardianSession() {
+  return _guardianSession;
 }

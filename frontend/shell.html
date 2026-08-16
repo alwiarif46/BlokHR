@@ -491,10 +491,10 @@
             <div class="sb-item role-gated" data-module="visitors" data-flag="visitor_mgmt" style="display: none">
               <span class="sb-icon">&#128100;</span><span class="sb-label">Visitors</span>
             </div>
-            <div class="sb-item role-gated" data-module="expenses" style="display: none">
+            <div class="sb-item role-gated" data-module="expenses" data-flag="expense_mgmt" style="display: none">
               <span class="sb-icon">&#128176;</span><span class="sb-label">Expenses</span>
             </div>
-            <div class="sb-item role-gated" data-module="timesheets" style="display: none">
+            <div class="sb-item role-gated" data-module="timesheets" data-flag="timesheets" style="display: none">
               <span class="sb-icon">&#128203;</span><span class="sb-label">Timesheets</span>
             </div>
             <div class="sb-divider role-gated" style="display: none"></div>
@@ -504,6 +504,32 @@
             </div>
             <div class="sb-item role-gated" data-module="capture_admin" style="display: none">
               <span class="sb-icon">&#128241;</span><span class="sb-label">Capture Admin</span>
+            </div>
+            <div class="sb-divider hidden" data-flag-group="school_vertical"></div>
+            <div class="sb-section-label hidden" data-flag-group="school_vertical">School</div>
+            <div class="sb-item hidden" data-module="school_students" data-flag="school_vertical">
+              <span class="sb-icon">&#128100;</span><span class="sb-label">Students</span>
+            </div>
+            <div class="sb-item hidden" data-module="school_roll_call" data-flag="school_vertical">
+              <span class="sb-icon">&#128203;</span><span class="sb-label">Roll Call</span>
+            </div>
+            <div class="sb-item hidden" data-module="school_attendance_admin" data-flag="school_vertical">
+              <span class="sb-icon">&#128197;</span><span class="sb-label">Attendance Admin</span>
+            </div>
+            <div class="sb-item hidden" data-module="school_academics" data-flag="school_vertical">
+              <span class="sb-icon">&#128218;</span><span class="sb-label">Academics</span>
+            </div>
+            <div class="sb-item hidden" data-module="school_hpc" data-flag="school_vertical">
+              <span class="sb-icon">&#127919;</span><span class="sb-label">HPC</span>
+            </div>
+            <div class="sb-item hidden" data-module="school_library" data-flag="school_vertical">
+              <span class="sb-icon">&#128214;</span><span class="sb-label">Library</span>
+            </div>
+            <div class="sb-item hidden" data-module="school_surveys" data-flag="school_vertical">
+              <span class="sb-icon">&#128202;</span><span class="sb-label">Parent Surveys</span>
+            </div>
+            <div class="sb-item hidden" data-module="school_settings" data-flag="school_vertical">
+              <span class="sb-icon">&#9881;</span><span class="sb-label">School Settings</span>
             </div>
             <div class="sb-item role-gated" data-module="iris_scan" data-flag="iris_scan" style="display: none">
               <span class="sb-icon">&#128065;</span><span class="sb-label">Iris Scan</span>
@@ -861,7 +887,24 @@
       }
 
       /* ── Auth: Logout — FIX #4: reset role gates on logout ── */
-      function doLogout() {
+      async function doLogout() {
+        /* F-03: final roll-call queue flush; never delete unsent marks */
+        try {
+          const { handleRollCallLogout } = await import('./modules/school_roll_call/queue.js');
+          const { getSchoolTenantId } = await import('./shared/api.js');
+          const remaining = await handleRollCallLogout(getSchoolTenantId());
+          if (remaining > 0) {
+            toast(
+              remaining +
+                ' unsent period' +
+                (remaining === 1 ? '' : 's') +
+                ' will sync on next login',
+              'info',
+            );
+          }
+        } catch (_e) {
+          /* queue optional if module unavailable */
+        }
         disconnectSSE();
         clearSession();
         _userRoles = { isAdmin: false, isGlobalManager: false, isGlobalHR: false, managerOf: [], hrOf: [] };

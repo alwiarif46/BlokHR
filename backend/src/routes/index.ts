@@ -38,11 +38,11 @@ import { createFeatureFlagsRouter } from './feature-flags';
 // ── Phase 2 route factories ──
 import { createOrgChartRouter } from './org-chart';
 import { createDocumentRouter } from './documents';
-import { createTrainingRouter } from './training';
 import { createWorkflowRouter } from './workflows';
 import { createSurveyRouter } from './surveys';
 import { createAssetRouter } from './assets';
 import { createVisitorRouter } from './visitors';
+import { createExpenseRouter } from './expenses';
 import { createIrisScanRouter } from './iris-scan';
 import { createMobileRouter } from './mobile';
 import { createMultiAuthRouter } from './multi-auth';
@@ -143,11 +143,11 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   app.use('/api', createHolidayRouter(db, logger));
   app.use('/api', createTimeTrackingRouter(db, logger));
   app.use('/api', createOvertimeRouter(db, logger));
-  app.use('/api', createTimesheetRouter(db, logger));
+  app.use('/api', createTimesheetRouter(db, logger, eventBus, notificationDispatcher));
   app.use('/api', createAnalyticsRouter(db, logger));
   app.use('/api', createFaceRecognitionRouter(db, config, logger));
   app.use('/api', createGeoRouter(db, logger));
-  app.use('/api', createChatbotRouter(db, config, logger));
+  app.use('/api', createChatbotRouter(db, config, logger, undefined, featureFlags));
   app.use('/api', createLiveChatRouter(db, broadcaster, logger));
   app.use('/api', createStorageRouter(db, logger));
   app.use('/api', createAuditRouter(db, logger));
@@ -158,11 +158,11 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
 
   app.use('/api', createOrgChartRouter(db, logger, eventBus));
   app.use('/api', createDocumentRouter(db, logger));
-  app.use('/api', createTrainingRouter(db, logger));
   app.use('/api', createWorkflowRouter(db, logger, eventBus));
   app.use('/api', createSurveyRouter(db, logger));
   app.use('/api', createAssetRouter(db, logger));
-  app.use('/api', createVisitorRouter(db, logger));
+  app.use('/api', createVisitorRouter(db, logger, notificationDispatcher));
+  app.use('/api', createExpenseRouter(db, logger, notificationDispatcher));
   app.use('/api', createIrisScanRouter(db, logger));
   app.use('/api', createMobileRouter(db, logger));
 }

@@ -87,6 +87,9 @@ export interface AppConfig {
   serverBaseUrl: string | undefined;
   actionLinkSecret: string | undefined;
 
+  /** Encrypts user calendar OAuth tokens + signs OAuth state (falls back to action/license secret). */
+  calendarTokenKey: string;
+
   /** Discord Bot (interactive buttons, replaces webhook) */
   discordBotToken: string | undefined;
   discordAppId: string | undefined;
@@ -113,6 +116,7 @@ export interface AppConfig {
   licenseSigningSecret: string;
   entitlementsDbPath: string;
   directoryDbPath: string;
+  learningDbPath: string;
   kioskDbPath: string;
   consentDbPath: string;
   captureDbPath: string;
@@ -191,6 +195,11 @@ export function loadConfig(): AppConfig {
 
     serverBaseUrl: env('SERVER_BASE_URL'),
     actionLinkSecret: env('ACTION_LINK_SECRET'),
+    calendarTokenKey: envDefault(
+      'CALENDAR_TOKEN_KEY',
+      env('ACTION_LINK_SECRET') ??
+        envDefault('LICENSE_SIGNING_SECRET', 'dev-license-signing-secret-change-me'),
+    ),
 
     zoomAccountId: env('ZOOM_ACCOUNT_ID'),
     zoomClientId: env('ZOOM_CLIENT_ID'),
@@ -222,6 +231,7 @@ export function loadConfig(): AppConfig {
     ),
     entitlementsDbPath: envDefault('ENTITLEMENTS_DB_PATH', './entitlements.db'),
     directoryDbPath: envDefault('DIRECTORY_DB_PATH', './directory.db'),
+    learningDbPath: envDefault('LEARNING_DB_PATH', './learning.db'),
     kioskDbPath: envDefault('KIOSK_DB_PATH', './kiosk.db'),
     consentDbPath: envDefault('CONSENT_DB_PATH', './consent.db'),
     captureDbPath: envDefault('CAPTURE_DB_PATH', './capture.db'),

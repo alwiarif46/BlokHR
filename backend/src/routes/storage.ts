@@ -129,8 +129,13 @@ export function createStorageRouter(
       const result = await service.download(req.params.id);
       if (!result.success) throw new AppError(result.error ?? 'Download failed', 404);
 
+      const inline = req.query.inline === '1' || req.query.inline === 'true';
+      const safeName = (result.originalName ?? 'file').replace(/"/g, '');
       res.setHeader('Content-Type', result.mimeType ?? 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${result.originalName}"`);
+      res.setHeader(
+        'Content-Disposition',
+        `${inline ? 'inline' : 'attachment'}; filename="${safeName}"`,
+      );
       res.send(result.buffer);
     }),
   );

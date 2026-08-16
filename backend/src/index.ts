@@ -18,6 +18,10 @@ import {
   mountDirectoryRouter,
 } from './directory/mount';
 import {
+  createLearningBundle,
+  mountLearningRouter,
+} from './learning/mount';
+import {
   createKioskBundle,
   mountKioskRouter,
 } from './kiosk/mount';
@@ -28,6 +32,7 @@ import {
 import type { EventBus } from './events';
 import type { CommercialServices } from './commercial/mount';
 import type { DirectoryBundle } from './directory/mount';
+import type { LearningBundle } from './learning/mount';
 import type { KioskBundle } from './kiosk/mount';
 import type { CapturePlatformBundle } from './capture/mount';
 
@@ -103,13 +108,16 @@ async function main(): Promise<void> {
     eventBus,
   });
 
-  // ── 7c. Kiosk (shared-device PIN clock) service ──
+  // ── 7c. Learning (LMS) service ──
+  const learning: LearningBundle = await createLearningBundle(config, logger);
+
+  // ── 7d. Kiosk (shared-device PIN clock) service ──
   const kiosk: KioskBundle = await createKioskBundle(config, logger, {
     monolithDb: db,
     directory: directory.service,
   });
 
-  // ── 7d. Capture platform (consent + capture + school attendance) ──
+  // ── 7e. Capture platform (consent + capture + school attendance) ──
   const capturePlatform: CapturePlatformBundle = await createCapturePlatformBundle(config, logger, {
     monolithDb: db,
     entitlements: commercial.entitlements,
@@ -119,6 +127,7 @@ async function main(): Promise<void> {
   const app = createApp(config, logger, (a) => {
     mountCommercialRouters(a, config, commercial);
     mountDirectoryRouter(a, directory, config, db);
+    mountLearningRouter(a, learning, config, db);
     mountKioskRouter(a, kiosk, config, db);
     mountCapturePlatform(a, capturePlatform, config, db);
     registerAllRoutes(a, {
@@ -184,6 +193,10 @@ async function main(): Promise<void> {
         })
         .then(() => {
           logger.info('Directory service closed');
+          return learning.close();
+        })
+        .then(() => {
+          logger.info('Learning service closed');
           return kiosk.close();
         })
         .then(() => {

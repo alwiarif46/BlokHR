@@ -187,13 +187,36 @@ var _modNames = {
   overtime: 'Overtime Management',
   leave_policies: 'Leave Policies',
   holidays: 'Holiday Calendar',
+  my_prefs: 'My Preferences',
   geo_fencing: 'Geo-Fencing',
   ai_chatbot: 'AI Chatbot',
   audit_trail: 'Audit Trail',
   feature_flags: 'Feature Flags',
   webhooks: 'Webhooks',
   kiosk: 'Kiosk',
+  school_students: 'Students',
+  school_roll_call: 'Roll Call',
+  school_attendance_admin: 'Attendance Admin',
+  school_academics: 'Academics',
+  school_hpc: 'HPC',
+  school_library: 'Library',
+  school_surveys: 'Parent Surveys',
+  school_settings: 'School Settings',
 };
+
+/** School shell module keys (F-01 placeholders → F-02+ / P10). */
+export const SCHOOL_MODULE_GROUP = [
+  'school_students',
+  'school_roll_call',
+  'school_attendance_admin',
+  'school_academics',
+  'school_hpc',
+  'school_library',
+  'school_surveys',
+  'school_settings',
+];
+
+export const SCHOOL_VERTICAL_FLAG = 'school_vertical';
 
 /* ── Navigate ── */
 
@@ -364,14 +387,40 @@ export function getFeatureFlags() {
 /**
  * Apply feature flags to sidebar items.
  * Items with data-flag attribute are hidden if the flag is disabled.
+ * `school_vertical` is opt-in (hidden unless explicitly true).
  */
 export function applyFeatureFlags() {
   document.querySelectorAll('.sb-item[data-flag]').forEach(function (item) {
     var flag = item.dataset.flag;
-    var enabled = _featureFlags[flag] !== false && _featureFlags[flag] !== 0;
+    var enabled = isFeatureEnabled(flag);
     item.classList.toggle('hidden', !enabled);
   });
+  document.querySelectorAll('[data-flag-group]').forEach(function (el) {
+    var flag = el.dataset.flagGroup;
+    var enabled = isFeatureEnabled(flag);
+    el.classList.toggle('hidden', !enabled);
+  });
 }
+
+/**
+ * @param {string} flag
+ * @returns {boolean}
+ */
+export function isFeatureEnabled(flag) {
+  if (flag === SCHOOL_VERTICAL_FLAG) {
+    return _featureFlags[flag] === true || _featureFlags[flag] === 1;
+  }
+  return _featureFlags[flag] !== false && _featureFlags[flag] !== 0;
+}
+
+/**
+ * Whether the school module group should appear in the shell.
+ * @returns {boolean}
+ */
+export function isSchoolModuleGroupVisible() {
+  return isFeatureEnabled(SCHOOL_VERTICAL_FLAG);
+}
+
 
 /* ── Sidebar ── */
 

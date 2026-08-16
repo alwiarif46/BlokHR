@@ -30,11 +30,11 @@ import { createWebhookReceiverRouter } from '../../src/routes/webhook-receivers'
 import { createFeatureFlagsRouter } from '../../src/routes/feature-flags';
 import { createOrgChartRouter } from '../../src/routes/org-chart';
 import { createDocumentRouter } from '../../src/routes/documents';
-import { createTrainingRouter } from '../../src/routes/training';
 import { createWorkflowRouter } from '../../src/routes/workflows';
 import { createSurveyRouter } from '../../src/routes/surveys';
 import { createAssetRouter } from '../../src/routes/assets';
 import { createVisitorRouter } from '../../src/routes/visitors';
+import { createExpenseRouter } from '../../src/routes/expenses';
 import { createIrisScanRouter } from '../../src/routes/iris-scan';
 import { createMobileRouter } from '../../src/routes/mobile';
 import { createMultiAuthRouter } from '../../src/routes/multi-auth';
@@ -57,6 +57,10 @@ import {
   mountDirectoryRouter,
 } from '../../src/directory/mount';
 import {
+  createLearningBundle,
+  mountLearningRouter,
+} from '../../src/learning/mount';
+import {
   createKioskBundle,
   mountKioskRouter,
 } from '../../src/kiosk/mount';
@@ -66,6 +70,7 @@ import {
 } from '../../src/capture/mount';
 import type { CommercialServices } from '../../src/commercial/mount';
 import type { DirectoryBundle } from '../../src/directory/mount';
+import type { LearningBundle } from '../../src/learning/mount';
 import type { KioskBundle } from '../../src/kiosk/mount';
 import type { CapturePlatformBundle } from '../../src/capture/mount';
 import type { AppConfig } from '../../src/config';
@@ -107,8 +112,9 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     llmModel: undefined,
     azureFaceEndpoint: undefined,
     azureFaceKey: undefined,
-    serverBaseUrl: undefined,
+    serverBaseUrl: 'http://localhost:3000',
     actionLinkSecret: 'test-action-secret-32chars-long!',
+    calendarTokenKey: 'test-calendar-token-key-32chars!!',
     zoomAccountId: undefined,
     zoomClientId: undefined,
     zoomClientSecret: undefined,
@@ -126,6 +132,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     licenseSigningSecret: 'test-license-signing-secret',
     entitlementsDbPath: ':memory:',
     directoryDbPath: ':memory:',
+    learningDbPath: ':memory:',
     kioskDbPath: ':memory:',
     consentDbPath: ':memory:',
     captureDbPath: ':memory:',
@@ -154,6 +161,7 @@ export async function createTestApp(): Promise<{
   featureFlags: FeatureFlagService;
   commercial: CommercialServices;
   directory: DirectoryBundle;
+  learning: LearningBundle;
   kiosk: KioskBundle;
   capturePlatform: CapturePlatformBundle;
 }> {
@@ -175,6 +183,7 @@ export async function createTestApp(): Promise<{
     monolithDb: db,
     entitlements: commercial.entitlements,
   });
+  const learning = await createLearningBundle(config, testLogger);
   const kiosk = await createKioskBundle(config, testLogger, {
     monolithDb: db,
     directory: directory.service,
@@ -187,6 +196,7 @@ export async function createTestApp(): Promise<{
   const app = createApp(config, testLogger, (a) => {
     mountCommercialRouters(a, config, commercial);
     mountDirectoryRouter(a, directory, config, db);
+    mountLearningRouter(a, learning, config, db);
     mountKioskRouter(a, kiosk, config, db);
     mountCapturePlatform(a, capturePlatform, config, db);
     // Feature flag guard — BEFORE all route handlers
@@ -257,7 +267,7 @@ export async function createTestApp(): Promise<{
     a.use('/api', faceRouter);
     const geoRouter = createGeoFencingRouter(db, testLogger);
     a.use('/api', geoRouter);
-    const chatbotRouter = createChatbotRouter(db, config, testLogger, mockLlm);
+    const chatbotRouter = createChatbotRouter(db, config, testLogger, mockLlm, featureFlags);
     a.use('/api', chatbotRouter);
     const liveChatRouter = createLiveChatRouter(db, broadcaster, testLogger);
     a.use('/api', liveChatRouter);
@@ -273,8 +283,6 @@ export async function createTestApp(): Promise<{
     a.use('/api', orgChartRouter);
     const documentRouter = createDocumentRouter(db, testLogger);
     a.use('/api', documentRouter);
-    const trainingRouter = createTrainingRouter(db, testLogger);
-    a.use('/api', trainingRouter);
     const workflowRouter = createWorkflowRouter(db, testLogger);
     a.use('/api', workflowRouter);
     const surveyRouter = createSurveyRouter(db, testLogger);
@@ -283,6 +291,8 @@ export async function createTestApp(): Promise<{
     a.use('/api', assetRouter);
     const visitorRouter = createVisitorRouter(db, testLogger);
     a.use('/api', visitorRouter);
+    const expenseRouter = createExpenseRouter(db, testLogger);
+    a.use('/api', expenseRouter);
     const irisScanRouter = createIrisScanRouter(db, testLogger);
     a.use('/api', irisScanRouter);
     const mobileRouter = createMobileRouter(db, testLogger);
@@ -294,7 +304,7 @@ export async function createTestApp(): Promise<{
   // Load feature flags into cache (must be after migrations)
   await featureFlags.load();
 
-  return { app, db, broadcaster, mockFaceApi, mockLlm, mockStorage, featureFlags, commercial, directory, kiosk, capturePlatform };
+  return { app, db, broadcaster, mockFaceApi, mockLlm, mockStorage, featureFlags, commercial, directory, learning, kiosk, capturePlatform };
 }
 
 /** Seed a member and group so clock actions can succeed. */

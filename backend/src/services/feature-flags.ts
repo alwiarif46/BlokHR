@@ -36,6 +36,7 @@ const FEATURE_ROUTE_MAP: Record<string, string[]> = {
   live_chat: ['/api/channels', '/api/messages', '/api/dm'],
   ai_chatbot: ['/api/chat'],
   time_tracking: ['/api/time-tracking'],
+  timesheets: ['/api/timesheets'],
   overtime: ['/api/overtime'],
   bd_meetings: ['/api/bd-meetings'],
   tracked_meetings: ['/api/meetings'],
@@ -45,7 +46,8 @@ const FEATURE_ROUTE_MAP: Record<string, string[]> = {
   surveys: ['/api/surveys'],
   asset_mgmt: ['/api/assets'],
   visitor_mgmt: ['/api/visitors'],
-  workflows: ['/api/workflows'],
+  workflows: ['/api/workflows', '/api/workflow-instances', '/api/workflow-forms'],
+  expense_mgmt: ['/api/expenses', '/api/expense-policies'],
   file_storage: ['/api/storage'],
   analytics: ['/api/analytics'],
 };
@@ -58,6 +60,7 @@ const FEATURE_TOOL_CATEGORIES: Record<string, string[]> = {
   geo_fencing: ['geo_fencing'],
   ai_chatbot: [],  // The chatbot itself — if off, entire /api/chat is gone
   time_tracking: ['time_tracking'],
+  timesheets: ['timesheets'],
   overtime: ['overtime'],
   bd_meetings: ['bd_meetings'],
   tracked_meetings: ['meetings'],
@@ -68,6 +71,7 @@ const FEATURE_TOOL_CATEGORIES: Record<string, string[]> = {
   asset_mgmt: ['assets'],
   visitor_mgmt: ['visitors'],
   workflows: ['workflows'],
+  expense_mgmt: ['expenses'],
   analytics: ['reports'],
 };
 
@@ -276,12 +280,14 @@ export class FeatureFlagService {
     if (!this.isEnabled('geo_fencing')) disabledKeys.add('geoFencing');
     if (!this.isEnabled('overtime')) disabledKeys.add('overtime');
     if (!this.isEnabled('time_tracking')) disabledKeys.add('timeTracking');
+    if (!this.isEnabled('timesheets')) disabledKeys.add('timesheets');
     if (!this.isEnabled('bd_meetings')) disabledKeys.add('bdMeetings');
     if (!this.isEnabled('tracked_meetings')) disabledKeys.add('trackedMeetings');
     if (!this.isEnabled('training_lms')) disabledKeys.add('training');
     if (!this.isEnabled('surveys')) disabledKeys.add('surveys');
     if (!this.isEnabled('asset_mgmt')) disabledKeys.add('assets');
     if (!this.isEnabled('visitor_mgmt')) disabledKeys.add('visitors');
+    if (!this.isEnabled('expense_mgmt')) disabledKeys.add('expenses');
     if (!this.isEnabled('workflows')) disabledKeys.add('workflows');
     if (disabledKeys.size === 0) return keys;
     return keys.filter(k => !disabledKeys.has(k));

@@ -4,7 +4,7 @@
  * Extracted from the monolith's connectSSE() function.
  *
  * Responsibilities:
- *  - Establish SSE connection to GET /api/sse/stream
+ *  - Establish SSE connection to GET /api/sse
  *  - Automatic reconnection with backoff on disconnect
  *  - Event dispatch to registered listeners
  *  - Sync status indicator (live/offline dot + label in header)
@@ -45,7 +45,7 @@ export function connectSSE() {
   const base = location.origin || '';
 
   try {
-    _source = new EventSource(base + '/api/sse/stream?email=' + encodeURIComponent(email));
+    _source = new EventSource(base + '/api/sse?email=' + encodeURIComponent(email));
 
     _source.onopen = function () {
       setSyncStatus('live');
