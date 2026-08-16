@@ -301,6 +301,82 @@ describe('Holiday Calendar Module', () => {
     });
   });
 
+  // ── Admin Excel/CSV import ──
+
+  describe('POST /api/holidays/import', () => {
+    beforeEach(async () => {
+      await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    });
+
+    it('rejects non-admin', async () => {
+      const res = await request(app)
+        .post('/api/holidays/import')
+        .send({ rows: [{ date: '2026-12-25', name: 'Christmas' }] })
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(403);
+    });
+
+    it('rejects unauthenticated', async () => {
+      const res = await request(app)
+        .post('/api/holidays/import')
+        .send({ rows: [{ date: '2026-12-25', name: 'Christmas' }] });
+      expect(res.status).toBe(401);
+    });
+
+    it('imports rows and maps gazetted → mandatory', async () => {
+      const res = await request(app)
+        .post('/api/holidays/import')
+        .send({
+          rows: [
+            { date: '2026-12-25', name: 'Christmas', type: 'gazetted' },
+            { date: '2026-03-14', name: 'Holi', type: 'optional' },
+          ],
+        })
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.created).toBe(2);
+      expect(res.body.skipped).toBe(0);
+
+      const list = await request(app).get('/api/holidays?year=2026');
+      const christmas = list.body.holidays.find((h: { name: string }) => h.name === 'Christmas');
+      expect(christmas?.type).toBe('mandatory');
+    });
+
+    it('skips duplicates without failing the batch', async () => {
+      const res = await request(app)
+        .post('/api/holidays/import')
+        .send({
+          rows: [
+            { date: '2026-01-26', name: 'Republic Day', type: 'mandatory' },
+            { date: '2026-11-14', name: 'Children Day', type: 'restricted' },
+          ],
+        })
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.created).toBe(1);
+      expect(res.body.skipped).toBe(1);
+    });
+
+    it('imports from Excel base64 workbook', async () => {
+      const XLSX = await import('xlsx');
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.aoa_to_sheet([
+        ['Date', 'Name', 'Type'],
+        ['2026-05-01', 'Labour Day', 'mandatory'],
+        ['01/06/2026', 'New Holiday', 'gazetted'],
+      ]);
+      XLSX.utils.book_append_sheet(wb, ws, 'Holidays');
+      const contentBase64 = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' }) as string;
+
+      const res = await request(app)
+        .post('/api/holidays/import')
+        .send({ filename: 'holidays.xlsx', contentBase64 })
+        .set('X-User-Email', 'admin@shaavir.com');
+      expect(res.status).toBe(200);
+      expect(res.body.created).toBe(2);
+    });
+  });
+
   // ── Scheduler integration ──
 
   describe('Scheduler skips mandatory holidays', () => {

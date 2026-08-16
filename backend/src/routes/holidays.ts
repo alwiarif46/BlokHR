@@ -4,12 +4,19 @@ import type { DatabaseEngine } from '../db/engine';
 import { AppError, asyncHandler } from '../app';
 import { HolidayRepository } from '../repositories/holiday-repository';
 import { HolidayService } from '../services/holiday-service';
+import {
+  decodeImportBase64,
+  importHolidayRows,
+  parseHolidayWorkbook,
+  type HolidayImportRow,
+} from '../services/holiday-import';
 
 /**
  * Holiday Calendar routes:
  *   GET    /api/holidays?year=          — list active holidays for a year
  *   GET    /api/holidays/all?year=      — admin: list all including inactive
  *   POST   /api/holidays                — admin: create a holiday
+ *   POST   /api/holidays/import         — admin: import from Excel/CSV (base64 or rows)
  *   PUT    /api/holidays/:id            — admin: update a holiday
  *   DELETE /api/holidays/:id            — admin: delete a holiday
  *   GET    /api/holidays/my-selections?year=  — employee's selected optional holidays
@@ -22,6 +29,14 @@ export function createHolidayRouter(db: DatabaseEngine, logger: Logger): Router 
   const router = Router();
   const repo = new HolidayRepository(db);
   const service = new HolidayService(repo, logger);
+
+  async function requireAdmin(req: Request): Promise<string> {
+    const callerEmail = req.identity?.email ?? '';
+    if (!callerEmail) throw new AppError('Authentication required', 401);
+    const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [callerEmail]);
+    if (!isAdmin) throw new AppError('Admin access required', 403);
+    return callerEmail;
+  }
 
   router.get(
     '/holidays',
@@ -54,6 +69,52 @@ export function createHolidayRouter(db: DatabaseEngine, logger: Logger): Router 
       const result = await service.create({ date, name, type, year });
       if (!result.success) throw new AppError(result.error ?? 'Failed', 400);
       res.json(result);
+    }),
+  );
+
+  /**
+   * POST /api/holidays/import — admin only.
+   * Body: { contentBase64, filename? } OR { rows: [{ date, name, type? }] }
+   */
+  router.post(
+    '/holidays/import',
+    asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = await requireAdmin(req);
+      const body = (req.body ?? {}) as {
+        contentBase64?: string;
+        filename?: string;
+        rows?: HolidayImportRow[];
+      };
+
+      let rows: HolidayImportRow[] = [];
+      let parseErrors: { row: number; message: string }[] = [];
+
+      if (Array.isArray(body.rows) && body.rows.length > 0) {
+        rows = body.rows;
+      } else if (typeof body.contentBase64 === 'string' && body.contentBase64.length > 0) {
+        let buffer: Buffer;
+        try {
+          buffer = decodeImportBase64(body.contentBase64);
+        } catch (err) {
+          throw new AppError(err instanceof Error ? err.message : 'Invalid file', 400);
+        }
+        const parsed = parseHolidayWorkbook(buffer);
+        rows = parsed.rows;
+        parseErrors = parsed.parseErrors;
+      } else {
+        throw new AppError('Provide contentBase64 (Excel/CSV) or rows[]', 400);
+      }
+
+      if (rows.length === 0 && parseErrors.length > 0) {
+        throw new AppError(parseErrors[0]?.message ?? 'Nothing to import', 400);
+      }
+
+      const result = await importHolidayRows(service, rows, logger, parseErrors);
+      logger.info(
+        { callerEmail, filename: body.filename, created: result.created, skipped: result.skipped },
+        'Admin imported holidays',
+      );
+      res.json({ success: true, ...result });
     }),
   );
 
