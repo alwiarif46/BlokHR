@@ -21,7 +21,8 @@ let _enrolments = [];
 let _loadError = '';
 let _loading = false;
 let _consentOut = '';
-let _eventsBound = false;
+/** @type {(() => void)|null} */
+let _unbindEvents = null;
 
 function _esc(s) {
   const d = document.createElement('div');
@@ -41,6 +42,10 @@ function _empty(text, icon) {
 
 /** Test helper — reset module state between cases. */
 export function _resetState() {
+  if (_unbindEvents) {
+    _unbindEvents();
+    _unbindEvents = null;
+  }
   _container = null;
   _tab = 'enrolments';
   _staffSession = null;
@@ -49,10 +54,13 @@ export function _resetState() {
   _loadError = '';
   _loading = false;
   _consentOut = '';
-  _eventsBound = false;
 }
 
 export function renderCaptureAdminPage(container) {
+  if (_unbindEvents) {
+    _unbindEvents();
+    _unbindEvents = null;
+  }
   _container = container;
   container.innerHTML =
     '<div class="ca-wrap" id="caWrap">' +
@@ -72,10 +80,10 @@ export function renderCaptureAdminPage(container) {
     '<div id="caContent"></div>' +
     '</div>';
 
-  if (!_eventsBound) {
-    container.addEventListener('click', _onClick);
-    _eventsBound = true;
-  }
+  container.addEventListener('click', _onClick);
+  _unbindEvents = function () {
+    container.removeEventListener('click', _onClick);
+  };
 
   caLoadData();
 }
@@ -161,6 +169,27 @@ function caRenderStats() {
     '</div><div class="ca-stat-label">Roll Call</div></div>';
 }
 
+/** True when session loaded but plan/gates yield no capture modalities. */
+function _noModalitiesEntitled() {
+  if (!_staffSession) return false;
+  const staff = (_staffSession.available_modalities || []).length;
+  const student =
+    _studentSession && Array.isArray(_studentSession.available_modalities)
+      ? _studentSession.available_modalities.length
+      : 0;
+  return staff === 0 && student === 0;
+}
+
+function _entitlementBanner() {
+  if (!_noModalitiesEntitled()) return '';
+  return (
+    '<div class="ca-banner" role="status">' +
+    '<div class="ca-banner-title">No capture modalities on this plan</div>' +
+    '<p>Staff/student modality counters show <strong>none</strong> when the tenant has no entitlement, or the plan omits capture modules (starting with <code>capture_qr</code>). Roll call needs <code>school_roll_call</code> or jurisdiction vertical set to school. This is plan gating, not a service outage.</p>' +
+    '</div>'
+  );
+}
+
 function caRender() {
   if (!_container) return;
   _syncTabs();
@@ -173,14 +202,29 @@ function caRender() {
   }
 
   if (_loadError && !_staffSession) {
-    el.innerHTML = _empty(_loadError);
+    el.innerHTML =
+      '<div class="ca-service-error" role="alert">' +
+      '<div class="ca-banner-title">Capture service unavailable</div>' +
+      '<p>' +
+      _esc(_loadError) +
+      '</p>' +
+      '<button type="button" class="ca-btn" data-action="refresh">Retry</button>' +
+      '</div>';
     return;
   }
 
-  if (_tab === 'enrolments') el.innerHTML = _renderEnrolments();
-  else if (_tab === 'devices') el.innerHTML = _renderDevices();
-  else if (_tab === 'consent') el.innerHTML = _renderConsent();
-  else el.innerHTML = _renderJurisdiction();
+  const banner = _entitlementBanner();
+  const enrolError =
+    _loadError && _staffSession
+      ? '<div class="ca-banner ca-banner-warn" role="alert">' +
+        _esc(_loadError) +
+        '</div>'
+      : '';
+
+  if (_tab === 'enrolments') el.innerHTML = banner + enrolError + _renderEnrolments();
+  else if (_tab === 'devices') el.innerHTML = banner + _renderDevices();
+  else if (_tab === 'consent') el.innerHTML = banner + _renderConsent();
+  else el.innerHTML = banner + _renderJurisdiction();
 }
 
 function _renderEnrolments() {

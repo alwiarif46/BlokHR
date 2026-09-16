@@ -1,8 +1,13 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import type { TimetableService } from '../services/timetable-service';
-import { resolveInternalSecret } from '../internal-auth';
+import {
+  enforceGuardianAccess,
+  isGuardianPrincipal,
+  resolveInternalSecret,
+} from '../internal-auth';
 import { assertTeacherMemberMatch, guardRoutes } from '../role-guard';
 import { TIMETABLE_ROUTE_POLICIES } from '../route-policies';
+import type { IdentityClient } from '../clients/identity-client';
 
 import {
   decodeTimetableImportBase64,
@@ -58,11 +63,13 @@ function pickPeriods(raw: unknown): PeriodDef[] {
   });
 }
 
-export function createTimetableRouter(service: TimetableService, opts: { internalSecret?: string } = {}): Router {
+export function createTimetableRouter(
+  service: TimetableService,
+  opts: { internalSecret?: string; identity?: IdentityClient } = {},
+): Router {
   const router = Router({ mergeParams: true });
-
-
   const internalSecret = opts?.internalSecret ?? resolveInternalSecret();
+  const identity = opts.identity;
   guardRoutes(router, TIMETABLE_ROUTE_POLICIES, { internalSecret });
   router.post(
     '/:tenantId/import',
@@ -827,6 +834,56 @@ export function createTimetableRouter(service: TimetableService, opts: { interna
         return;
       }
       res.json({ allowed: result.allowed });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/students/:studentId/schedule',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const studentId = req.params.studentId;
+      const gate = enforceGuardianAccess(req, internalSecret, studentId);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      let sectionRef =
+        typeof req.query.section_ref === 'string'
+          ? req.query.section_ref.trim()
+          : typeof req.query.sectionRef === 'string'
+            ? req.query.sectionRef.trim()
+            : '';
+      if (!sectionRef) {
+        if (!identity) {
+          res.status(503).json({ error: 'section_unresolvable' });
+          return;
+        }
+        const sectionInfo = await identity.getStudentSection(
+          req.params.tenantId,
+          studentId,
+        );
+        if ('error' in sectionInfo) {
+          res.status(sectionInfo.status).json({ error: sectionInfo.error });
+          return;
+        }
+        sectionRef = sectionInfo.sectionRef;
+      }
+      const result = await service.getGuardianStudentSchedule(
+        req.params.tenantId,
+        sectionRef,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        section_ref: sectionRef,
+        section: result.section,
+        slots: result.slots,
+      });
     }),
   );
 

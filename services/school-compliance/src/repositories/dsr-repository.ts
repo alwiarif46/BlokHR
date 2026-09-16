@@ -137,13 +137,27 @@ export class DsrRepository {
 
   async listRequests(
     tenantId: string,
-    opts: { state?: string; overdueOnly?: boolean; todayIso?: string },
+    opts: {
+      state?: string;
+      overdueOnly?: boolean;
+      todayIso?: string;
+      studentRef?: string;
+      guardianRef?: string;
+    },
   ): Promise<DataRequest[]> {
     const clauses = ['tenant_id = ?'];
     const params: unknown[] = [tenantId];
     if (opts.state) {
       clauses.push('state = ?');
       params.push(opts.state);
+    }
+    if (opts.studentRef) {
+      clauses.push('student_ref = ?');
+      params.push(opts.studentRef);
+    }
+    if (opts.guardianRef) {
+      clauses.push('guardian_ref = ?');
+      params.push(opts.guardianRef);
     }
     if (opts.overdueOnly && opts.todayIso) {
       clauses.push(`sla_due_on < ?`);

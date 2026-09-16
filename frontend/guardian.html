@@ -4,6 +4,11 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>BlokSchool</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/shared/shared.css" />
     <link rel="stylesheet" href="/modules/guardian_portal/guardian_portal.css" />
   </head>
@@ -14,13 +19,11 @@
       import { initApi } from '/shared/api.js';
       import { setTheme } from '/shared/themes.js';
       import { applyBrand } from '/shared/brand.js';
-      import { loadGuardianSession } from '/shared/session.js';
       import { bootGuardianPortal } from '/modules/guardian_portal/guardian_portal.js';
 
       initApi({});
       setTheme('chromium');
       applyBrand('school');
-      loadGuardianSession();
       bootGuardianPortal(document.getElementById('guardianRoot'));
     </script>
   </body>

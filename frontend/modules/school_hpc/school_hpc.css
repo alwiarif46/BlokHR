@@ -45,7 +45,7 @@
 }
 
 .theme-clean .hpc-tab.active {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 
 .hpc-toolbar {
@@ -80,7 +80,7 @@
 }
 
 .theme-clean .hpc-btn {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 
 .hpc-btn.ghost {
@@ -185,7 +185,7 @@
 }
 
 .theme-clean .hpc-seg button.active {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 
 .hpc-level-chip {

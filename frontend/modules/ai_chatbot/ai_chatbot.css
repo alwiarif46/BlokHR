@@ -48,7 +48,7 @@
   align-items: center;
   gap: 5px;
 }
-.theme-clean .chat-btn { color: #fff; border-radius: 10px; }
+.theme-clean .chat-btn { color: var(--ink-on-accent, #00112b); border-radius: 10px; }
 .chat-btn:hover:not(:disabled) {
   transform: translateY(-1px);
   box-shadow: 0 4px 12px var(--accent-glow);
@@ -202,7 +202,7 @@
   background: var(--accent);
   color: #000;
 }
-.theme-clean .chat-bubble-user .chat-bubble-body { color: #fff; }
+.theme-clean .chat-bubble-user .chat-bubble-body { color: var(--ink-on-accent, #00112b); }
 .chat-bubble-assistant .chat-bubble-body {
   background: var(--bg3);
   border: 1px solid var(--bd);

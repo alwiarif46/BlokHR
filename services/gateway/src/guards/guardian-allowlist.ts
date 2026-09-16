@@ -43,10 +43,87 @@ const ROUTES: RouteDef[] = [
   },
   {
     method: 'GET',
+    pattern: '/guardian/me/profile',
+    service: 'school-identity',
+    upstream: (id) =>
+      `/api/identity/${encodeURIComponent(id.tenantId)}/guardians/${encodeURIComponent(id.guardianId)}/profile`,
+  },
+  {
+    method: 'PATCH',
+    pattern: '/guardian/me/profile',
+    service: 'school-identity',
+    upstream: (id) =>
+      `/api/identity/${encodeURIComponent(id.tenantId)}/guardians/${encodeURIComponent(id.guardianId)}/profile`,
+  },
+  {
+    method: 'GET',
     pattern: '/guardian/students/:id/attendance',
     service: 'school-attendance',
     upstream: (id, params) =>
       `/api/attendance/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/summary`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/fees',
+    service: 'school-fees',
+    upstream: (id, params) =>
+      `/api/fees/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/ledger`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/library',
+    service: 'school-library',
+    upstream: (id, params) =>
+      `/api/library/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/library-summary`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/family/:area',
+    service: 'school-family-ops',
+    upstream: (id, params) =>
+      `/api/family-ops/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/${encodeURIComponent(params.area!)}`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/report-cards',
+    service: 'school-assessment',
+    upstream: (id, params) =>
+      `/api/assessment/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/report-cards`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/assignments',
+    service: 'school-academics',
+    upstream: (id, params) =>
+      `/api/academics/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/assignments`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/timetable',
+    service: 'school-timetable',
+    upstream: (id, params) =>
+      `/api/timetable/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/schedule`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/transport',
+    service: 'school-transport',
+    upstream: (id, params) =>
+      `/api/transport/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/status`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/consents',
+    service: 'school-identity',
+    upstream: (id, params) =>
+      `/api/identity/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/consents`,
+  },
+  {
+    method: 'POST',
+    pattern: '/guardian/students/:id/consents',
+    service: 'school-identity',
+    upstream: (id, params) =>
+      `/api/identity/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/consents`,
   },
   {
     method: 'POST',
@@ -117,6 +194,40 @@ const ROUTES: RouteDef[] = [
     service: 'school-engagement',
     upstream: (id, params) =>
       `/api/engagement/${encodeURIComponent(id.tenantId)}/guardian/diary/${encodeURIComponent(params.id!)}/ack`,
+  },
+  {
+    method: 'GET',
+    pattern: '/guardian/students/:id/dsr',
+    service: 'school-compliance',
+    upstream: (id, params) =>
+      `/api/compliance/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/dsr`,
+  },
+  {
+    method: 'POST',
+    pattern: '/guardian/students/:id/dsr',
+    service: 'school-compliance',
+    upstream: (id, params) =>
+      `/api/compliance/${encodeURIComponent(id.tenantId)}/guardian/students/${encodeURIComponent(params.id!)}/dsr`,
+  },
+  // Public-ish (login-style) — mapped for resolveGuardianAllowlist; gateway also
+  // proxies these without bearer before the guardian middleware.
+  {
+    method: 'POST',
+    pattern: '/guardian/claim',
+    service: 'school-identity',
+    upstream: () => `/api/identity/guardian-auth/claim`,
+  },
+  {
+    method: 'POST',
+    pattern: '/guardian/otp/request',
+    service: 'school-identity',
+    upstream: () => `/api/identity/guardian-auth/otp/request`,
+  },
+  {
+    method: 'POST',
+    pattern: '/guardian/otp/verify',
+    service: 'school-identity',
+    upstream: () => `/api/identity/guardian-auth/otp/verify`,
   },
 ];
 
@@ -208,4 +319,14 @@ export function isGuardianStudentRefAllowed(
 
 export function isGuardianSurfacePath(pathname: string): boolean {
   return pathname === '/guardian' || pathname.startsWith('/guardian/');
+}
+
+/** Paths that do not require a guardian bearer (login / claim / OTP). */
+export function isGuardianPublicAuthPath(pathname: string): boolean {
+  return (
+    pathname === '/guardian/login' ||
+    pathname === '/guardian/claim' ||
+    pathname === '/guardian/otp/request' ||
+    pathname === '/guardian/otp/verify'
+  );
 }

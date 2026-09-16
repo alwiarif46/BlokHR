@@ -3,6 +3,7 @@ import type { Express } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import type { AppConfig } from '../config';
+import type { FeatureFlagService } from '../services/feature-flags';
 import {
   LearningSqlite,
   runLearningMigrations,
@@ -53,9 +54,12 @@ export function mountLearningRouter(
   bundle: LearningBundle,
   config: AppConfig,
   monolithDb: DatabaseEngine,
+  featureFlags?: FeatureFlagService,
 ): void {
+  const guards = featureFlags ? [featureFlags.guardFeature('training_lms')] : [];
   app.use(
     '/api/training',
+    ...guards,
     createLearningRouter(bundle.service, {
       tenantId: config.defaultTenantId,
       isAdmin: async (email: string) => {

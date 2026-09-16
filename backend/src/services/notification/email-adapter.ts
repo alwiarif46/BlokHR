@@ -129,6 +129,34 @@ export class EmailAdapter implements ChannelAdapter {
     }
   }
 
+  /**
+   * Send a simple transactional email (auth reset / magic link).
+   * Does not use notification templates.
+   */
+  async sendSimple(
+    to: string,
+    subject: string,
+    html: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!this.isConfigured || !this.transporter) {
+      return { success: false, error: 'Email SMTP not configured' };
+    }
+    try {
+      await this.transporter.sendMail({
+        from: this.fromAddress,
+        to,
+        subject,
+        html,
+      });
+      this.logger.info({ recipient: to, subject }, 'Transactional email sent');
+      return { success: true };
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : 'Unknown error';
+      this.logger.error({ err, recipient: to }, 'Transactional email send error');
+      return { success: false, error: errMsg };
+    }
+  }
+
   // eslint-disable-next-line @typescript-eslint/require-await
   async updateCard(
     _conversationId: string,

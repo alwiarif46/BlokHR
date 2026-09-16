@@ -21,6 +21,7 @@ function samplePath(pattern: RegExp): string {
       .replace(/\\\//g, '/')
       .replace(/\[\^\/\]\+/g, 't1')
       .replace(/\/\?/g, '')
+      .replace(/\\+$/g, '')
   );
 }
 

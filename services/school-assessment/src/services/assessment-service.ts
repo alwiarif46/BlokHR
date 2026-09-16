@@ -1529,6 +1529,36 @@ export class AssessmentService {
     return { cards: await this.repo.listReportCards(tenantId, filters) };
   }
 
+  /**
+   * Guardian-facing published artefacts only: generated report cards + published marks.
+   */
+  async getGuardianPublishedReports(
+    tenantId: string,
+    studentId: string,
+    session?: string,
+  ): Promise<{ cards: ReportCard[]; marks: unknown[] }> {
+    const cards = await this.repo.listReportCards(tenantId, {
+      studentId,
+      session,
+    });
+    const marks = session
+      ? await this.repo.listPublishedMarksForStudentSession(
+          tenantId,
+          studentId,
+          session,
+        )
+      : await this.repo.listPublishedMarksForStudent(tenantId, studentId);
+    return {
+      cards,
+      marks: marks.map((row) => ({
+        mark: row.mark,
+        exam: row.exam,
+        termWeightagePct: row.termWeightagePct,
+        termLabel: row.termLabel,
+      })),
+    };
+  }
+
   async getReportCard(
     tenantId: string,
     id: string,

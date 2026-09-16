@@ -68,6 +68,11 @@ export const LIBRARY_ROUTE_POLICIES: RoutePolicy[] = [
     method: 'GET',
     pattern: /^\/[^/]+\/students\/[^/]+\/library-summary\/?$/,
     roles: OFFICE_UP,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/library-summary\/?$/,
+    roles: [],
     guardianOk: true,
   },
 ];

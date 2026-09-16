@@ -313,7 +313,7 @@ describe('school-engagement diary (P13-01)', () => {
     await created.db.close();
   });
 
-  it('digest: class-wide no-op; student-specific with guardian_ref queues digest urgency', async () => {
+  it('digest: class-wide empty without section guardians; student-specific needs identity', async () => {
     const classNoop = await request(app)
       .post('/api/engagement/t1/ingest')
       .set(internalOnly())
@@ -343,8 +343,45 @@ describe('school-engagement diary (P13-01)', () => {
       });
     expect(noGuardian.status).toBe(200);
     expect(noGuardian.body.dropped).toBe(true);
+  });
 
-    const queued = await request(app)
+  it('digest: student-specific fans out via identity listGuardiansForStudent', async () => {
+    const created = await createSchoolEngagementApp({
+      dbPath: ':memory:',
+      migrationsDir: path.resolve(__dirname, '../migrations'),
+      logger: pino({ level: 'silent' }),
+      internalSecret: SECRET,
+      identityClient: createStubIdentityClient(
+        {
+          child1: { sectionRef: sectionA, academicSessionId: '2025-26' },
+        },
+        {},
+        {
+          child1: [
+            { guardianId: 'g1', studentId: 'child1' },
+            { guardianId: 'g2', studentId: 'child1' },
+          ],
+        },
+      ),
+    });
+    await request(created.app)
+      .put('/api/engagement/t1/guardians/g1/channels')
+      .set(staff('school_admin'))
+      .send({
+        channels: [
+          { channel: 'sms', address: '+911', priority: 1, verified: true },
+        ],
+      });
+    await request(created.app)
+      .put('/api/engagement/t1/guardians/g2/channels')
+      .set(staff('school_admin'))
+      .send({
+        channels: [
+          { channel: 'sms', address: '+912', priority: 1, verified: true },
+        ],
+      });
+
+    const queued = await request(created.app)
       .post('/api/engagement/t1/ingest')
       .set(internalOnly())
       .send({
@@ -352,15 +389,70 @@ describe('school-engagement diary (P13-01)', () => {
         data: {
           section_ref: sectionA,
           student_ref: 'child1',
-          guardian_ref: 'g1',
           entry_date: '2025-09-10',
           kind: 'homework',
+          body: 'Math worksheet',
           student_name: 'Asha',
         },
       });
     expect(queued.status).toBe(201);
-    expect(queued.body.status).toBe('queued');
-    expect(queued.body.templateKey).toBe('attendance_nudge');
+    expect(queued.body.count).toBe(2);
+    expect(queued.body.messages[0].templateKey).toBe('general');
+    await created.db.close();
+  });
+
+  it('digest: class-wide queues per section guardian when identity returns links', async () => {
+    const created = await createSchoolEngagementApp({
+      dbPath: ':memory:',
+      migrationsDir: path.resolve(__dirname, '../migrations'),
+      logger: pino({ level: 'silent' }),
+      internalSecret: SECRET,
+      identityClient: createStubIdentityClient(
+        {
+          child1: { sectionRef: sectionA, academicSessionId: '2025-26' },
+        },
+        {
+          [sectionA]: [
+            { guardianId: 'g1', studentId: 'child1' },
+            { guardianId: 'g2', studentId: 'child2' },
+          ],
+        },
+      ),
+    });
+    await request(created.app)
+      .put('/api/engagement/t1/guardians/g1/channels')
+      .set(staff('school_admin'))
+      .send({
+        channels: [
+          { channel: 'sms', address: '+911', priority: 1, verified: true },
+        ],
+      });
+    await request(created.app)
+      .put('/api/engagement/t1/guardians/g2/channels')
+      .set(staff('school_admin'))
+      .send({
+        channels: [
+          { channel: 'sms', address: '+912', priority: 1, verified: true },
+        ],
+      });
+
+    const classWide = await request(created.app)
+      .post('/api/engagement/t1/ingest')
+      .set(internalOnly())
+      .send({
+        type: 'school.diary.created',
+        data: {
+          section_ref: sectionA,
+          student_ref: null,
+          entry_date: '2025-09-10',
+          kind: 'homework',
+          body: 'Bring books tomorrow',
+        },
+      });
+    expect(classWide.status).toBe(201);
+    expect(classWide.body.count).toBe(2);
+    expect(classWide.body.messages[0].templateKey).toBe('general');
+    await created.db.close();
   });
 
   it('deny-by-default: every policy matches; unknown path 403; tenant isolation', async () => {

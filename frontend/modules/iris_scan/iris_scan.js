@@ -1,17 +1,25 @@
 /**
- * Legacy iris stub — redirects to Capture Admin.
- * Monolith iris Azure path is frozen; students use gated capture_iris_students.
+ * Legacy iris stub — Capture Admin owns gated iris under DPIA + guardian consent.
  */
 import { navigateToModule, registerModule } from '../../shared/router.js';
-import { toast } from '../../shared/toast.js';
 
 export function renderIrisScanPage(container) {
   container.innerHTML =
-    '<div style="padding:24px">' +
-    '<p>Iris capture moved to <strong>Capture Admin</strong> under DPIA + guardian consent. Legacy API is deprecated.</p>' +
+    '<div class="fr-deprecated">' +
+    '<h2 class="fr-deprecated-title">Iris Scan moved</h2>' +
+    '<p>Iris capture lives in <strong>Capture Admin</strong> (DPIA + guardian consent). The legacy Azure iris path is deprecated.</p>' +
+    '<button type="button" class="fr-deprecated-btn" id="irisOpenCapture">Open Capture Admin</button>' +
     '</div>';
-  toast('Opening Capture Admin', 'success');
-  setTimeout(() => navigateToModule('capture_admin'), 200);
+
+  const btn = container.querySelector('#irisOpenCapture');
+  if (btn) {
+    btn.addEventListener('click', function () {
+      navigateToModule('capture_admin');
+    });
+  }
+  setTimeout(function () {
+    navigateToModule('capture_admin');
+  }, 50);
 }
 
 registerModule('iris_scan', renderIrisScanPage);

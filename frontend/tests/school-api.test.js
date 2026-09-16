@@ -59,6 +59,29 @@ describe('school API helper (F-01)', () => {
     expect(fetchMock.mock.calls[1][1].method).toBe('POST');
   });
 
+  it('routes localhost:3000 development traffic through the gateway', async () => {
+    vi.stubGlobal('location', {
+      origin: 'http://localhost:3000',
+      protocol: 'http:',
+      hostname: 'localhost',
+      port: '3000',
+    });
+    apiMod.initApi();
+
+    const fetchMock = vi.fn(async () => ({
+      status: 200,
+      ok: true,
+      json: async () => ({ competencies: [] }),
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiMod.api.school('school-assessment').get('/hpc/competencies');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      'http://localhost:8080/svc/school-assessment/api/assessment/tenant-a/hpc/competencies',
+    );
+  });
+
   it('supports tenantScoped=false (no tenant segment)', async () => {
     const fetchMock = vi.fn(async () => ({
       status: 200,
@@ -170,6 +193,7 @@ describe('school module group visibility (F-01)', () => {
     expect(router.SCHOOL_MODULE_GROUP).toContain('school_students');
     expect(router.SCHOOL_MODULE_GROUP).toContain('school_library');
     expect(router.SCHOOL_MODULE_GROUP).toContain('school_surveys');
-    expect(router.SCHOOL_MODULE_GROUP).toHaveLength(8);
+    expect(router.SCHOOL_MODULE_GROUP).toContain('parent_hub');
+    expect(router.SCHOOL_MODULE_GROUP).toHaveLength(9);
   });
 });

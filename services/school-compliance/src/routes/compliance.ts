@@ -4,7 +4,11 @@ import type { ExportService } from '../services/export-service';
 import type { ApaarService } from '../services/apaar-service';
 import type { DsrService } from '../services/dsr-service';
 import type { ComplianceStatusState } from '../types';
-import { resolveInternalSecret } from '../internal-auth';
+import {
+  enforceGuardianAccess,
+  isGuardianPrincipal,
+  resolveInternalSecret,
+} from '../internal-auth';
 import { guardRoutes } from '../role-guard';
 import { COMPLIANCE_ROUTE_POLICIES } from '../route-policies';
 
@@ -289,6 +293,78 @@ export function createComplianceRouter(
         return;
       }
       res.json(result.request);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/students/:studentId/dsr',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const studentId = req.params.studentId;
+      const gate = enforceGuardianAccess(req, internalSecret, studentId);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const result = await dsr.list(req.params.tenantId, {
+        studentRef: studentId,
+        guardianRef: gate.guardianId,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ requests: result.requests });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/guardian/students/:studentId/dsr',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const studentId = req.params.studentId;
+      const gate = enforceGuardianAccess(req, internalSecret, studentId);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const body = req.body as Record<string, unknown>;
+      const detailsRaw = body.details ?? body.details_json;
+      let details: Record<string, unknown> | undefined;
+      if (detailsRaw != null) {
+        if (typeof detailsRaw === 'string') {
+          try {
+            details = JSON.parse(detailsRaw) as Record<string, unknown>;
+          } catch {
+            res.status(400).json({ error: 'details must be an object' });
+            return;
+          }
+        } else if (typeof detailsRaw === 'object' && !Array.isArray(detailsRaw)) {
+          details = detailsRaw as Record<string, unknown>;
+        } else {
+          res.status(400).json({ error: 'details must be an object' });
+          return;
+        }
+      }
+      // Force guardian_ref from header; student from path — never allow staff transition here.
+      const result = await dsr.create(req.params.tenantId, {
+        studentRef: studentId,
+        guardianRef: gate.guardianId,
+        kind: String(body.kind ?? ''),
+        details,
+        createdBy: `guardian:${gate.guardianId}`,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.request);
     }),
   );
 

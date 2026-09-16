@@ -806,6 +806,65 @@ export class AssessmentRepository {
     }));
   }
 
+  async listPublishedMarksForStudent(
+    tenantId: string,
+    studentId: string,
+  ): Promise<
+    Array<{
+      mark: Mark;
+      exam: Exam;
+      termWeightagePct: number;
+      termLabel: string;
+    }>
+  > {
+    const rows = await this.db.all<
+      MarkRow & {
+        exam_term_id: string;
+        course_ref: string;
+        section_ref: string;
+        subject_code: string;
+        class_label: string;
+        date: string;
+        max_marks: number;
+        kind: string;
+        exam_created_at: string;
+        weightage_pct: number;
+        term_label: string;
+      }
+    >(
+      `SELECT m.*,
+              e.exam_term_id, e.course_ref, e.section_ref, e.subject_code,
+              e.class_label, e.date, e.max_marks, e.kind, e.created_at as exam_created_at,
+              t.weightage_pct, t.label as term_label
+       FROM marks m
+       INNER JOIN exams e ON e.id = m.exam_id AND e.tenant_id = m.tenant_id
+       INNER JOIN exam_terms t ON t.id = e.exam_term_id AND t.tenant_id = m.tenant_id
+       WHERE m.tenant_id = ?
+         AND m.student_id = ?
+         AND m.published_at IS NOT NULL
+       ORDER BY e.date ASC`,
+      [tenantId, studentId],
+    );
+    return rows.map((row) => ({
+      mark: mapMark(row),
+      exam: {
+        id: row.exam_id,
+        tenantId: row.tenant_id,
+        examTermId: row.exam_term_id,
+        courseRef: row.course_ref,
+        sectionRef: row.section_ref,
+        subjectCode: row.subject_code,
+        classLabel: row.class_label,
+        date: row.date,
+        maxMarks: row.max_marks,
+        kind: row.kind as ExamKind,
+        createdAt: row.exam_created_at,
+      },
+      termWeightagePct: row.weightage_pct,
+      termLabel: row.term_label,
+    }));
+  }
+
   async getReportTemplate(tenantId: string, id: string): Promise<ReportTemplate | null> {
     const row = await this.db.get<ReportTemplateRow>(
       'SELECT * FROM report_templates WHERE tenant_id = ? AND id = ?',

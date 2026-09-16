@@ -13,7 +13,8 @@ export type StaffRole =
   | 'teacher'
   | 'office'
   | 'school_admin'
-  | 'admin';
+  | 'admin'
+  | 'parent';
 
 const STAFF_ROLES = new Set<string>([
   'employee',
@@ -23,6 +24,7 @@ const STAFF_ROLES = new Set<string>([
   'office',
   'school_admin',
   'admin',
+  'parent',
 ]);
 
 export interface StaffIntrospectActive {

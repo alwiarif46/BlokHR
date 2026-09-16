@@ -24,6 +24,7 @@ import {
   detectNameDobAnomalies,
 } from './services/apaar-readiness';
 import { createComplianceRouter } from './routes/compliance';
+import { resolveInternalSecret } from './internal-auth';
 import { daysUntilDue, resolveDueDate, dueDateIso } from './services/due-math';
 import { escapeCsv, buildCsv } from './exports/csv';
 import { UDISE_COLUMNS } from './exports/udise-columns';
@@ -38,6 +39,7 @@ export interface SchoolComplianceAppOptions {
   events?: EventPublisher;
   identity?: IdentityClient;
   storage?: StorageClient;
+  internalSecret?: string;
 }
 
 export async function createSchoolComplianceApp(
@@ -69,6 +71,8 @@ export async function createSchoolComplianceApp(
   const exports = new ExportService(repo, identity, storage, events, clock);
   const apaar = new ApaarService(identity, clock);
   const dsr = new DsrService(dsrRepo, events, clock);
+  const internalSecret =
+    options.internalSecret ?? resolveInternalSecret(process.env);
 
   const app = express();
   app.use(cors());
@@ -78,7 +82,10 @@ export async function createSchoolComplianceApp(
     res.json({ ok: true });
   });
 
-  app.use('/api/compliance', createComplianceRouter(service, exports, apaar, dsr));
+  app.use(
+    '/api/compliance',
+    createComplianceRouter(service, exports, apaar, dsr, { internalSecret }),
+  );
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     options.logger.error({ err }, 'School compliance error');

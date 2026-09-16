@@ -96,4 +96,10 @@ export const TRANSPORT_ROUTE_POLICIES: RoutePolicy[] = [
     pattern: /^\/[^/]+\/routes\/[^/]+\/check-delay\/?$/,
     roles: OFFICE_UP,
   },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/status\/?$/,
+    roles: [],
+    guardianOk: true,
+  },
 ];

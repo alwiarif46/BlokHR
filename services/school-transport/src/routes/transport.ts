@@ -3,7 +3,11 @@ import type { TransportService } from '../services/transport-service';
 import type { BoardingService } from '../services/boarding-service';
 import type { TelemetryService } from '../services/telemetry-service';
 import type { BoardingDirection, BoardingLeg } from '../types';
-import { resolveInternalSecret } from '../internal-auth';
+import {
+  enforceGuardianAccess,
+  isGuardianPrincipal,
+  resolveInternalSecret,
+} from '../internal-auth';
 import { guardRoutes } from '../role-guard';
 import { TRANSPORT_ROUTE_POLICIES } from '../route-policies';
 
@@ -557,6 +561,38 @@ export function createTransportRouter(
         delayed: result.delayed ?? false,
         minutesLate: result.minutesLate,
         skipped: result.skipped ?? false,
+      });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/students/:studentRef/status',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const studentRef = req.params.studentRef;
+      const gate = enforceGuardianAccess(req, internalSecret, studentRef);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const result = await boarding.getGuardianStudentStatus(
+        req.params.tenantId,
+        studentRef,
+        telemetry,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        assignment: result.assignment,
+        stop: result.stop,
+        route: result.route,
+        eta: result.eta,
+        recentBoarding: result.recentBoarding,
       });
     }),
   );

@@ -3,6 +3,7 @@ import type { Logger } from 'pino';
 import type { NotifySink } from '../events';
 import type { EngagementRepository } from '../repositories/engagement-repository';
 import type { EngagementService } from './engagement-service';
+import type { IdentityClient } from '../clients/identity-client';
 import type {
   ListMessagesFilters,
   MessageTemplate,
@@ -75,6 +76,7 @@ export class MessageService {
     private readonly notify: NotifySink,
     private readonly clock: () => Date = () => new Date(),
     private readonly logger: Logger | null = null,
+    private readonly identity: IdentityClient | null = null,
   ) {}
 
   async createTenantTemplate(
@@ -250,6 +252,66 @@ export class MessageService {
     return { message };
   }
 
+  /**
+   * Staff circular: fan-out `general` messages to all guardians in a section.
+   */
+  async sendCircular(
+    tenantId: string,
+    input: {
+      sectionRef: string;
+      body: string;
+      title?: string | null;
+      lang?: string;
+    },
+  ): Promise<{
+    messages?: OutboundMessage[];
+    count?: number;
+    error?: ServiceError;
+  }> {
+    const sectionRef = (input.sectionRef || '').trim();
+    const body = String(input.body ?? '').trim();
+    if (!sectionRef) {
+      return { error: { error: 'section_ref is required', status: 400 } };
+    }
+    if (!body) {
+      return { error: { error: 'body is required', status: 400 } };
+    }
+    if (!this.identity) {
+      return { error: { error: 'identity_unavailable', status: 503 } };
+    }
+    const listed = await this.identity.listGuardiansForSection(tenantId, sectionRef);
+    if ('error' in listed) {
+      this.logger?.warn(
+        { tenantId, sectionRef, err: listed.error },
+        'engagement.circular.identity_fail',
+      );
+      return { error: { error: 'identity_unavailable', status: 503 } };
+    }
+    if (listed.guardians.length === 0) {
+      return { error: { error: 'no_guardians_for_section', status: 404 } };
+    }
+    const title = (input.title || '').trim();
+    const messageText = title ? `${title}\n\n${body}` : body;
+    const lang = (input.lang || 'en').trim() || 'en';
+    const messages: OutboundMessage[] = [];
+    for (const g of listed.guardians) {
+      const result = await this.queueMessage({
+        tenantId,
+        guardianRef: g.guardianId,
+        studentRef: g.studentId || null,
+        templateKey: 'general',
+        lang,
+        vars: { message: messageText },
+        urgency: 'digest',
+      });
+      if (result.message) messages.push(result.message);
+    }
+    if (messages.length === 0) {
+      return { error: { error: 'circular_queue_failed', status: 502 } };
+    }
+    return { messages, count: messages.length };
+  }
+
   async listMessages(
     tenantId: string,
     filters: ListMessagesFilters,
@@ -263,6 +325,7 @@ export class MessageService {
   ): Promise<{
     dropped?: boolean;
     message?: OutboundMessage;
+    messages?: OutboundMessage[];
     error?: ServiceError;
   }> {
     const type = String(body.type ?? '').trim();
@@ -324,48 +387,224 @@ export class MessageService {
       return { message: result.message };
     }
 
+    if (type === 'school.fee.invoice_issued') {
+      return this.ingestGuardianTemplateEvent(tenantId, data, {
+        templateKey: 'fee_reminder',
+        urgency: 'interrupt',
+        vars: {
+          student_name: String(
+            data.student_name ??
+              data.studentName ??
+              data.student_ref ??
+              data.studentRef ??
+              '',
+          ),
+          period_label: String(data.period_label ?? data.periodLabel ?? ''),
+          total_paise: String(data.total_paise ?? data.totalPaise ?? ''),
+        },
+      });
+    }
+
+    if (
+      type === 'school.transport.boarded' ||
+      type === 'school.transport.alighted' ||
+      type === 'school.transport.missed_boarding' ||
+      type === 'school.transport.delayed'
+    ) {
+      const label = type.replace('school.transport.', '');
+      const useNudge = type === 'school.transport.missed_boarding';
+      return this.ingestGuardianTemplateEvent(tenantId, data, {
+        templateKey: useNudge ? 'attendance_nudge' : 'general',
+        urgency: 'interrupt',
+        vars: useNudge
+          ? {
+              student_name: String(
+                data.student_name ??
+                  data.studentName ??
+                  data.student_ref ??
+                  data.studentRef ??
+                  '',
+              ),
+              date: String(data.date ?? dayKey(this.clock())),
+            }
+          : {
+              message: String(
+                data.message ??
+                  `Transport ${label}: ${data.student_ref ?? data.studentRef ?? data.route_id ?? data.routeId ?? ''}`.trim(),
+              ),
+            },
+      });
+    }
+
+    if (type === 'school.survey.published') {
+      return this.ingestGuardianTemplateEvent(tenantId, data, {
+        templateKey: 'general',
+        urgency: 'digest',
+        vars: {
+          message: String(
+            data.message ??
+              `New survey published: ${data.title ?? data.surveyId ?? data.survey_id ?? ''}`.trim(),
+          ),
+        },
+      });
+    }
+
     if (type === 'school.diary.created') {
       const studentRef = str(data.student_ref ?? data.studentRef) ?? null;
       const sectionRef = str(data.section_ref ?? data.sectionRef);
-      // Class-wide: no guardian enumeration without a second identity call (P13-01 documented no-op).
+      const lang = str(data.lang ?? data.locale) ?? 'en';
+      const kind = String(data.kind ?? 'note');
+      const entryDate = String(
+        data.entry_date ?? data.entryDate ?? dayKey(this.clock()),
+      );
+      const bodyText = String(data.body ?? '').trim();
+      const diaryMessage =
+        bodyText ||
+        `Diary update (${kind}) for ${entryDate}` +
+          (studentRef ? ` — student ${studentRef}` : sectionRef ? ` — section ${sectionRef}` : '');
+      const vars: Record<string, string> = {
+        student_name: String(
+          data.student_name ?? data.studentName ?? studentRef ?? '',
+        ),
+        date: entryDate,
+        message: diaryMessage,
+      };
+
+      // Class-wide: enumerate guardians via identity when IDENTITY_URL is set.
       if (!studentRef) {
+        if (!sectionRef) {
+          this.logger?.info(
+            { tenantId, type, kind: data.kind },
+            'engagement.ingest.diary_classwide_noop',
+          );
+          return { dropped: true };
+        }
+        if (!this.identity) {
+          this.logger?.info(
+            { tenantId, type, sectionRef },
+            'engagement.ingest.diary_classwide_no_identity',
+          );
+          return { dropped: true };
+        }
+        const listed = await this.identity.listGuardiansForSection(
+          tenantId,
+          sectionRef,
+        );
+        if ('error' in listed) {
+          this.logger?.warn(
+            { tenantId, type, sectionRef, err: listed.error },
+            'engagement.ingest.diary_classwide_identity_fail',
+          );
+          return { dropped: true };
+        }
+        if (listed.guardians.length === 0) {
+          this.logger?.info(
+            { tenantId, type, sectionRef },
+            'engagement.ingest.diary_classwide_empty',
+          );
+          return { dropped: true };
+        }
+        const messages: OutboundMessage[] = [];
+        for (const g of listed.guardians) {
+          const result = await this.queueMessage({
+            tenantId,
+            guardianRef: g.guardianId,
+            studentRef: g.studentId || null,
+            templateKey: 'general',
+            lang,
+            vars: {
+              ...vars,
+              student_name: vars.student_name || g.studentId,
+            },
+            urgency: 'digest',
+          });
+          if (result.message) messages.push(result.message);
+        }
+        if (messages.length === 0) return { dropped: true };
+        return { messages, message: messages[0] };
+      }
+
+      // Student-specific: resolve guardians via identity (fail-closed if down).
+      if (!this.identity) {
         this.logger?.info(
-          { tenantId, type, sectionRef, kind: data.kind },
-          'engagement.ingest.diary_classwide_noop',
+          { tenantId, type, studentRef, sectionRef },
+          'engagement.ingest.diary_no_identity',
         );
         return { dropped: true };
       }
-      // Same recipient path as marked_absent — requires guardian_ref on the event.
-      const guardianRef = str(data.guardian_ref ?? data.guardianRef);
-      if (!guardianRef) {
+      const listed = await this.identity.listGuardiansForStudent(
+        tenantId,
+        studentRef,
+      );
+      if ('error' in listed) {
+        this.logger?.warn(
+          { tenantId, type, studentRef, err: listed.error },
+          'engagement.ingest.diary_student_identity_fail',
+        );
+        return { dropped: true };
+      }
+      if (listed.guardians.length === 0) {
         this.logger?.info(
           { tenantId, type, studentRef, sectionRef },
           'engagement.ingest.diary_no_guardian_noop',
         );
         return { dropped: true };
       }
-      const lang = str(data.lang ?? data.locale) ?? 'en';
-      const vars: Record<string, string> = {
-        student_name: String(
-          data.student_name ?? data.studentName ?? studentRef,
-        ),
-        date: String(data.entry_date ?? data.entryDate ?? dayKey(this.clock())),
-      };
-      const result = await this.queueMessage({
-        tenantId,
-        guardianRef,
-        studentRef,
-        templateKey: 'attendance_nudge',
-        lang,
-        vars,
-        urgency: 'digest', // diary is never interrupt
-      });
-      if (result.error) return { error: result.error };
-      return { message: result.message };
+      const messages: OutboundMessage[] = [];
+      for (const g of listed.guardians) {
+        const result = await this.queueMessage({
+          tenantId,
+          guardianRef: g.guardianId,
+          studentRef,
+          templateKey: 'general',
+          lang,
+          vars,
+          urgency: 'digest',
+        });
+        if (result.message) messages.push(result.message);
+      }
+      if (messages.length === 0) return { dropped: true };
+      return { messages, message: messages[0] };
     }
 
     this.logger?.info({ tenantId, type }, 'engagement.ingest.unknown_event');
     return { dropped: true };
+  }
+
+  private async ingestGuardianTemplateEvent(
+    tenantId: string,
+    data: Record<string, unknown>,
+    opts: {
+      templateKey: TemplateKey;
+      urgency: 'interrupt' | 'digest';
+      vars: Record<string, string>;
+    },
+  ): Promise<{
+    dropped?: boolean;
+    message?: OutboundMessage;
+    error?: ServiceError;
+  }> {
+    const guardianRef = str(data.guardian_ref ?? data.guardianRef);
+    const studentRef = str(data.student_ref ?? data.studentRef) ?? null;
+    if (!guardianRef) {
+      this.logger?.info(
+        { tenantId, templateKey: opts.templateKey, studentRef },
+        'engagement.ingest.no_guardian_noop',
+      );
+      return { dropped: true };
+    }
+    const lang = str(data.lang ?? data.locale) ?? 'en';
+    const result = await this.queueMessage({
+      tenantId,
+      guardianRef,
+      studentRef,
+      templateKey: opts.templateKey,
+      lang,
+      vars: opts.vars,
+      urgency: opts.urgency,
+    });
+    if (result.error) return { error: result.error };
+    return { message: result.message };
   }
 
   async runDigest(

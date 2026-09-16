@@ -119,7 +119,16 @@ export function pplShowForm() {
     '<div class="ppl-field"><label>Full name *</label><input type="text" id="pplF_name" placeholder="Jane Doe" autocomplete="name"></div>' +
     '<div class="ppl-field"><label>Work email *</label><input type="email" id="pplF_email" placeholder="jane@company.com" autocomplete="off"></div>' +
     '<div class="ppl-field"><label>Temporary password *</label><input type="password" id="pplF_pass" placeholder="Minimum 8 characters" autocomplete="new-password"></div>' +
-    '<div class="ppl-field"><label>Role</label><select id="pplF_role"><option value="employee">Employee</option><option value="manager">Manager</option><option value="hr">HR</option><option value="admin">Admin</option></select></div>' +
+    '<div class="ppl-field"><label>Role</label><select id="pplF_role">' +
+      '<option value="employee">Employee</option>' +
+      '<option value="manager">Manager</option>' +
+      '<option value="hr">HR</option>' +
+      '<option value="teacher">Teacher</option>' +
+      '<option value="office">Office</option>' +
+      '<option value="school_admin">School admin</option>' +
+      '<option value="parent">Parent</option>' +
+      '<option value="admin">Admin</option>' +
+    '</select></div>' +
     '<div class="ppl-form-actions">' +
       '<button class="ppl-btn ghost" type="button" data-action="close-modal">Cancel</button>' +
       '<button class="ppl-btn" type="button" id="pplSaveBtn">Create</button>' +

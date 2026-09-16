@@ -45,7 +45,7 @@
   color: #000;
 }
 .theme-clean .reg-tab.active {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 .theme-clean .reg-tabs {
   border-radius: 10px;
@@ -112,8 +112,7 @@
   border-radius: 0;
 }
 .theme-holodeck .reg-card {
-  border-radius: 0;
-  background: rgba(10, 20, 34, 0.5);
+  border-radius: var(--r); background: var(--surface, var(--bg2));
 }
 .theme-clean .reg-card {
   border-radius: 14px;
@@ -240,7 +239,7 @@
   gap: 5px;
 }
 .theme-clean .reg-btn {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
 .reg-btn.ghost {
@@ -266,7 +265,7 @@
   display: flex;
 }
 .reg-modal-box {
-  background: var(--bg1);
+  background: var(--surface, var(--bg2));
   border: 1px solid var(--bd2);
   border-radius: var(--r);
   padding: 24px;

@@ -153,16 +153,39 @@ export function saveGuardianSession(session) {
 }
 
 /**
+ * True when expiresAt is missing/invalid or still in the future.
+ * @param {string|null|undefined} expiresAt
+ * @returns {boolean}
+ */
+export function isGuardianSessionActive(expiresAt) {
+  if (!expiresAt) return true;
+  const ms = Date.parse(String(expiresAt));
+  if (!Number.isFinite(ms)) return true;
+  return ms > Date.now();
+}
+
+/**
  * Load guardian session from localStorage into memory.
+ * Clears and returns null when the token is expired.
  * @returns {GuardianSession | null}
  */
 export function loadGuardianSession() {
-  if (_guardianSession && _guardianSession.token) return _guardianSession;
+  if (_guardianSession && _guardianSession.token) {
+    if (!isGuardianSessionActive(_guardianSession.expiresAt)) {
+      clearGuardianSession();
+      return null;
+    }
+    return _guardianSession;
+  }
   try {
     const raw = localStorage.getItem(GUARDIAN_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && parsed.token) {
+        if (!isGuardianSessionActive(parsed.expiresAt)) {
+          clearGuardianSession();
+          return null;
+        }
         _guardianSession = parsed;
         return _guardianSession;
       }

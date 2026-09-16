@@ -65,7 +65,6 @@ export const ASSESSMENT_ROUTE_POLICIES: RoutePolicy[] = [
     roles: TEACHER_ADMIN,
     scope: 'teacher_section',
     requireMemberBinding: true,
-    guardianOk: true,
   },
   {
     method: 'POST',
@@ -73,7 +72,6 @@ export const ASSESSMENT_ROUTE_POLICIES: RoutePolicy[] = [
     roles: TEACHER_ADMIN,
     scope: 'teacher_section',
     requireMemberBinding: true,
-    guardianOk: true,
   },
   {
     method: 'GET',
@@ -107,6 +105,12 @@ export const ASSESSMENT_ROUTE_POLICIES: RoutePolicy[] = [
   },
   { method: 'GET', pattern: /^\/[^/]+\/report-cards\/?$/, roles: OFFICE_UP },
   { method: 'GET', pattern: /^\/[^/]+\/report-cards\/[^/]+\/?$/, roles: OFFICE_UP },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/report-cards\/?$/,
+    roles: [],
+    guardianOk: true,
+  },
   { method: 'POST', pattern: /^\/[^/]+\/feedback\/run\/?$/, roles: ADMIN_UP },
   { method: 'GET', pattern: /^\/[^/]+\/outcomes\/weak\/?$/, roles: TEACHER_ADMIN },
 ];

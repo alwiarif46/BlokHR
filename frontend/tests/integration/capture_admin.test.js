@@ -129,6 +129,22 @@ describe('capture_admin module', () => {
 
     await mount();
     expect(document.querySelector('.ca-empty-text').textContent).toMatch(/No enrolments/i);
+    expect(document.querySelector('.ca-banner')).toBeTruthy();
+    expect(document.body.textContent).toMatch(/No capture modalities on this plan/i);
+    expect(document.getElementById('caStats').textContent).toMatch(/none/i);
+  });
+
+  it('shows service error with Retry when session-token fails', async () => {
+    apiGet.mockImplementation(async () => ({
+      _error: true,
+      status: 502,
+      message: 'Capture service is unavailable. Start the school stack and retry.',
+    }));
+
+    await mount();
+    expect(document.querySelector('.ca-service-error')).toBeTruthy();
+    expect(document.getElementById('caStats').textContent).toContain('—');
+    expect(document.querySelector('[data-action="refresh"]')).toBeTruthy();
   });
 
   it('posts the expected QR enrol body', async () => {

@@ -133,6 +133,21 @@ describe('school_library (P10-04)', () => {
     expect(libGet).toHaveBeenCalledWith('/settings');
   });
 
+  it('renders one recoverable service error instead of repeated toasts', async () => {
+    libGet.mockResolvedValue({
+      _error: true,
+      status: 502,
+      error: 'upstream_unavailable',
+      message: 'upstream_unavailable',
+    });
+
+    await mod.renderSchoolLibraryPage(document.getElementById('root'));
+
+    expect(document.querySelectorAll('.lib-service-error')).toHaveLength(1);
+    expect(document.getElementById('libRetry')).toBeTruthy();
+    expect(toastFn).not.toHaveBeenCalled();
+  });
+
   it('isbnLengthHint only for non-10/13 digit lengths', () => {
     expect(mod.isbnLengthHint('')).toBeNull();
     expect(mod.isbnLengthHint('9780306406157')).toBeNull();

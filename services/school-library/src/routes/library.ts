@@ -2,7 +2,11 @@ import { Router, Request, Response, NextFunction } from 'express';
 import type { CirculationService } from '../services/circulation-service';
 import type { FineService } from '../services/fine-service';
 import type { LibraryService } from '../services/library-service';
-import { resolveInternalSecret } from '../internal-auth';
+import {
+  enforceGuardianAccess,
+  isGuardianPrincipal,
+  resolveInternalSecret,
+} from '../internal-auth';
 import { guardRoutes } from '../role-guard';
 import { LIBRARY_ROUTE_POLICIES } from '../route-policies';
 
@@ -418,6 +422,31 @@ export function createLibraryRouter(
       const result = await fines.librarySummary(
         req.params.tenantId,
         req.params.studentRef,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.summary);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/students/:studentRef/library-summary',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const studentRef = req.params.studentRef;
+      const gate = enforceGuardianAccess(req, internalSecret, studentRef);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const result = await fines.librarySummary(
+        req.params.tenantId,
+        studentRef,
       );
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });

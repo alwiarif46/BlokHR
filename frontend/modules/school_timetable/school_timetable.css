@@ -1,0 +1,238 @@
+/**
+ * modules/school_timetable/school_timetable.css
+ * Classes | Grid | Cover — CSS custom properties only.
+ */
+
+.stt-wrap {
+  padding: 18px 22px 56px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.stt-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 10px;
+}
+
+.stt-tabs,
+.stt-subtabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 14px;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.stt-tab,
+.stt-subtab {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--tx3);
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: capitalize;
+}
+
+.stt-tab.active,
+.stt-subtab.active {
+  background: var(--accent);
+  color: #000;
+}
+
+.theme-clean .stt-tab.active,
+.theme-clean .stt-subtab.active {
+  color: var(--ink-on-accent, #00112b);
+}
+
+.stt-stats,
+.stt-fair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.stt-pill {
+  padding: 6px 12px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  font-size: 11px;
+  color: var(--tx2);
+}
+
+.stt-pill strong {
+  color: var(--tx);
+}
+
+.stt-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.stt-input {
+  background: var(--bg3);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 8px 10px;
+  color: var(--tx);
+  font-family: inherit;
+  font-size: 12px;
+  min-width: 120px;
+}
+
+.stt-input.tiny {
+  min-width: 140px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.stt-btn {
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--accent);
+  color: #000;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.theme-clean .stt-btn {
+  color: var(--ink-on-accent, #00112b);
+}
+
+.stt-btn.ghost {
+  background: transparent;
+  color: var(--accent);
+}
+
+.stt-card {
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  padding: 14px;
+  margin-bottom: 12px;
+}
+
+.stt-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.stt-form.inline {
+  margin-top: 16px;
+}
+
+.stt-form-title {
+  width: 100%;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tx);
+  margin-bottom: 4px;
+}
+
+.stt-check {
+  font-size: 11px;
+  color: var(--tx2);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.stt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.stt-table th,
+.stt-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bd);
+  color: var(--tx2);
+}
+
+.stt-table th {
+  color: var(--tx3);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.stt-mono {
+  font-family: monospace;
+  font-size: 11px;
+}
+
+.stt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+
+.stt-grid-wrap {
+  overflow-x: auto;
+  margin-bottom: 12px;
+}
+
+.stt-grid {
+  border-collapse: collapse;
+  font-size: 11px;
+  min-width: 640px;
+}
+
+.stt-grid th,
+.stt-grid td {
+  border: 1px solid var(--bd);
+  padding: 4px;
+  text-align: center;
+}
+
+.stt-grid th {
+  background: var(--bg1);
+  color: var(--tx3);
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.stt-cell {
+  width: 100%;
+  min-width: 88px;
+  background: var(--bg3);
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  color: var(--tx);
+  font-size: 11px;
+  padding: 4px;
+  font-family: inherit;
+}
+
+.stt-empty,
+.stt-hint {
+  padding: 20px;
+  color: var(--tx3);
+  font-size: 12px;
+}
+
+.stt-hint {
+  padding: 8px 0;
+}

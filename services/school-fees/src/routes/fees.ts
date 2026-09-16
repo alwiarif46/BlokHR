@@ -3,7 +3,11 @@ import type { FeesService } from '../services/fees-service';
 import type { InvoiceService } from '../services/invoice-service';
 import type { PaymentService } from '../services/payment-service';
 import type { ConcessionKind, FeeHeadKind, FeePayer, PaymentMethod } from '../types';
-import { resolveInternalSecret } from '../internal-auth';
+import {
+  enforceGuardianAccess,
+  isGuardianPrincipal,
+  resolveInternalSecret,
+} from '../internal-auth';
 import { guardRoutes } from '../role-guard';
 import { FEES_ROUTE_POLICIES } from '../route-policies';
 
@@ -487,6 +491,28 @@ export function createFeesRouter(
     '/:tenantId/students/:ref/ledger',
     asyncHandler(async (req, res) => {
       const result = await payments.studentLedger(req.params.tenantId, req.params.ref);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ entries: result.entries });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/students/:ref/ledger',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const ref = req.params.ref;
+      const gate = enforceGuardianAccess(req, internalSecret, ref);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const result = await payments.studentLedger(req.params.tenantId, ref);
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
         return;

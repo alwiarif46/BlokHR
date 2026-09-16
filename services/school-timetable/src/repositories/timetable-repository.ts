@@ -437,6 +437,18 @@ export class TimetableRepository {
   async findSectionsByRef(tenantId: string, sectionRef: string): Promise<Section[]> {
     const ref = sectionRef.trim();
     if (!ref) return [];
+    const pipe = ref.indexOf('|');
+    if (pipe > 0 && pipe < ref.length - 1) {
+      const classLabel = ref.slice(0, pipe);
+      const section = ref.slice(pipe + 1);
+      const byKey = await this.db.all<SectionRow>(
+        `SELECT * FROM sections
+         WHERE tenant_id = ? AND class_label = ? AND section = ?
+         ORDER BY created_at ASC`,
+        [tenantId, classLabel, section],
+      );
+      if (byKey.length > 0) return byKey.map(mapSection);
+    }
     const rows = await this.db.all<SectionRow>(
       `SELECT * FROM sections
        WHERE tenant_id = ?

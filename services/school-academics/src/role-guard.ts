@@ -92,7 +92,11 @@ export function assertTeacherMemberMatch(
   if (!staff.memberId) {
     return { status: 403, error: 'no_member_binding' };
   }
-  if (staff.memberId !== claimedMemberId) {
+  const claimed = (claimedMemberId || '').trim();
+  if (!claimed) {
+    return { status: 400, error: 'teacher_member_id is required' };
+  }
+  if (staff.memberId !== claimed) {
     return { status: 403, error: 'role_denied' };
   }
   return { ok: true };

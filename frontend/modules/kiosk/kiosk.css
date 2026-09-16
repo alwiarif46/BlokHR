@@ -82,7 +82,7 @@
   font-weight: 800;
   cursor: pointer;
 }
-.theme-clean .kiosk-cta { color: #fff; border-radius: 14px; }
+.theme-clean .kiosk-cta { color: var(--ink-on-accent, #00112b); border-radius: 14px; }
 .kiosk-cta:disabled { opacity: 0.45; cursor: not-allowed; }
 .kiosk-cta:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 8px 24px var(--accent-glow); }
 

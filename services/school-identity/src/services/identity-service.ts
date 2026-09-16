@@ -114,6 +114,32 @@ export class IdentityService {
     };
   }
 
+  /**
+   * Internal: guardians linked to students currently enrolled in section_ref.
+   * section_ref = "<class_label>|<section>"
+   */
+  async listGuardiansForSection(
+    tenantId: string,
+    sectionRef: string,
+  ): Promise<{
+    guardians?: Array<{ guardianId: string; studentId: string }>;
+    error?: ServiceError;
+  }> {
+    const raw = (sectionRef || '').trim();
+    const pipe = raw.indexOf('|');
+    if (pipe <= 0 || pipe === raw.length - 1) {
+      return { error: { error: 'invalid section_ref', status: 400 } };
+    }
+    const classLabel = raw.slice(0, pipe);
+    const section = raw.slice(pipe + 1);
+    const pairs = await this.repo.listGuardianStudentPairsForSection(
+      tenantId,
+      classLabel,
+      section,
+    );
+    return { guardians: pairs };
+  }
+
   async createSession(
     tenantId: string,
     input: CreateAcademicSessionInput,
@@ -435,11 +461,17 @@ export class IdentityService {
       phone: input.phone ?? existing.phone,
       email: input.email !== undefined ? input.email : existing.email,
       preferredLanguage: input.preferredLanguage ?? existing.preferredLanguage,
+      timezone: input.timezone ?? existing.timezone,
     };
     const validated = this.validateGuardianFields(merged);
     if ('error' in validated) return { error: validated };
 
-    const guardian = await this.repo.updateGuardian(tenantId, id, validated);
+    const guardian = await this.repo.updateGuardian(tenantId, id, {
+      ...validated,
+      timezone: merged.timezone,
+      accessibility: input.accessibility ?? existing.accessibility,
+      privacy: input.privacy ?? existing.privacy,
+    });
     if (!guardian) return { error: { error: 'Guardian not found', status: 404 } };
     return { guardian };
   }
@@ -470,7 +502,30 @@ export class IdentityService {
       studentId,
       guardianId,
       !!input.isPrimary,
+      {
+        canViewEducation: input.canViewEducation,
+        canViewFinance: input.canViewFinance,
+        canViewMedical: input.canViewMedical,
+        canAuthorizePickup: input.canAuthorizePickup,
+        isEmergencyContact: input.isEmergencyContact,
+        isDelegated: input.isDelegated,
+        accessStartsOn: input.accessStartsOn,
+        accessEndsOn: input.accessEndsOn,
+        contactRestricted: input.contactRestricted,
+        custodyNotesRef: input.custodyNotesRef,
+        courtOrderRef: input.courtOrderRef,
+      },
     );
+    await this.repo.insertLinkAudit({
+      id: uuidv4(),
+      tenantId,
+      studentId,
+      guardianId,
+      action: existingLink ? 'permissions_updated' : 'linked',
+      actor: 'staff',
+      details: { isPrimary: !!input.isPrimary },
+      at: new Date().toISOString(),
+    });
     return { link };
   }
 
@@ -504,9 +559,12 @@ export class IdentityService {
   async listStudentsForGuardian(tenantId: string, guardianId: string) {
     const guardian = await this.repo.getGuardian(tenantId, guardianId);
     if (!guardian) return { error: { error: 'Guardian not found', status: 404 } as ServiceError };
-    const students = await this.repo.listStudentsForGuardian(tenantId, guardianId);
+    const rows = await this.repo.listStudentsForGuardianWithLinks(tenantId, guardianId);
     const enriched = [];
-    for (const s of students) {
+    const today = new Date().toISOString().slice(0, 10);
+    for (const { student: s, link } of rows) {
+      if (link.accessStartsOn && link.accessStartsOn > today) continue;
+      if (link.accessEndsOn && link.accessEndsOn < today) continue;
       const enrolments = await this.repo.listActiveEnrolments(tenantId, s.id);
       const active = enrolments[0] ?? null;
       enriched.push({
@@ -515,6 +573,16 @@ export class IdentityService {
         class_label: active?.classLabel ?? null,
         section: active?.section ?? null,
         classLabel: active?.classLabel ?? null,
+        permissions: {
+          canViewEducation: link.canViewEducation,
+          canViewFinance: link.canViewFinance,
+          canViewMedical: link.canViewMedical,
+          canAuthorizePickup: link.canAuthorizePickup,
+          isEmergencyContact: link.isEmergencyContact,
+          isDelegated: link.isDelegated,
+          isPrimary: link.isPrimary,
+          contactRestricted: link.contactRestricted,
+        },
       });
     }
     return { students: enriched };

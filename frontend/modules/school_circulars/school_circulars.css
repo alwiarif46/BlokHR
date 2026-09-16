@@ -1,0 +1,95 @@
+/**
+ * modules/school_circulars/school_circulars.css
+ */
+
+.scirc-wrap {
+  padding: 18px 22px 56px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.scirc-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 10px;
+}
+
+.scirc-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 520px;
+  margin-bottom: 18px;
+}
+
+.scirc-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+
+.scirc-input {
+  padding: 8px 10px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  color: var(--tx);
+  font: inherit;
+}
+
+.scirc-btn {
+  align-self: flex-start;
+  padding: 8px 14px;
+  border: none;
+  border-radius: var(--r);
+  background: var(--accent);
+  color: #000;
+  font-weight: 700;
+  font-size: 12px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.theme-clean .scirc-btn {
+  color: var(--ink-on-accent, #00112b);
+}
+
+.scirc-ok {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--ok, #1a7f37);
+}
+
+.scirc-err {
+  margin-bottom: 12px;
+  font-size: 12px;
+  color: var(--danger, #b42318);
+}
+
+.scirc-sub {
+  font-size: 12px;
+  margin: 0 0 8px;
+  color: var(--tx);
+}
+
+.scirc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.scirc-table th,
+.scirc-table td {
+  text-align: left;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--bd);
+  color: var(--tx2);
+}
+
+.scirc-mono {
+  font-family: ui-monospace, monospace;
+}

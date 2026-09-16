@@ -297,7 +297,7 @@ export async function createTestApp(): Promise<{
     a.use('/api', irisScanRouter);
     const mobileRouter = createMobileRouter(db, testLogger);
     a.use('/api', mobileRouter);
-    const multiAuthRouter = createMultiAuthRouter(db, testLogger);
+    const multiAuthRouter = createMultiAuthRouter(db, testLogger, { config });
     a.use('/api', multiAuthRouter);
   });
 

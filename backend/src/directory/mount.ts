@@ -14,6 +14,7 @@ import {
   DIRECTORY_DEFAULTS,
   type DirectoryMember,
 } from '@blokhr/directory';
+import type { FeatureFlagService } from '../services/feature-flags';
 import { MultiAuthService } from '../services/multi-auth-service';
 import { SettingsRepository } from '../repositories/settings-repository';
 import { SettingsService } from '../services/settings-service';
@@ -231,10 +232,12 @@ export function mountDirectoryRouter(
   bundle: DirectoryBundle,
   config: AppConfig,
   _monolithDb: DatabaseEngine,
+  featureFlags?: FeatureFlagService,
 ): void {
-  // P12-04: admin gating is role-guard on gateway X-Blok-* headers (not X-User-Email).
+  const guards = featureFlags ? [featureFlags.guardFeature('people')] : [];
   app.use(
     '/api/directory',
+    ...guards,
     createDirectoryRouter(bundle.service, {
       tenantId: config.defaultTenantId,
     }),

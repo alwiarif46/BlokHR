@@ -68,7 +68,14 @@ export async function createSchoolEngagementApp(
   const identity =
     options.identityClient ??
     createHttpIdentityClient(process.env.IDENTITY_URL, internalSecret);
-  const messages = new MessageService(repo, service, notify, clock, options.logger);
+  const messages = new MessageService(
+    repo,
+    service,
+    notify,
+    clock,
+    options.logger,
+    identity,
+  );
   const threads = new ThreadService(repo, clock);
   const diary = new DiaryService(
     diaryRepo,

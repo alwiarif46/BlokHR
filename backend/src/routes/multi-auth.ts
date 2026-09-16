@@ -1,19 +1,27 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import type { AppConfig } from '../config';
 import { AppError, asyncHandler } from '../app';
-import { MultiAuthService } from '../services/multi-auth-service';
+import {
+  MultiAuthService,
+  FORGOT_PASSWORD_PUBLIC_MESSAGE,
+  type AuthMailSender,
+} from '../services/multi-auth-service';
 import { SettingsRepository } from '../repositories/settings-repository';
 import { SettingsService } from '../services/settings-service';
 import { requireInternalMatch, resolveInternalSecret } from '../internal-auth';
+import { EmailAdapter } from '../services/notification/email-adapter';
 
 /**
  * Multi-provider auth routes:
  *   GET    /api/auth/providers                 — list enabled providers for login screen
  *   POST   /api/auth/local                     — email + password login
- *   POST   /api/auth/local/register            — create local credentials
+ *   POST   /api/auth/local/register            — create local credentials (admin)
  *   POST   /api/auth/change-password           — change own password
  *   POST   /api/auth/reset-password            — admin reset (no old password)
+ *   POST   /api/auth/forgot-password           — request self-service reset email
+ *   POST   /api/auth/forgot-password/confirm   — confirm reset with token + new password
  *   POST   /api/auth/magic-link/request        — request a magic link email
  *   POST   /api/auth/magic-link/verify         — verify magic link token
  *   POST   /api/auth/teams-sso                 — Microsoft MSAL SSO (existing)
@@ -28,7 +36,40 @@ import { requireInternalMatch, resolveInternalSecret } from '../internal-auth';
  * Long-term owner of session introspect is a future auth service; this router
  * extends the monolith auth domain until extraction.
  */
-export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Router {
+export interface MultiAuthRouterOptions {
+  config?: AppConfig;
+  mailSender?: AuthMailSender;
+}
+
+async function requireAdmin(req: Request, db: DatabaseEngine): Promise<string> {
+  const email = req.identity?.email;
+  if (!email) throw new AppError('Authentication required', 401);
+  const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+    email,
+  ]);
+  if (!admin) throw new AppError('Admin access required', 403);
+  return email;
+}
+
+function createMailSender(config: AppConfig | undefined, logger: Logger): AuthMailSender | undefined {
+  if (!config) return undefined;
+  return new EmailAdapter(
+    config.smtpHost,
+    config.smtpPort,
+    config.smtpUser,
+    config.smtpPass,
+    config.smtpFrom,
+    config.serverBaseUrl,
+    config.actionLinkSecret,
+    logger,
+  );
+}
+
+export function createMultiAuthRouter(
+  db: DatabaseEngine,
+  logger: Logger,
+  options: MultiAuthRouterOptions = {},
+): Router {
   const router = Router();
   const settingsService = new SettingsService(
     new SettingsRepository(db),
@@ -38,7 +79,15 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
     null,
     logger,
   );
-  const authService = new MultiAuthService(db, logger, settingsService);
+  const mailSender = options.mailSender ?? createMailSender(options.config, logger);
+  const publicBaseUrl = options.config?.serverBaseUrl ?? '';
+  const authService = new MultiAuthService(
+    db,
+    logger,
+    settingsService,
+    mailSender,
+    publicBaseUrl,
+  );
   const internalSecret = resolveInternalSecret();
 
   /** GET /api/auth/providers — list enabled auth providers for login screen. */
@@ -64,10 +113,11 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
     }),
   );
 
-  /** POST /api/auth/local/register — create local credentials. */
+  /** POST /api/auth/local/register — create local credentials (admin only). */
   router.post(
     '/auth/local/register',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req, db);
       const { email, password, mustChangePassword } = req.body as {
         email?: string;
         password?: string;
@@ -110,6 +160,7 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
   router.post(
     '/auth/reset-password',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req, db);
       const { email, newPassword, mustChangeOnLogin } = req.body as {
         email?: string;
         newPassword?: string;
@@ -128,6 +179,49 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
     }),
   );
 
+  /** POST /api/auth/forgot-password — request self-service reset email. */
+  router.post(
+    '/auth/forgot-password',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { email } = req.body as { email?: string };
+      if (!email) throw new AppError('email is required', 400);
+
+      const normalized = email.toLowerCase().trim();
+      const result = await authService.requestPasswordReset(normalized);
+      if (result.token) {
+        const link = authService.buildAuthDeepLink('reset', result.token);
+        const html =
+          '<p>We received a request to reset your BlokHR password.</p>' +
+          `<p><a href="${link}">Reset your password</a></p>` +
+          '<p>This link expires in 15 minutes. If you did not request this, you can ignore this email.</p>';
+        await authService.deliverAuthLinkEmail(
+          normalized,
+          'Reset your BlokHR password',
+          html,
+          link,
+        );
+      }
+      res.json({ success: true, message: FORGOT_PASSWORD_PUBLIC_MESSAGE });
+    }),
+  );
+
+  /** POST /api/auth/forgot-password/confirm — set new password with reset token. */
+  router.post(
+    '/auth/forgot-password/confirm',
+    asyncHandler(async (req: Request, res: Response) => {
+      const { token, newPassword } = req.body as { token?: string; newPassword?: string };
+      if (!token) throw new AppError('token is required', 400);
+      if (!newPassword) throw new AppError('newPassword is required', 400);
+
+      const result = await authService.confirmPasswordReset(token, newPassword);
+      if (!result.success) {
+        const status = result.error?.includes('8 characters') ? 400 : 401;
+        throw new AppError(result.error ?? 'Invalid or expired reset link', status);
+      }
+      res.json({ success: true });
+    }),
+  );
+
   /** POST /api/auth/magic-link/request — request a magic link. */
   router.post(
     '/auth/magic-link/request',
@@ -135,11 +229,20 @@ export function createMultiAuthRouter(db: DatabaseEngine, logger: Logger): Route
       const { email } = req.body as { email?: string };
       if (!email) throw new AppError('email is required', 400);
 
-      const result = await authService.generateMagicLink(email.toLowerCase().trim());
-      // Always return success (don't leak whether email exists)
-      res.json({ success: true, message: 'If the email exists, a login link has been sent.' });
-      // In production, the caller would send the email with result.token
-      void result;
+      const normalized = email.toLowerCase().trim();
+      const result = await authService.generateMagicLink(normalized);
+      if (result.token) {
+        const link = authService.buildAuthDeepLink('magic', result.token);
+        const html =
+          '<p>Use this link to sign in to BlokHR:</p>' +
+          `<p><a href="${link}">Sign in with magic link</a></p>` +
+          '<p>This link expires in 15 minutes and can only be used once.</p>';
+        await authService.deliverAuthLinkEmail(normalized, 'Your BlokHR sign-in link', html, link);
+      }
+      res.json({
+        success: true,
+        message: 'If the email exists, a login link has been sent.',
+      });
     }),
   );
 

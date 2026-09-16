@@ -38,6 +38,50 @@
   line-height: 1.5;
 }
 
+.ca-banner {
+  max-width: 720px;
+  margin: 0 0 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  background: var(--surface, var(--bg2));
+  color: var(--tx2);
+}
+
+.ca-banner-warn {
+  border-color: var(--status-out, var(--bd2));
+}
+
+.ca-banner-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 4px;
+}
+
+.ca-banner p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ca-service-error {
+  max-width: 520px;
+  margin: 24px auto;
+  padding: 24px;
+  text-align: center;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  background: var(--surface, var(--bg2));
+  color: var(--tx2);
+}
+
+.ca-service-error p {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .ca-tabs {
   display: flex;
   gap: 6px;
@@ -85,7 +129,7 @@
 }
 
 .theme-clean .ca-btn {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
 
@@ -138,8 +182,7 @@
 }
 
 .theme-holodeck .ca-stat {
-  border-radius: 0;
-  background: rgba(10, 20, 34, 0.5);
+  border-radius: var(--r); background: var(--surface, var(--bg2));
 }
 
 .theme-clean .ca-stat {
@@ -184,8 +227,7 @@
 }
 
 .theme-holodeck .ca-panel {
-  border-radius: 0;
-  background: rgba(10, 20, 34, 0.5);
+  border-radius: var(--r); background: var(--surface, var(--bg2));
 }
 
 .theme-clean .ca-panel {

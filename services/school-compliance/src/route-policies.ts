@@ -30,4 +30,16 @@ export const COMPLIANCE_ROUTE_POLICIES: RoutePolicy[] = [
     pattern: /^\/[^/]+\/data-requests\/[^/]+\/?$/,
     roles: ADMIN_UP,
   },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/dsr\/?$/,
+    roles: [],
+    guardianOk: true,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/dsr\/?$/,
+    roles: [],
+    guardianOk: true,
+  },
 ];

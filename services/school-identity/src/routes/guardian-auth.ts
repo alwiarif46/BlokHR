@@ -36,6 +36,96 @@ export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
       const result = await auth.login({
         phone: String(body.phone ?? ''),
         password: String(body.password ?? ''),
+        tenantId:
+          body.tenant_id != null || body.tenantId != null
+            ? String(body.tenant_id ?? body.tenantId)
+            : undefined,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({
+          error: result.error.error,
+          ...(result.tenants ? { tenants: result.tenants } : {}),
+        });
+        return;
+      }
+      res.json({
+        token: result.token,
+        tenant_id: result.tenantId,
+        guardian_id: result.guardianId,
+        expires_at: result.expiresAt,
+      });
+    }),
+  );
+
+  router.post(
+    '/otp/request',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await auth.requestOtp({
+        phone: String(body.phone ?? ''),
+        purpose: String(body.purpose ?? 'login') as
+          | 'login'
+          | 'reset'
+          | 'claim'
+          | 'verify_phone',
+        tenantId:
+          body.tenant_id != null || body.tenantId != null
+            ? String(body.tenant_id ?? body.tenantId)
+            : undefined,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        ok: true,
+        expires_at: result.expiresAt,
+        ...(result.debugOtp ? { debug_otp: result.debugOtp } : {}),
+      });
+    }),
+  );
+
+  router.post(
+    '/otp/verify',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await auth.verifyOtp({
+        phone: String(body.phone ?? ''),
+        otp: String(body.otp ?? ''),
+        purpose: String(body.purpose ?? 'login') as
+          | 'login'
+          | 'reset'
+          | 'claim'
+          | 'verify_phone',
+        newPassword:
+          body.new_password != null || body.newPassword != null
+            ? String(body.new_password ?? body.newPassword)
+            : undefined,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      if (result.token) {
+        res.json({
+          token: result.token,
+          tenant_id: result.tenantId,
+          guardian_id: result.guardianId,
+          expires_at: result.expiresAt,
+        });
+        return;
+      }
+      res.json({ ok: true });
+    }),
+  );
+
+  router.post(
+    '/claim',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await auth.acceptInvitation({
+        claimToken: String(body.claim_token ?? body.claimToken ?? ''),
+        password: String(body.password ?? ''),
       });
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });

@@ -29,6 +29,7 @@ let _callNotes = {};
 let _detailRow = null;
 let _regularizeTarget = null;
 let _reasonCodes = [];
+let _loadError = '';
 
 function _esc(s) {
   const d = document.createElement('div');
@@ -139,6 +140,7 @@ export function aaSwitchTab(tab) {
  * Load active tab data.
  */
 export async function aaLoadData() {
+  _loadError = '';
   if (_tab === 'registers') await _loadRegisters();
   else if (_tab === 'unexplained') await _loadUnexplained();
   else {
@@ -155,8 +157,13 @@ async function _loadRegisters() {
     (_sectionClass ? '&class=' + encodeURIComponent(_sectionClass) : '') +
     (_section ? '&section=' + encodeURIComponent(_section) : '');
   const list = await _id().get(qs);
-  _students = list && !list._error ? list.items || [] : [];
-  if (list && list._error) toast(list.message || 'Could not load students', 'error');
+  if (list && list._error) {
+    _students = [];
+    _register = {};
+    _loadError = list.message || 'Could not load students';
+    return;
+  }
+  _students = (list && list.items) || [];
 
   const ids = _students.map(function (s) {
     return s.id;
@@ -177,7 +184,8 @@ async function _loadRegisters() {
     _register = reg.register || {};
   } else {
     _register = {};
-    if (reg && reg._error) toast(reg.message || 'Could not load register', 'error');
+    _loadError = (reg && reg.message) || 'Could not load register';
+    return;
   }
 
   const codes = await _att().get('/reason-codes');
@@ -190,7 +198,7 @@ async function _loadUnexplained() {
     _unexplained = res.unexplained || [];
   } else {
     _unexplained = [];
-    if (res && res._error) toast(res.message || 'Could not load unexplained', 'error');
+    _loadError = (res && res.message) || 'Could not load unexplained';
   }
 }
 
@@ -200,6 +208,11 @@ async function _loadUnexplained() {
 export function aaRenderStats() {
   const el = _container && _container.querySelector('#aaStats');
   if (!el) return;
+
+  if (_loadError) {
+    el.innerHTML = '';
+    return;
+  }
 
   if (_tab === 'registers') {
     let unmarked = 0;
@@ -249,6 +262,24 @@ export function aaRenderStats() {
 export function aaRender() {
   const content = _container && _container.querySelector('#aaContent');
   if (!content) return;
+
+  if (_loadError) {
+    content.innerHTML =
+      '<div class="aa-service-error" role="alert">' +
+      '<div class="aa-service-error-title">Attendance service unavailable</div>' +
+      '<p>' +
+      _esc(_loadError) +
+      '</p>' +
+      '<button type="button" class="aa-btn primary" id="aaRetry">Retry</button>' +
+      '</div>';
+    const retry = content.querySelector('#aaRetry');
+    if (retry) {
+      retry.addEventListener('click', function () {
+        aaLoadData();
+      });
+    }
+    return;
+  }
 
   if (_tab === 'registers') _renderRegisters(content);
   else if (_tab === 'unexplained') _renderUnexplained(content);
@@ -647,6 +678,7 @@ export function aaGetState() {
     unexplained: _unexplained.slice(),
     acked: Array.from(_acked),
     regularizeTarget: _regularizeTarget,
+    loadError: _loadError,
   };
 }
 
@@ -658,6 +690,7 @@ export function aaSetState(partial) {
   if (partial.register) _register = partial.register;
   if (partial.unexplained) _unexplained = partial.unexplained;
   if (partial.reasonCodes) _reasonCodes = partial.reasonCodes;
+  if (partial.loadError != null) _loadError = partial.loadError;
   if (_container) {
     _container.querySelectorAll('.aa-tab').forEach(function (btn) {
       btn.classList.toggle('active', btn.dataset.tab === _tab);

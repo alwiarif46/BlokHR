@@ -12,6 +12,10 @@ import {
   HttpTimetableClient,
   type TimetableClient,
 } from './clients/timetable-client';
+import {
+  createHttpIdentityClient,
+  type IdentityClient,
+} from './clients/identity-client';
 import { resolveInternalSecret } from './internal-auth';
 
 export interface SchoolAcademicsAppOptions {
@@ -22,6 +26,7 @@ export interface SchoolAcademicsAppOptions {
   logger: Logger;
   eventPublisher?: EventPublisher;
   timetableClient?: TimetableClient;
+  identityClient?: IdentityClient;
   internalSecret?: string;
 }
 
@@ -65,6 +70,12 @@ export async function createSchoolAcademicsApp(
           undefined,
           options.internalSecret ?? resolveInternalSecret(process.env),
         ),
+      identity:
+        options.identityClient ??
+        createHttpIdentityClient(
+          process.env.IDENTITY_URL,
+          options.internalSecret ?? resolveInternalSecret(process.env),
+        ),
     }),
   );
 
@@ -104,3 +115,7 @@ export { validateImportUnits } from './services/syllabus-import-validate';
 export { asRole, guardRoutes } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';
 export { ACADEMICS_ROUTE_POLICIES } from './route-policies';
+export {
+  createHttpIdentityClient,
+  createStubIdentityClient,
+} from './clients/identity-client';

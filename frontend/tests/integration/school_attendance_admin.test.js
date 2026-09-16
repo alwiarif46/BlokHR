@@ -207,6 +207,61 @@ describe('school_attendance_admin (F-04)', () => {
       );
     });
   });
+
+  it('renders one recoverable unavailable state instead of repeated toasts', async () => {
+    attGet.mockResolvedValue({
+      _error: true,
+      status: 502,
+      error: 'upstream_unavailable',
+      message: 'Attendance service is unavailable. Start the school stack and retry.',
+      service: 'school-attendance',
+    });
+    toastFn.mockClear();
+
+    await mod.aaLoadData();
+
+    expect(document.querySelectorAll('.aa-service-error')).toHaveLength(1);
+    expect(document.getElementById('aaRetry')).toBeTruthy();
+    expect(document.body.textContent).toMatch(/Attendance service unavailable/i);
+    expect(document.querySelector('.aa-empty')).toBeFalsy();
+    expect(toastFn).not.toHaveBeenCalled();
+  });
+
+  it('Retry reloads and recovers into the register table', async () => {
+    attGet.mockResolvedValueOnce({
+      _error: true,
+      status: 502,
+      error: 'upstream_unavailable',
+      message: 'Attendance service is unavailable. Start the school stack and retry.',
+      service: 'school-attendance',
+    });
+    await mod.aaLoadData();
+    expect(document.getElementById('aaRetry')).toBeTruthy();
+
+    attGet.mockImplementation(async (path) => {
+      if (path.startsWith('/register')) {
+        return {
+          date: '2026-08-15',
+          register: {
+            s1: { id: 'rec-1', status: 'present', studentId: 's1' },
+            s2: { status: 'unmarked' },
+            s3: { id: 'rec-3', status: 'absent', studentId: 's3' },
+          },
+        };
+      }
+      if (path === '/reason-codes') {
+        return { reasonCodes: [{ id: 'rc1', code: 'FIX', label: 'Correction' }] };
+      }
+      return {};
+    });
+
+    document.getElementById('aaRetry').click();
+    await vi.waitFor(() => {
+      expect(document.querySelector('.aa-table')).toBeTruthy();
+    });
+    expect(document.querySelector('.aa-service-error')).toBeFalsy();
+    expect(mod.aaGetState().loadError).toBeFalsy();
+  });
 });
 
 describe('school_attendance_admin L6 role gates (P12-06)', () => {

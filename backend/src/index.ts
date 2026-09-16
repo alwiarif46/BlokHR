@@ -126,10 +126,10 @@ async function main(): Promise<void> {
   // ── 8. Routes ──
   const app = createApp(config, logger, (a) => {
     mountCommercialRouters(a, config, commercial);
-    mountDirectoryRouter(a, directory, config, db);
-    mountLearningRouter(a, learning, config, db);
-    mountKioskRouter(a, kiosk, config, db);
-    mountCapturePlatform(a, capturePlatform, config, db);
+    mountDirectoryRouter(a, directory, config, db, featureFlags);
+    mountLearningRouter(a, learning, config, db, featureFlags);
+    mountKioskRouter(a, kiosk, config, db, featureFlags);
+    mountCapturePlatform(a, capturePlatform, config, db, featureFlags);
     registerAllRoutes(a, {
       db,
       config,

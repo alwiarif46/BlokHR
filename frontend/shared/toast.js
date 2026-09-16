@@ -8,6 +8,7 @@
  *  - Auto-dismiss after configurable duration (from settings, default 3500ms)
  *  - Fade-out animation before removal
  *  - Stack multiple toasts vertically
+ *  - Deduplicate identical active messages (same text + type)
  */
 
 let _defaultDuration = 3500;
@@ -41,6 +42,23 @@ function getContainer() {
 }
 
 /**
+ * @param {string} msg
+ * @param {string} type
+ * @returns {boolean}
+ */
+function hasActiveDuplicate(msg, type) {
+  const container = getContainer();
+  const className = 'toast ' + (type || '');
+  const nodes = container.querySelectorAll('.toast');
+  for (let i = 0; i < nodes.length; i++) {
+    const el = nodes[i];
+    if (el.classList.contains('fade-out')) continue;
+    if (el.textContent === msg && el.className === className) return true;
+  }
+  return false;
+}
+
+/**
  * Show a toast notification.
  *
  * @param {string} msg   — The message text
@@ -48,6 +66,8 @@ function getContainer() {
  * @param {{ duration?: number }} [opts]
  */
 export function toast(msg, type, opts) {
+  if (hasActiveDuplicate(String(msg), type || '')) return;
+
   const container = getContainer();
   const el = document.createElement('div');
   el.className = 'toast ' + (type || '');

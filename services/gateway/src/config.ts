@@ -19,6 +19,9 @@ export const SERVICE_MAP = {
   'school-library': 3020,
   learning: 3021,
   'school-surveys': 3022,
+  'school-family-ops': 3023,
+  'time-tracking': 3030,
+  overtime: 3031,
 } as const;
 
 export type ServiceName = keyof typeof SERVICE_MAP;

@@ -14,6 +14,7 @@ describe('Multi-Provider Auth Module', () => {
     db = setup.db;
     await seedMember(db, { email: 'admin@shaavir.com', name: 'Admin' });
     await seedMember(db, { email: 'alice@shaavir.com', name: 'Alice' });
+    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
   });
 
   afterEach(async () => { await db.close(); });
@@ -169,6 +170,126 @@ describe('Multi-Provider Auth Module', () => {
         .send({ email: 'alice@shaavir.com', password: 'resetpass123' });
       expect(login.body.success).toBe(true);
       expect(login.body.mustChangePassword).toBe(true);
+    });
+
+    it('rejects admin reset without admin identity', async () => {
+      const res = await request(app).post('/api/auth/reset-password')
+        .send({ email: 'alice@shaavir.com', newPassword: 'resetpass123' })
+        .set('X-User-Email', 'alice@shaavir.com');
+      expect(res.status).toBe(403);
+    });
+
+    it('rejects register without admin identity', async () => {
+      const res = await request(app).post('/api/auth/local/register')
+        .send({ email: 'alice@shaavir.com', password: 'password123' });
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('Forgot password', () => {
+    beforeEach(async () => {
+      await request(app).post('/api/auth/local/register')
+        .send({ email: 'alice@shaavir.com', password: 'oldpass12345' })
+        .set('X-User-Email', 'admin@shaavir.com');
+    });
+
+    it('always returns success for unknown email and creates no token', async () => {
+      const res = await request(app).post('/api/auth/forgot-password')
+        .send({ email: 'nobody@shaavir.com' });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toMatch(/If an account exists/);
+      const row = await db.get<{ c: number }>(
+        "SELECT COUNT(*) as c FROM password_reset_tokens WHERE email = 'nobody@shaavir.com'",
+      );
+      expect(Number(row?.c ?? 0)).toBe(0);
+    });
+
+    it('creates a hashed token for known credentials', async () => {
+      const res = await request(app).post('/api/auth/forgot-password')
+        .send({ email: 'alice@shaavir.com' });
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.token).toBeUndefined();
+      const row = await db.get<{ token_hash: string; used: number }>(
+        "SELECT token_hash, used FROM password_reset_tokens WHERE email = 'alice@shaavir.com' AND used = 0",
+      );
+      expect(row).toBeTruthy();
+      expect(row!.token_hash).toMatch(/^[a-f0-9]{64}$/);
+    });
+
+    it('confirms reset, clears lockout, and revokes sessions', async () => {
+      const login = await request(app).post('/api/auth/local')
+        .send({ email: 'alice@shaavir.com', password: 'oldpass12345' });
+      expect(login.body.sessionToken).toBeTruthy();
+
+      await request(app).post('/api/auth/forgot-password')
+        .send({ email: 'alice@shaavir.com' });
+
+      // Recover raw token via service-level hash match: insert known token for test
+      const crypto = await import('crypto');
+      const raw = 'a'.repeat(64);
+      const hash = crypto.createHash('sha256').update(raw).digest('hex');
+      await db.run('UPDATE password_reset_tokens SET used = 1 WHERE email = ?', ['alice@shaavir.com']);
+      const expiresAt = new Date(Date.now() + 15 * 60_000).toISOString();
+      await db.run(
+        `INSERT INTO password_reset_tokens (id, email, token_hash, expires_at, used)
+         VALUES ('tok1', 'alice@shaavir.com', ?, ?, 0)`,
+        [hash, expiresAt],
+      );
+
+      // Lock account first
+      for (let i = 0; i < 5; i++) {
+        await request(app).post('/api/auth/local')
+          .send({ email: 'alice@shaavir.com', password: 'wrong' });
+      }
+
+      const confirm = await request(app).post('/api/auth/forgot-password/confirm')
+        .send({ token: raw, newPassword: 'brandnewpass1' });
+      expect(confirm.status).toBe(200);
+      expect(confirm.body.success).toBe(true);
+
+      const sessions = await db.get<{ c: number }>(
+        "SELECT COUNT(*) as c FROM auth_sessions WHERE email = 'alice@shaavir.com'",
+      );
+      expect(Number(sessions?.c ?? 0)).toBe(0);
+
+      const again = await request(app).post('/api/auth/local')
+        .send({ email: 'alice@shaavir.com', password: 'brandnewpass1' });
+      expect(again.status).toBe(200);
+      expect(again.body.success).toBe(true);
+      expect(again.body.mustChangePassword).toBe(false);
+    });
+
+    it('rejects expired, used, and wrong tokens', async () => {
+      const crypto = await import('crypto');
+      const raw = 'b'.repeat(64);
+      const hash = crypto.createHash('sha256').update(raw).digest('hex');
+      const expiredAt = new Date(Date.now() - 60_000).toISOString();
+      await db.run(
+        `INSERT INTO password_reset_tokens (id, email, token_hash, expires_at, used)
+         VALUES ('tok-exp', 'alice@shaavir.com', ?, ?, 0)`,
+        [hash, expiredAt],
+      );
+      const expired = await request(app).post('/api/auth/forgot-password/confirm')
+        .send({ token: raw, newPassword: 'brandnewpass1' });
+      expect(expired.status).toBe(401);
+
+      const wrong = await request(app).post('/api/auth/forgot-password/confirm')
+        .send({ token: 'c'.repeat(64), newPassword: 'brandnewpass1' });
+      expect(wrong.status).toBe(401);
+
+      const raw2 = 'd'.repeat(64);
+      const hash2 = crypto.createHash('sha256').update(raw2).digest('hex');
+      const future = new Date(Date.now() + 15 * 60_000).toISOString();
+      await db.run(
+        `INSERT INTO password_reset_tokens (id, email, token_hash, expires_at, used)
+         VALUES ('tok-used', 'alice@shaavir.com', ?, ?, 1)`,
+        [hash2, future],
+      );
+      const used = await request(app).post('/api/auth/forgot-password/confirm')
+        .send({ token: raw2, newPassword: 'brandnewpass1' });
+      expect(used.status).toBe(401);
     });
   });
 

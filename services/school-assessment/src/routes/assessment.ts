@@ -15,7 +15,11 @@ import type {
   ReportBlockDefinition,
 } from '../types';
 import type { CreateHpcInputPayload } from '../types-hpc';
-import { resolveInternalSecret } from '../internal-auth';
+import {
+  enforceGuardianAccess,
+  isGuardianPrincipal,
+  resolveInternalSecret,
+} from '../internal-auth';
 import { guardRoutes } from '../role-guard';
 import { ASSESSMENT_ROUTE_POLICIES } from '../route-policies';
 import type { TimetableClient } from '../clients/timetable-client';
@@ -908,6 +912,34 @@ export function createAssessmentRouter(
         return;
       }
       res.json(result.card);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/students/:studentId/report-cards',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const studentId = req.params.studentId;
+      const gate = enforceGuardianAccess(req, internalSecret, studentId);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const session =
+        typeof req.query.session === 'string'
+          ? req.query.session
+          : typeof req.query.academic_session_ref === 'string'
+            ? req.query.academic_session_ref
+            : undefined;
+      const result = await service.getGuardianPublishedReports(
+        req.params.tenantId,
+        studentId,
+        session,
+      );
+      res.json(result);
     }),
   );
 

@@ -162,6 +162,7 @@ export class DiaryService {
         entry_date: entryDate,
         kind,
         entry_id: entry.id,
+        body,
       },
     });
 

@@ -10,7 +10,7 @@
 .ts-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .ts-spacer { flex: 1; }
 .ts-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
-.theme-clean .ts-btn { color: #fff; border-radius: 10px; }
+.theme-clean .ts-btn { color: var(--ink-on-accent, #00112b); border-radius: 10px; }
 .ts-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 .ts-btn.ghost { background: transparent; color: var(--accent); }
 .ts-btn.ghost.danger { color: var(--status-absent); border-color: var(--status-absent); }
@@ -90,7 +90,7 @@
 /* ── Modal ── */
 .ts-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .ts-modal.open { display: flex; }
-.ts-modal-box { background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 720px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
+.ts-modal-box { background: var(--surface, var(--bg2)); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 720px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
 .theme-clean .ts-modal-box { border-radius: 20px; }
 .ts-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 12px; }
 

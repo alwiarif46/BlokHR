@@ -1268,4 +1268,38 @@ export class TimetableService {
     const fairness = await this.repo.coverFairness(tenantId, from, to);
     return { fairness };
   }
+
+  async getGuardianStudentSchedule(
+    tenantId: string,
+    sectionRef: string,
+  ): Promise<{
+    section?: Section;
+    slots?: SlotGridEntry[];
+    error?: ServiceError;
+  }> {
+    const raw = (sectionRef || '').trim();
+    if (!raw) {
+      return { error: { error: 'section_ref is required', status: 400 } };
+    }
+    const sections = await this.repo.findSectionsByRef(tenantId, raw);
+    if (sections.length === 0) {
+      return { error: { error: 'section not found', status: 404 } };
+    }
+    const section = sections[0]!;
+    const slots = await this.repo.listSlotGridForSection(tenantId, section.id);
+    return { section, slots };
+  }
+
+  /** @deprecated Prefer getGuardianStudentSchedule */
+  async getGuardianStudentTimetable(
+    tenantId: string,
+    sectionRef: string,
+    _academicSessionId?: string,
+  ): Promise<{
+    section?: Section;
+    slots?: SlotGridEntry[];
+    error?: ServiceError;
+  }> {
+    return this.getGuardianStudentSchedule(tenantId, sectionRef);
+  }
 }

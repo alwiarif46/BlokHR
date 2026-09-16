@@ -1727,6 +1727,24 @@ export class AcademicsService {
     return { assignment };
   }
 
+  async listAssignmentsForGuardianStudent(
+    tenantId: string,
+    sectionRef: string,
+  ): Promise<{ assignments: Assignment[] }> {
+    const section = (sectionRef || '').trim();
+    if (!section) return { assignments: [] };
+    return {
+      assignments: await this.repo.listAssignmentsBySectionRef(tenantId, section),
+    };
+  }
+
+  async listAssignmentsForSection(
+    tenantId: string,
+    sectionRef: string,
+  ): Promise<Assignment[]> {
+    return this.repo.listAssignmentsBySectionRef(tenantId, (sectionRef || '').trim());
+  }
+
   async getSubmission(
     tenantId: string,
     id: string,

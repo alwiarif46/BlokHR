@@ -16,7 +16,7 @@
   padding: 7px 14px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent);
   border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit;
 }
-.theme-clean .mp-btn { color: #fff; border-radius: 10px; }
+.theme-clean .mp-btn { color: var(--ink-on-accent, #00112b); border-radius: 10px; }
 .mp-btn.ghost { background: transparent; color: var(--accent); }
 .mp-btn:hover { box-shadow: 0 4px 12px var(--accent-glow); }
 .mp-theme-grid { display: flex; flex-wrap: wrap; gap: 8px; }

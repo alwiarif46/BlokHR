@@ -1,5 +1,5 @@
 /**
- * SAMPLE SEED — global absence_alert + attendance_nudge in en + hi (reviewed=1).
+ * SAMPLE SEED — global templates in en + hi (reviewed=1).
  */
 import { v4 as uuidv4 } from 'uuid';
 import type { SchoolEngagementDb } from './db';
@@ -28,6 +28,30 @@ const SEEDS: Array<{ key: string; lang: string; body: string; kind: string }> = 
     lang: 'hi',
     kind: 'informational',
     body: 'अनुस्मारक: कृपया सुनिश्चित करें कि {{student_name}} विद्यालय आएँ। संदर्भ {{date}}।',
+  },
+  {
+    key: 'fee_reminder',
+    lang: 'en',
+    kind: 'transactional',
+    body: 'Fee reminder: invoice {{period_label}} for {{student_name}} — amount {{total_paise}} paise due.',
+  },
+  {
+    key: 'fee_reminder',
+    lang: 'hi',
+    kind: 'transactional',
+    body: 'शुल्क अनुस्मारक: {{student_name}} के लिए {{period_label}} — राशि {{total_paise}} पैसे।',
+  },
+  {
+    key: 'general',
+    lang: 'en',
+    kind: 'informational',
+    body: '{{message}}',
+  },
+  {
+    key: 'general',
+    lang: 'hi',
+    kind: 'informational',
+    body: '{{message}}',
   },
   {
     key: 'digest',

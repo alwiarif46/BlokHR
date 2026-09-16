@@ -8,12 +8,19 @@ import { TimetableRepository } from './repositories/timetable-repository';
 import { TimetableService } from './services/timetable-service';
 import { generateInstances } from './services/instance-generator';
 import { createTimetableRouter } from './routes/timetable';
+import { resolveInternalSecret } from './internal-auth';
+import {
+  createHttpIdentityClient,
+  type IdentityClient,
+} from './clients/identity-client';
 
 export interface SchoolTimetableAppOptions {
   dbPath: string;
   migrationsDir?: string;
   logger: Logger;
   eventPublisher?: EventPublisher;
+  identityClient?: IdentityClient;
+  internalSecret?: string;
 }
 
 export async function createSchoolTimetableApp(
@@ -27,6 +34,8 @@ export async function createSchoolTimetableApp(
   const repo = new TimetableRepository(db);
   const events = options.eventPublisher ?? new LogEventPublisher(options.logger);
   const service = new TimetableService(repo, events);
+  const internalSecret =
+    options.internalSecret ?? resolveInternalSecret(process.env);
 
   const app = express();
   app.use(cors());
@@ -36,7 +45,15 @@ export async function createSchoolTimetableApp(
     res.json({ ok: true });
   });
 
-  app.use('/api/timetable', createTimetableRouter(service));
+  app.use(
+    '/api/timetable',
+    createTimetableRouter(service, {
+      internalSecret,
+      identity:
+        options.identityClient ??
+        createHttpIdentityClient(process.env.IDENTITY_URL, internalSecret),
+    }),
+  );
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     options.logger.error({ err }, 'School timetable error');
@@ -61,3 +78,7 @@ export * from './events';
 export { asRole, guardRoutes } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';
 export { TIMETABLE_ROUTE_POLICIES } from './route-policies';
+export {
+  createHttpIdentityClient,
+  createStubIdentityClient,
+} from './clients/identity-client';

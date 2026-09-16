@@ -33,6 +33,7 @@ import {
 import { ClockRepository } from '../repositories/clock-repository';
 import { ClockService } from '../services/clock-service';
 import type { EntitlementsService } from '@blokhr/entitlements';
+import type { FeatureFlagService } from '../services/feature-flags';
 
 export interface CapturePlatformBundle {
   consent: ConsentService;
@@ -171,6 +172,7 @@ export function mountCapturePlatform(
   bundle: CapturePlatformBundle,
   config: AppConfig,
   monolithDb: DatabaseEngine,
+  featureFlags?: FeatureFlagService,
 ): void {
   const isAdmin = async (email: string) => {
     const row = await monolithDb.get<{ email: string }>(
@@ -180,8 +182,12 @@ export function mountCapturePlatform(
     return !!row;
   };
 
+  const captureGuards = featureFlags ? [featureFlags.guardFeature('capture_admin')] : [];
+  const registerGuards = featureFlags ? [featureFlags.guardFeature('school_register')] : [];
+
   app.use(
     '/api/consent',
+    ...captureGuards,
     createConsentRouter(bundle.consent, {
       tenantId: config.defaultTenantId,
       isAdmin,
@@ -189,11 +195,16 @@ export function mountCapturePlatform(
   );
   app.use(
     '/api/capture',
+    ...captureGuards,
     createCaptureRouter(bundle.capture, {
       tenantId: config.defaultTenantId,
       isAdmin,
     }),
   );
-  app.use('/api/school-attendance', createCaptureRollcallRouter(bundle.school));
+  app.use(
+    '/api/school-attendance',
+    ...registerGuards,
+    createCaptureRollcallRouter(bundle.school),
+  );
   app.use('/api/transport', createTransportRouter(bundle.transport));
 }

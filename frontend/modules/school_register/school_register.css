@@ -61,7 +61,7 @@
 }
 
 .theme-clean .sr-btn {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
 
@@ -178,7 +178,7 @@
 }
 
 .theme-clean .sr-mark.on {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 
 .sr-mark[data-mark='absent'].on {

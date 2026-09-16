@@ -731,6 +731,19 @@ export class AcademicsRepository {
     return rows.map(mapAssignment);
   }
 
+  async listAssignmentsBySectionRef(
+    tenantId: string,
+    sectionRef: string,
+  ): Promise<Assignment[]> {
+    const rows = await this.db.all<AssignmentRow>(
+      `SELECT * FROM assignments
+       WHERE tenant_id = ? AND section_ref = ?
+       ORDER BY due_at ASC, created_at ASC`,
+      [tenantId, sectionRef],
+    );
+    return rows.map(mapAssignment);
+  }
+
   async insertAssignment(a: Assignment): Promise<Assignment> {
     await this.db.run(
       `INSERT INTO assignments (

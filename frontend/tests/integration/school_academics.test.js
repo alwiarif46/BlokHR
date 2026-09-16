@@ -468,6 +468,128 @@ describe('school_academics L6 teacher gates (P12-06)', () => {
   });
 });
 
+describe('school_academics homework tab', () => {
+  /** @type {typeof import('../../modules/school_academics/school_academics.js')} */
+  let mod;
+  let acGet;
+  let acPost;
+  let acPatch;
+  let toastFn;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    document.body.innerHTML = '<div id="toasts"></div><div id="root"></div>';
+    toastFn = vi.fn();
+    acGet = vi.fn(async (path) => {
+      if (path === '/courses') {
+        return {
+          courses: [{ id: 'c1', label: 'Science 8', subjectCode: 'Sc', classLabel: '8' }],
+        };
+      }
+      if (path === '/courses/c1/tree') {
+        return { id: 'c1', label: 'Science 8', units: [], outcomes: [] };
+      }
+      if (path === '/outcomes') return { outcomes: [] };
+      if (path.startsWith('/assignments?')) {
+        return {
+          assignments: [{ id: 'a1', title: 'Worksheet 1', sectionRef: '8|A' }],
+        };
+      }
+      if (path.includes('/submissions')) {
+        return {
+          submissions: [{ id: 'sub1', studentId: 's1', state: 'turned_in', draftGrade: null }],
+        };
+      }
+      if (path.includes('/stats')) {
+        return { assigned: 1, turned_in: 1, returned: 0 };
+      }
+      return {};
+    });
+    acPost = vi.fn(async (path) => {
+      if (path === '/assignments') {
+        return { assignment: { id: 'a2', title: 'New HW' }, submissions: [] };
+      }
+      if (path.includes('/return')) return { id: 'sub1', state: 'returned' };
+      return {};
+    });
+    acPatch = vi.fn(async () => ({ id: 'sub1', draftGrade: 8 }));
+
+    vi.doMock('../../shared/api.js', () => ({
+      api: {
+        school: (name) => {
+          if (name === 'school-academics') {
+            return {
+              get: acGet,
+              post: acPost,
+              put: vi.fn(),
+              patch: acPatch,
+              del: vi.fn(),
+            };
+          }
+          return {
+            get: vi.fn(async () => ({})),
+            post: vi.fn(),
+            put: vi.fn(),
+            patch: vi.fn(),
+            del: vi.fn(),
+          };
+        },
+      },
+    }));
+    vi.doMock('../../shared/toast.js', () => ({
+      toast: toastFn,
+      setToastDuration: () => {},
+    }));
+    vi.doMock('../../shared/session.js', async () => {
+      const actual = await vi.importActual('../../shared/session.js');
+      return {
+        ...actual,
+        getSession: () => ({
+          email: 'teacher@school.test',
+          schoolRole: 'teacher',
+          name: 'Teacher',
+        }),
+      };
+    });
+    vi.doMock('../../shared/router.js', () => ({
+      registerModule: () => {},
+      navigateToModule: vi.fn(),
+    }));
+
+    mod = await import('../../modules/school_academics/school_academics.js');
+    mod.renderSchoolAcademicsPage(document.getElementById('root'));
+    await vi.waitFor(() => {
+      expect(document.querySelector('.sac-tab')).toBeTruthy();
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('lists assignments and grades a submission', async () => {
+    await vi.waitFor(() => {
+      expect(acGet.mock.calls.some((c) => c[0] === '/courses')).toBe(true);
+    });
+    mod.sacSetState({ sectionRef: '8|A', courseId: 'c1' });
+    await mod.sacSwitchTab('homework');
+    await vi.waitFor(() => {
+      expect(document.getElementById('sacHwCreate')).toBeTruthy();
+    });
+    expect(document.body.textContent).toContain('Worksheet 1');
+
+    const gradeInput = document.querySelector('[data-grade-for="sub1"]');
+    gradeInput.value = '8';
+    document.querySelector('[data-hw-grade="sub1"]').click();
+    await vi.waitFor(() => {
+      expect(acPatch).toHaveBeenCalledWith(
+        '/submissions/sub1/grade',
+        expect.objectContaining({ draft_grade: 8 }),
+      );
+    });
+  });
+});
+
 describe('school_academics empty / service states', () => {
   /** @type {typeof import('../../modules/school_academics/school_academics.js')} */
   let mod;

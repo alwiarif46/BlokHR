@@ -14,6 +14,7 @@ import type {
 import {
   enforceGuardianPrincipal,
   requireInternalMatch,
+  parseStudentsHeader,
 } from '../internal-auth';
 import {
   decodeImportBase64,
@@ -98,9 +99,13 @@ function pickStudentBody(body: Record<string, unknown>): CreateStudentInput {
 
 export function createIdentityRouter(
   service: IdentityService,
-  opts: { internalSecret?: string } = {},
+  opts: {
+    internalSecret?: string;
+    guardianAuth?: import('../services/guardian-auth-service').GuardianAuthService;
+  } = {},
 ): Router {
   const internalSecret = opts.internalSecret ?? '';
+  const guardianAuth = opts.guardianAuth;
   const router = Router({ mergeParams: true });
 
   guardRoutes(router, IDENTITY_ROUTE_POLICIES, { internalSecret });
@@ -454,6 +459,159 @@ export function createIdentityRouter(
   );
 
   router.get(
+    '/:tenantId/guardians/:id/profile',
+    asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret, {
+        mustMatchGuardianId: req.params.id,
+      });
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const guardian = await service.getGuardian(req.params.tenantId, req.params.id);
+      if (!guardian) {
+        res.status(404).json({ error: 'Guardian not found' });
+        return;
+      }
+      res.json({
+        id: guardian.id,
+        firstName: guardian.firstName,
+        lastName: guardian.lastName,
+        relation: guardian.relation,
+        phone: guardian.phone,
+        email: guardian.email,
+        preferredLanguage: guardian.preferredLanguage,
+        timezone: guardian.timezone,
+        accessibility: guardian.accessibility,
+        privacy: guardian.privacy,
+        emailVerified: guardian.emailVerified,
+        phoneVerified: guardian.phoneVerified,
+        mfaEnabled: guardian.mfaEnabled,
+      });
+    }),
+  );
+
+  router.patch(
+    '/:tenantId/guardians/:id/profile',
+    asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret, {
+        mustMatchGuardianId: req.params.id,
+      });
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const body = req.body as Record<string, unknown>;
+      const result = await service.patchGuardian(req.params.tenantId, req.params.id, {
+        preferredLanguage:
+          body.preferred_language != null || body.preferredLanguage != null
+            ? String(body.preferred_language ?? body.preferredLanguage)
+            : undefined,
+        timezone:
+          body.timezone != null ? String(body.timezone) : undefined,
+        email: body.email !== undefined ? (body.email == null ? null : String(body.email)) : undefined,
+        accessibility:
+          body.accessibility && typeof body.accessibility === 'object'
+            ? (body.accessibility as Record<string, unknown>)
+            : undefined,
+        privacy:
+          body.privacy && typeof body.privacy === 'object'
+            ? (body.privacy as Record<string, unknown>)
+            : undefined,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.guardian);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/guardians/:id/invitations',
+    asyncHandler(async (req, res) => {
+      if (!guardianAuth) {
+        res.status(501).json({ error: 'invitations unavailable' });
+        return;
+      }
+      const body = req.body as Record<string, unknown>;
+      const result = await guardianAuth.createInvitation({
+        tenantId: req.params.tenantId,
+        guardianId: req.params.id,
+        studentId:
+          body.student_id != null || body.studentId != null
+            ? String(body.student_id ?? body.studentId)
+            : null,
+        invitedBy: String(body.invited_by ?? body.invitedBy ?? ''),
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.invitation);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/guardians/:id/sessions/revoke',
+    asyncHandler(async (req, res) => {
+      if (!guardianAuth) {
+        res.status(501).json({ error: 'session revoke unavailable' });
+        return;
+      }
+      const gate = enforceGuardianPrincipal(req, internalSecret, {
+        mustMatchGuardianId: req.params.id,
+      });
+      // Staff may also revoke (gate only applies when principal is guardian)
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      const result = await guardianAuth.revokeAllSessions(
+        req.params.tenantId,
+        req.params.id,
+      );
+      res.json(result);
+    }),
+  );
+
+  router.get(
+    '/:tenantId/invitations',
+    asyncHandler(async (req, res) => {
+      if (!guardianAuth) {
+        res.status(501).json({ error: 'invitations unavailable' });
+        return;
+      }
+      const status =
+        typeof req.query.status === 'string' ? req.query.status : undefined;
+      const invitations = await guardianAuth.listInvitations(
+        req.params.tenantId,
+        status,
+      );
+      res.json({ invitations });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/invitations/:id/revoke',
+    asyncHandler(async (req, res) => {
+      if (!guardianAuth) {
+        res.status(501).json({ error: 'invitations unavailable' });
+        return;
+      }
+      const result = await guardianAuth.revokeInvitation(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ ok: true });
+    }),
+  );
+
+  router.get(
     '/:tenantId/guardians/:id',
     asyncHandler(async (req, res) => {
       const guardian = await service.getGuardian(req.params.tenantId, req.params.id);
@@ -517,6 +675,58 @@ export function createIdentityRouter(
       const result = await service.linkGuardian(req.params.tenantId, req.params.id, {
         guardianId: String(body.guardian_id ?? body.guardianId ?? ''),
         isPrimary: body.is_primary === true || body.isPrimary === true,
+        canViewEducation:
+          body.can_view_education != null || body.canViewEducation != null
+            ? Boolean(body.can_view_education ?? body.canViewEducation)
+            : undefined,
+        canViewFinance:
+          body.can_view_finance != null || body.canViewFinance != null
+            ? Boolean(body.can_view_finance ?? body.canViewFinance)
+            : undefined,
+        canViewMedical:
+          body.can_view_medical != null || body.canViewMedical != null
+            ? Boolean(body.can_view_medical ?? body.canViewMedical)
+            : undefined,
+        canAuthorizePickup:
+          body.can_authorize_pickup != null || body.canAuthorizePickup != null
+            ? Boolean(body.can_authorize_pickup ?? body.canAuthorizePickup)
+            : undefined,
+        isEmergencyContact:
+          body.is_emergency_contact != null || body.isEmergencyContact != null
+            ? Boolean(body.is_emergency_contact ?? body.isEmergencyContact)
+            : undefined,
+        isDelegated:
+          body.is_delegated != null || body.isDelegated != null
+            ? Boolean(body.is_delegated ?? body.isDelegated)
+            : undefined,
+        contactRestricted:
+          body.contact_restricted != null || body.contactRestricted != null
+            ? Boolean(body.contact_restricted ?? body.contactRestricted)
+            : undefined,
+        accessStartsOn:
+          body.access_starts_on != null || body.accessStartsOn != null
+            ? body.access_starts_on == null && body.accessStartsOn == null
+              ? null
+              : String(body.access_starts_on ?? body.accessStartsOn)
+            : undefined,
+        accessEndsOn:
+          body.access_ends_on != null || body.accessEndsOn != null
+            ? body.access_ends_on == null && body.accessEndsOn == null
+              ? null
+              : String(body.access_ends_on ?? body.accessEndsOn)
+            : undefined,
+        custodyNotesRef:
+          body.custody_notes_ref != null || body.custodyNotesRef != null
+            ? body.custody_notes_ref == null && body.custodyNotesRef == null
+              ? null
+              : String(body.custody_notes_ref ?? body.custodyNotesRef)
+            : undefined,
+        courtOrderRef:
+          body.court_order_ref != null || body.courtOrderRef != null
+            ? body.court_order_ref == null && body.courtOrderRef == null
+              ? null
+              : String(body.court_order_ref ?? body.courtOrderRef)
+            : undefined,
       });
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
@@ -610,6 +820,139 @@ export function createIdentityRouter(
         return;
       }
       res.status(201).json(result.consent);
+    }),
+  );
+
+  // Guardian self-service consent for linked children
+  router.get(
+    '/:tenantId/guardian/students/:studentId/consents',
+    asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      if (!gate.guardianId) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+      const allowed = parseStudentsHeader(req);
+      if (!allowed.includes(req.params.studentId)) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+      const result = await service.listStudentConsents(
+        req.params.tenantId,
+        req.params.studentId,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ consents: result.consents });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/guardian/students/:studentId/consents',
+    asyncHandler(async (req, res) => {
+      const gate = enforceGuardianPrincipal(req, internalSecret);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      if (!gate.guardianId) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+      const allowed = parseStudentsHeader(req);
+      if (!allowed.includes(req.params.studentId)) {
+        res.status(403).json({ error: 'forbidden' });
+        return;
+      }
+      const body = req.body as Record<string, unknown>;
+      const result = await service.transitionConsent(
+        req.params.tenantId,
+        req.params.studentId,
+        {
+          kind: String(body.kind ?? '') as ConsentKind,
+          state: String(body.state ?? '') as ConsentState,
+          grantedByGuardianId: gate.guardianId,
+          artefactRef:
+            body.artefact_ref != null || body.artefactRef != null
+              ? String(body.artefact_ref ?? body.artefactRef)
+              : null,
+          verificationMethod:
+            body.verification_method != null || body.verificationMethod != null
+              ? (String(
+                  body.verification_method ?? body.verificationMethod,
+                ) as ConsentVerificationMethod)
+              : 'existing_records',
+          notedBy: `guardian:${gate.guardianId}`,
+          reason: body.reason != null ? String(body.reason) : null,
+        },
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.consent);
+    }),
+  );
+
+  // Internal: guardians linked to a student (diary digest / student-specific)
+  router.get(
+    '/:tenantId/internal/students/:id/guardians',
+    asyncHandler(async (req, res) => {
+      const internal = requireInternalMatch(req, internalSecret);
+      if (!('ok' in internal)) {
+        res.status(internal.status).json({ error: internal.error });
+        return;
+      }
+      if (
+        String(req.headers['x-blok-principal'] ?? '')
+          .trim()
+          .toLowerCase()
+      ) {
+        res.status(403).json({ error: 'internal_only' });
+        return;
+      }
+      const result = await service.listGuardiansForStudent(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        guardians: (result.guardians ?? []).map((g) => ({
+          guardianId: g.id,
+          studentId: req.params.id,
+        })),
+      });
+    }),
+  );
+
+  // Internal: enumerate guardians for a section (diary digest / class-wide)
+  router.get(
+    '/:tenantId/internal/sections/:sectionRef/guardians',
+    asyncHandler(async (req, res) => {
+      const internal = requireInternalMatch(req, internalSecret);
+      if (!('ok' in internal)) {
+        res.status(internal.status).json({ error: internal.error });
+        return;
+      }
+      const sectionRef = decodeURIComponent(req.params.sectionRef);
+      const result = await service.listGuardiansForSection(
+        req.params.tenantId,
+        sectionRef,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ guardians: result.guardians });
     }),
   );
 

@@ -1,6 +1,10 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import type { AcademicsService } from '../services/academics-service';
-import { resolveInternalSecret } from '../internal-auth';
+import {
+  enforceGuardianAccess,
+  isGuardianPrincipal,
+  resolveInternalSecret,
+} from '../internal-auth';
 import {
   assertTeacherMemberMatch,
   guardRoutes,
@@ -8,6 +12,7 @@ import {
 } from '../role-guard';
 import { ACADEMICS_ROUTE_POLICIES } from '../route-policies';
 import type { TimetableClient } from '../clients/timetable-client';
+import type { IdentityClient } from '../clients/identity-client';
 import { assertTeacherSectionScope } from '../teacher-scope';
 import type {
   CourseBoard,
@@ -46,11 +51,16 @@ function asyncHandler(
 
 export function createAcademicsRouter(
   service: AcademicsService,
-  opts: { internalSecret?: string; timetable?: TimetableClient } = {},
+  opts: {
+    internalSecret?: string;
+    timetable?: TimetableClient;
+    identity?: IdentityClient;
+  } = {},
 ): Router {
   const router = Router({ mergeParams: true });
   const internalSecret = opts.internalSecret ?? resolveInternalSecret();
   const timetable = opts.timetable;
+  const identity = opts.identity;
   guardRoutes(router, ACADEMICS_ROUTE_POLICIES, { internalSecret });
   router.get(
     '/packs',
@@ -996,6 +1006,37 @@ export function createAcademicsRouter(
   );
 
   router.get(
+    '/:tenantId/assignments',
+    asyncHandler(async (req, res) => {
+      const sectionRef =
+        typeof req.query.section_ref === 'string'
+          ? req.query.section_ref
+          : typeof req.query.sectionRef === 'string'
+            ? req.query.sectionRef
+            : '';
+      if (!sectionRef) {
+        res.status(400).json({ error: 'section_ref is required' });
+        return;
+      }
+      if (timetable) {
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
+      const assignments = await service.listAssignmentsForSection(
+        req.params.tenantId,
+        sectionRef,
+      );
+      res.json({ assignments });
+    }),
+  );
+
+  router.get(
     '/:tenantId/assignments/:id',
     asyncHandler(async (req, res) => {
       const result = await service.getAssignment(req.params.tenantId, req.params.id);
@@ -1193,6 +1234,51 @@ export function createAcademicsRouter(
         return;
       }
       res.json({ units: result.export?.units ?? [], warnings: result.warnings ?? [] });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/guardian/students/:studentRef/assignments',
+    asyncHandler(async (req, res) => {
+      if (!isGuardianPrincipal(req)) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
+      const studentRef = req.params.studentRef;
+      const gate = enforceGuardianAccess(req, internalSecret, studentRef);
+      if ('error' in gate) {
+        res.status(gate.status).json({ error: gate.error });
+        return;
+      }
+      let sectionRef =
+        typeof req.query.section_ref === 'string'
+          ? req.query.section_ref
+          : typeof req.query.sectionRef === 'string'
+            ? req.query.sectionRef
+            : '';
+      if (!sectionRef) {
+        if (!identity) {
+          res.status(503).json({ error: 'section_unresolvable' });
+          return;
+        }
+        const section = await identity.getStudentSection(
+          req.params.tenantId,
+          studentRef,
+        );
+        if ('error' in section) {
+          res.status(section.status).json({ error: section.error });
+          return;
+        }
+        sectionRef = section.sectionRef;
+      }
+      const result = await service.listAssignmentsForGuardianStudent(
+        req.params.tenantId,
+        sectionRef,
+      );
+      res.json({
+        assignments: result.assignments,
+        section_ref: sectionRef,
+      });
     }),
   );
 

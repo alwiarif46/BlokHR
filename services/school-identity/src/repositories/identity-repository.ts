@@ -422,6 +422,28 @@ export class IdentityRepository {
     return rows.map(mapEnrolment);
   }
 
+  async listGuardianStudentPairsForSection(
+    tenantId: string,
+    classLabel: string,
+    section: string,
+  ): Promise<Array<{ guardianId: string; studentId: string }>> {
+    const rows = await this.db.all<{ guardian_id: string; student_id: string }>(
+      `SELECT DISTINCT sg.guardian_id, sg.student_id
+       FROM student_guardians sg
+       INNER JOIN enrolments e
+         ON e.tenant_id = sg.tenant_id AND e.student_id = sg.student_id
+         AND e.exited_on IS NULL
+       WHERE sg.tenant_id = ?
+         AND e.class_label = ?
+         AND e.section = ?`,
+      [tenantId, classLabel, section],
+    );
+    return rows.map((r) => ({
+      guardianId: r.guardian_id,
+      studentId: r.student_id,
+    }));
+  }
+
   async hasOpenEnrolmentOutsideSession(
     tenantId: string,
     studentId: string,
@@ -548,6 +570,12 @@ export class IdentityRepository {
       phone: string;
       email: string | null;
       preferredLanguage: string;
+      timezone?: string;
+      accessibility?: Record<string, unknown>;
+      privacy?: Record<string, unknown>;
+      emailVerified?: boolean;
+      phoneVerified?: boolean;
+      mfaEnabled?: boolean;
     },
   ): Promise<Guardian | null> {
     const existing = await this.getGuardian(tenantId, id);
@@ -555,7 +583,14 @@ export class IdentityRepository {
     await this.db.run(
       `UPDATE guardians SET
          first_name = ?, last_name = ?, relation = ?, phone = ?, email = ?,
-         preferred_language = ?, updated_at = datetime('now')
+         preferred_language = ?,
+         timezone = ?,
+         accessibility_json = ?,
+         privacy_json = ?,
+         email_verified = ?,
+         phone_verified = ?,
+         mfa_enabled = ?,
+         updated_at = datetime('now')
        WHERE tenant_id = ? AND id = ?`,
       [
         patch.firstName,
@@ -564,6 +599,30 @@ export class IdentityRepository {
         patch.phone,
         patch.email,
         patch.preferredLanguage,
+        patch.timezone ?? existing.timezone,
+        JSON.stringify(patch.accessibility ?? existing.accessibility),
+        JSON.stringify(patch.privacy ?? existing.privacy),
+        patch.emailVerified != null
+          ? patch.emailVerified
+            ? 1
+            : 0
+          : existing.emailVerified
+            ? 1
+            : 0,
+        patch.phoneVerified != null
+          ? patch.phoneVerified
+            ? 1
+            : 0
+          : existing.phoneVerified
+            ? 1
+            : 0,
+        patch.mfaEnabled != null
+          ? patch.mfaEnabled
+            ? 1
+            : 0
+          : existing.mfaEnabled
+            ? 1
+            : 0,
         tenantId,
         id,
       ],
@@ -605,25 +664,175 @@ export class IdentityRepository {
     studentId: string,
     guardianId: string,
     isPrimary: boolean,
+    permissions?: Partial<{
+      canViewEducation: boolean;
+      canViewFinance: boolean;
+      canViewMedical: boolean;
+      canAuthorizePickup: boolean;
+      isEmergencyContact: boolean;
+      isDelegated: boolean;
+      accessStartsOn: string | null;
+      accessEndsOn: string | null;
+      contactRestricted: boolean;
+      custodyNotesRef: string | null;
+      courtOrderRef: string | null;
+    }>,
   ): Promise<StudentGuardian> {
     if (isPrimary) {
       await this.clearPrimaryGuardians(tenantId, studentId);
     }
     const existing = await this.getLink(tenantId, studentId, guardianId);
+    const p = {
+      canViewEducation: permissions?.canViewEducation ?? existing?.canViewEducation ?? true,
+      canViewFinance: permissions?.canViewFinance ?? existing?.canViewFinance ?? true,
+      canViewMedical: permissions?.canViewMedical ?? existing?.canViewMedical ?? false,
+      canAuthorizePickup:
+        permissions?.canAuthorizePickup ?? existing?.canAuthorizePickup ?? true,
+      isEmergencyContact:
+        permissions?.isEmergencyContact ?? existing?.isEmergencyContact ?? false,
+      isDelegated: permissions?.isDelegated ?? existing?.isDelegated ?? false,
+      accessStartsOn:
+        permissions?.accessStartsOn !== undefined
+          ? permissions.accessStartsOn
+          : (existing?.accessStartsOn ?? null),
+      accessEndsOn:
+        permissions?.accessEndsOn !== undefined
+          ? permissions.accessEndsOn
+          : (existing?.accessEndsOn ?? null),
+      contactRestricted:
+        permissions?.contactRestricted ?? existing?.contactRestricted ?? false,
+      custodyNotesRef:
+        permissions?.custodyNotesRef !== undefined
+          ? permissions.custodyNotesRef
+          : (existing?.custodyNotesRef ?? null),
+      courtOrderRef:
+        permissions?.courtOrderRef !== undefined
+          ? permissions.courtOrderRef
+          : (existing?.courtOrderRef ?? null),
+    };
     if (existing) {
       await this.db.run(
-        `UPDATE student_guardians SET is_primary = ?
+        `UPDATE student_guardians SET
+           is_primary = ?,
+           can_view_education = ?, can_view_finance = ?, can_view_medical = ?,
+           can_authorize_pickup = ?, is_emergency_contact = ?, is_delegated = ?,
+           access_starts_on = ?, access_ends_on = ?, contact_restricted = ?,
+           custody_notes_ref = ?, court_order_ref = ?
          WHERE tenant_id = ? AND student_id = ? AND guardian_id = ?`,
-        [isPrimary ? 1 : 0, tenantId, studentId, guardianId],
+        [
+          isPrimary ? 1 : 0,
+          p.canViewEducation ? 1 : 0,
+          p.canViewFinance ? 1 : 0,
+          p.canViewMedical ? 1 : 0,
+          p.canAuthorizePickup ? 1 : 0,
+          p.isEmergencyContact ? 1 : 0,
+          p.isDelegated ? 1 : 0,
+          p.accessStartsOn,
+          p.accessEndsOn,
+          p.contactRestricted ? 1 : 0,
+          p.custodyNotesRef,
+          p.courtOrderRef,
+          tenantId,
+          studentId,
+          guardianId,
+        ],
       );
     } else {
       await this.db.run(
-        `INSERT INTO student_guardians (student_id, guardian_id, tenant_id, is_primary)
-         VALUES (?, ?, ?, ?)`,
-        [studentId, guardianId, tenantId, isPrimary ? 1 : 0],
+        `INSERT INTO student_guardians (
+           student_id, guardian_id, tenant_id, is_primary,
+           can_view_education, can_view_finance, can_view_medical,
+           can_authorize_pickup, is_emergency_contact, is_delegated,
+           access_starts_on, access_ends_on, contact_restricted,
+           custody_notes_ref, court_order_ref
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          studentId,
+          guardianId,
+          tenantId,
+          isPrimary ? 1 : 0,
+          p.canViewEducation ? 1 : 0,
+          p.canViewFinance ? 1 : 0,
+          p.canViewMedical ? 1 : 0,
+          p.canAuthorizePickup ? 1 : 0,
+          p.isEmergencyContact ? 1 : 0,
+          p.isDelegated ? 1 : 0,
+          p.accessStartsOn,
+          p.accessEndsOn,
+          p.contactRestricted ? 1 : 0,
+          p.custodyNotesRef,
+          p.courtOrderRef,
+        ],
       );
     }
     return (await this.getLink(tenantId, studentId, guardianId))!;
+  }
+
+  async insertLinkAudit(row: {
+    id: string;
+    tenantId: string;
+    studentId: string;
+    guardianId: string;
+    action: string;
+    actor: string;
+    details: Record<string, unknown>;
+    at: string;
+  }): Promise<void> {
+    await this.db.run(
+      `INSERT INTO guardian_link_audit (
+         id, tenant_id, student_id, guardian_id, action, actor, details_json, at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        row.id,
+        row.tenantId,
+        row.studentId,
+        row.guardianId,
+        row.action,
+        row.actor,
+        JSON.stringify(row.details),
+        row.at,
+      ],
+    );
+  }
+
+  async listStudentsForGuardianWithLinks(
+    tenantId: string,
+    guardianId: string,
+  ): Promise<Array<{ student: Student; link: StudentGuardian }>> {
+    const rows = await this.db.all<StudentRow & LinkRow>(
+      `SELECT s.*, sg.is_primary, sg.can_view_education, sg.can_view_finance,
+              sg.can_view_medical, sg.can_authorize_pickup, sg.is_emergency_contact,
+              sg.is_delegated, sg.access_starts_on, sg.access_ends_on,
+              sg.contact_restricted, sg.custody_notes_ref, sg.court_order_ref,
+              sg.student_id as sg_student_id, sg.guardian_id as sg_guardian_id,
+              sg.tenant_id as sg_tenant_id
+       FROM students s
+       INNER JOIN student_guardians sg
+         ON sg.student_id = s.id AND sg.tenant_id = s.tenant_id
+       WHERE sg.tenant_id = ? AND sg.guardian_id = ?
+       ORDER BY s.last_name, s.first_name`,
+      [tenantId, guardianId],
+    );
+    return rows.map((r) => ({
+      student: mapStudent(r),
+      link: mapLink({
+        student_id: String(r.sg_student_id ?? r.id),
+        guardian_id: String(r.sg_guardian_id ?? guardianId),
+        tenant_id: String(r.sg_tenant_id ?? tenantId),
+        is_primary: Number(r.is_primary ?? 0),
+        can_view_education: r.can_view_education,
+        can_view_finance: r.can_view_finance,
+        can_view_medical: r.can_view_medical,
+        can_authorize_pickup: r.can_authorize_pickup,
+        is_emergency_contact: r.is_emergency_contact,
+        is_delegated: r.is_delegated,
+        access_starts_on: r.access_starts_on,
+        access_ends_on: r.access_ends_on,
+        contact_restricted: r.contact_restricted,
+        custody_notes_ref: r.custody_notes_ref,
+        court_order_ref: r.court_order_ref,
+      }),
+    }));
   }
 
   async unlinkGuardian(tenantId: string, studentId: string, guardianId: string): Promise<boolean> {
@@ -849,6 +1058,12 @@ interface GuardianRow extends Record<string, unknown> {
   phone: string;
   email: string | null;
   preferred_language: string;
+  timezone?: string;
+  accessibility_json?: string;
+  privacy_json?: string;
+  email_verified?: number;
+  phone_verified?: number;
+  mfa_enabled?: number;
   created_at: string;
   updated_at: string;
 }
@@ -858,6 +1073,29 @@ interface LinkRow extends Record<string, unknown> {
   guardian_id: string;
   tenant_id: string;
   is_primary: number;
+  can_view_education?: number;
+  can_view_finance?: number;
+  can_view_medical?: number;
+  can_authorize_pickup?: number;
+  is_emergency_contact?: number;
+  is_delegated?: number;
+  access_starts_on?: string | null;
+  access_ends_on?: string | null;
+  contact_restricted?: number;
+  custody_notes_ref?: string | null;
+  court_order_ref?: string | null;
+}
+
+function parseJsonObject(raw: string | undefined | null): Record<string, unknown> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : {};
+  } catch {
+    return {};
+  }
 }
 
 function mapGuardian(row: GuardianRow): Guardian {
@@ -870,6 +1108,12 @@ function mapGuardian(row: GuardianRow): Guardian {
     phone: row.phone,
     email: row.email,
     preferredLanguage: row.preferred_language,
+    timezone: row.timezone || 'Asia/Kolkata',
+    accessibility: parseJsonObject(row.accessibility_json),
+    privacy: parseJsonObject(row.privacy_json),
+    emailVerified: Number(row.email_verified ?? 0) === 1,
+    phoneVerified: Number(row.phone_verified ?? 0) === 1,
+    mfaEnabled: Number(row.mfa_enabled ?? 0) === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -881,5 +1125,16 @@ function mapLink(row: LinkRow): StudentGuardian {
     guardianId: row.guardian_id,
     tenantId: row.tenant_id,
     isPrimary: row.is_primary === 1,
+    canViewEducation: Number(row.can_view_education ?? 1) === 1,
+    canViewFinance: Number(row.can_view_finance ?? 1) === 1,
+    canViewMedical: Number(row.can_view_medical ?? 0) === 1,
+    canAuthorizePickup: Number(row.can_authorize_pickup ?? 1) === 1,
+    isEmergencyContact: Number(row.is_emergency_contact ?? 0) === 1,
+    isDelegated: Number(row.is_delegated ?? 0) === 1,
+    accessStartsOn: row.access_starts_on ?? null,
+    accessEndsOn: row.access_ends_on ?? null,
+    contactRestricted: Number(row.contact_restricted ?? 0) === 1,
+    custodyNotesRef: row.custody_notes_ref ?? null,
+    courtOrderRef: row.court_order_ref ?? null,
   };
 }

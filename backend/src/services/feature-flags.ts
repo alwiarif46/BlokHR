@@ -30,12 +30,27 @@ export interface FeatureFlag {
 // ── Feature key to route prefix mapping ──
 
 const FEATURE_ROUTE_MAP: Record<string, string[]> = {
+  attendance: ['/api/clock', '/api/attendance'],
+  holidays: ['/api/holidays'],
+  meetings: ['/api/bd-meetings', '/api/meetings'],
+  my_preferences: ['/api/profiles/me/prefs'],
+  leaves: ['/api/leaves'],
+  regularizations: ['/api/regularizations'],
+  profiles: ['/api/profiles', '/api/profile'],
+  people: ['/api/directory', '/api/kiosk'],
+  leave_policies: ['/api/leave-policies'],
+  audit_trail: ['/api/audit'],
+  webhooks: ['/api/webhooks'],
+  settings: ['/api/settings'],
+  feature_flags: ['/api/features'],
+  capture_admin: ['/api/capture', '/api/consent'],
+  school_register: ['/api/school-attendance'],
   face_recognition: ['/api/face'],
   iris_scan: ['/api/iris'],
   geo_fencing: ['/api/clock/geo', '/api/geo'],
   live_chat: ['/api/channels', '/api/messages', '/api/dm'],
   ai_chatbot: ['/api/chat'],
-  time_tracking: ['/api/time-tracking'],
+  time_tracking: ['/api/clients', '/api/projects', '/api/time-entries', '/api/time-summary'],
   timesheets: ['/api/timesheets'],
   overtime: ['/api/overtime'],
   bd_meetings: ['/api/bd-meetings'],
@@ -62,6 +77,7 @@ const FEATURE_TOOL_CATEGORIES: Record<string, string[]> = {
   time_tracking: ['time_tracking'],
   timesheets: ['timesheets'],
   overtime: ['overtime'],
+  meetings: ['bd_meetings', 'meetings'],
   bd_meetings: ['bd_meetings'],
   tracked_meetings: ['meetings'],
   training_lms: ['training'],
@@ -81,7 +97,38 @@ const ADMIN_ONLY_ROUTE_PREFIXES: string[] = [
   '/api/face/enroll', '/api/face/status', '/api/face/enrollment',
   '/api/iris/enroll', '/api/iris/status', '/api/iris/enrollment',
   '/api/export',
+  '/api/directory',
+  '/api/audit',
+  '/api/webhooks',
+  '/api/settings',
+  '/api/leave-policies',
+  '/api/capture',
+  '/api/consent',
+  '/api/school-attendance',
 ];
+
+/** Longest matching route prefix wins when paths overlap. */
+function resolveFeatureKeyForPath(path: string): string | null {
+  let bestKey: string | null = null;
+  let bestLen = -1;
+  for (const [featureKey, prefixes] of Object.entries(FEATURE_ROUTE_MAP)) {
+    for (const prefix of prefixes) {
+      if (path === prefix || path.startsWith(prefix + '/')) {
+        if (prefix.length > bestLen) {
+          bestLen = prefix.length;
+          bestKey = featureKey;
+        }
+      }
+    }
+  }
+  return bestKey;
+}
+
+function pathBlockedByFlags(path: string, isEnabled: (key: string) => boolean): boolean {
+  const key = resolveFeatureKeyForPath(path);
+  if (!key) return false;
+  return !isEnabled(key);
+}
 
 /**
  * Feature Flag Service.
@@ -161,16 +208,9 @@ export class FeatureFlagService {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       const path = req.path;
 
-      // Check feature flag guard first (disabled features → 404)
-      for (const [featureKey, prefixes] of Object.entries(FEATURE_ROUTE_MAP)) {
-        for (const prefix of prefixes) {
-          if (path === prefix || path.startsWith(prefix + '/')) {
-            if (!this.isEnabled(featureKey)) {
-              res.status(404).json({ error: 'Not found' });
-              return;
-            }
-          }
-        }
+      if (pathBlockedByFlags(path, (key) => this.isEnabled(key))) {
+        res.status(404).json({ error: 'Not found' });
+        return;
       }
 
       // Check admin-only route prefixes
@@ -238,19 +278,24 @@ export class FeatureFlagService {
    */
   guard(): (req: Request, res: Response, next: NextFunction) => void {
     return (req: Request, res: Response, next: NextFunction): void => {
-      const path = req.path;
-
-      for (const [featureKey, prefixes] of Object.entries(FEATURE_ROUTE_MAP)) {
-        for (const prefix of prefixes) {
-          if (path === prefix || path.startsWith(prefix + '/')) {
-            if (!this.isEnabled(featureKey)) {
-              res.status(404).json({ error: 'Not found' });
-              return;
-            }
-          }
-        }
+      if (pathBlockedByFlags(req.path, (key) => this.isEnabled(key))) {
+        res.status(404).json({ error: 'Not found' });
+        return;
       }
+      next();
+    };
+  }
 
+  /**
+   * Guard a mount path when routers register before the global feature guard.
+   * Usage: app.use('/api/training', featureFlags.guardFeature('training_lms'), router)
+   */
+  guardFeature(featureKey: string): (req: Request, res: Response, next: NextFunction) => void {
+    return (_req: Request, res: Response, next: NextFunction): void => {
+      if (!this.isEnabled(featureKey)) {
+        res.status(404).json({ error: 'Not found' });
+        return;
+      }
       next();
     };
   }
@@ -281,14 +326,23 @@ export class FeatureFlagService {
     if (!this.isEnabled('overtime')) disabledKeys.add('overtime');
     if (!this.isEnabled('time_tracking')) disabledKeys.add('timeTracking');
     if (!this.isEnabled('timesheets')) disabledKeys.add('timesheets');
-    if (!this.isEnabled('bd_meetings')) disabledKeys.add('bdMeetings');
-    if (!this.isEnabled('tracked_meetings')) disabledKeys.add('trackedMeetings');
+    if (!this.isEnabled('meetings') && !this.isEnabled('bd_meetings')) {
+      disabledKeys.add('bdMeetings');
+    }
+    if (!this.isEnabled('meetings') && !this.isEnabled('tracked_meetings')) {
+      disabledKeys.add('trackedMeetings');
+    }
     if (!this.isEnabled('training_lms')) disabledKeys.add('training');
     if (!this.isEnabled('surveys')) disabledKeys.add('surveys');
     if (!this.isEnabled('asset_mgmt')) disabledKeys.add('assets');
     if (!this.isEnabled('visitor_mgmt')) disabledKeys.add('visitors');
     if (!this.isEnabled('expense_mgmt')) disabledKeys.add('expenses');
     if (!this.isEnabled('workflows')) disabledKeys.add('workflows');
+    if (!this.isEnabled('leaves')) disabledKeys.add('leaves');
+    if (!this.isEnabled('leave_policies')) disabledKeys.add('leavePolicies');
+    if (!this.isEnabled('holidays')) disabledKeys.add('holidays');
+    if (!this.isEnabled('iris_scan')) disabledKeys.add('irisScan');
+    if (!this.isEnabled('analytics')) disabledKeys.add('analytics');
     if (disabledKeys.size === 0) return keys;
     return keys.filter(k => !disabledKeys.has(k));
   }

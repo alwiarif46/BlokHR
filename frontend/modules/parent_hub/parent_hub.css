@@ -1,0 +1,44 @@
+/* Parent Hub — parent-role only landing */
+.ph-wrap {
+  max-width: 32rem;
+  margin: 2rem auto;
+  padding: 0 1.25rem 2rem;
+}
+.ph-title {
+  font-size: 1.75rem;
+  font-weight: 650;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.02em;
+}
+.ph-lead {
+  margin: 0 0 1rem;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+.ph-meta {
+  margin: 0 0 1.25rem;
+  font-size: 0.9rem;
+  opacity: 0.75;
+}
+.ph-actions {
+  margin: 1.25rem 0;
+}
+.ph-btn {
+  display: inline-block;
+  padding: 0.65rem 1.15rem;
+  border-radius: 8px;
+  background: var(--accent, #2563eb);
+  color: #fff;
+  text-decoration: none;
+  font-weight: 600;
+}
+.ph-btn:focus-visible {
+  outline: 2px solid var(--accent, #2563eb);
+  outline-offset: 2px;
+}
+.ph-note {
+  margin: 1.5rem 0 0;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  opacity: 0.7;
+}

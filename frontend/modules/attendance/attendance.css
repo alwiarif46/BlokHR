@@ -59,7 +59,7 @@
   font-weight: 600;
   border-radius: 4px;
   border: 1px solid var(--bd);
-  background: rgba(0, 0, 0, 0.15);
+  background: var(--bg3);
   display: flex;
   align-items: center;
   gap: 3px;
@@ -86,7 +86,7 @@
 
 /* ── Search ── */
 .tb-search {
-  background: rgba(0, 0, 0, 0.2);
+  background: var(--bg3);
   border: 1px solid var(--bd2);
   border-radius: 4px;
   padding: 6px 12px;
@@ -137,13 +137,12 @@
   border-bottom: 1px solid var(--bd);
 }
 .theme-neural .toolbar {
-  background: var(--bg1);
-  border-bottom: 1px solid var(--bd);
+  background: var(--header-bg, var(--bg2));
+  border-bottom: 1px solid var(--header-border, var(--bd));
 }
 .theme-holodeck .toolbar {
-  background: rgba(6, 14, 24, 0.5);
-  border-bottom: 1px solid var(--bd);
-  backdrop-filter: blur(8px);
+  background: var(--header-bg, var(--bg2));
+  border-bottom: 1px solid var(--header-border, var(--bd));
 }
 .theme-clean .toolbar {
   background: var(--bg2);
@@ -176,7 +175,11 @@
   border-radius: 0;
 }
 .theme-clean .ct-btn.active {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
+}
+.theme-neural .ct-btn.active,
+.theme-holodeck .ct-btn.active {
+  color: #ffffff;
 }
 
 /* ── Employee grid ── */
@@ -410,14 +413,14 @@
 .theme-neural .av {
   border-radius: 50%;
   border: 2px solid var(--bd2);
-  background: var(--bg0);
+  background: var(--bg3);
 }
 .theme-neural .ec:hover .av {
   border-color: var(--accent);
   box-shadow: 0 0 10px var(--accent-glow);
 }
 .theme-neural .sb {
-  font-family: 'Fira Code', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 8px;
   font-weight: 600;
   letter-spacing: 1px;
@@ -446,7 +449,7 @@
   box-shadow: 0 0 4px var(--status-absent);
 }
 .theme-neural .tmr {
-  font-family: 'Fira Code', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: var(--accent);
   letter-spacing: 2px;
   text-shadow: 0 0 4px var(--accent-glow);
@@ -454,18 +457,18 @@
 
 /* ── THEME: Holodeck cards ── */
 .theme-holodeck .ec {
-  background: rgba(10, 20, 34, 0.5);
-  border: 1px solid var(--bd);
-  border-radius: 0;
+  background: var(--surface, var(--bg2));
+  border: 1px solid var(--surface-border, var(--bd));
+  border-radius: var(--r);
 }
 .theme-holodeck .ec:hover {
-  background: rgba(10, 20, 34, 0.7);
+  background: var(--bg3);
   border-color: var(--bd2);
   transform: translateY(-2px);
 }
 .theme-holodeck .av {
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--bg3);
   border: 1px solid var(--bd2);
 }
 .theme-holodeck .ec:hover .av {
@@ -473,7 +476,7 @@
   box-shadow: 0 0 8px var(--accent-glow);
 }
 .theme-holodeck .sb {
-  font-family: 'Source Code Pro', monospace;
+  font-family: 'JetBrains Mono', monospace;
   font-size: 8px;
   font-weight: 700;
   letter-spacing: 1px;
@@ -491,7 +494,7 @@
   border-color: rgba(248, 113, 113, 0.15);
 }
 .theme-holodeck .tmr {
-  font-family: 'Source Code Pro', monospace;
+  font-family: 'JetBrains Mono', monospace;
   letter-spacing: 2px;
   text-shadow: 0 0 4px var(--accent-glow);
 }
@@ -505,7 +508,7 @@
 }
 .theme-clean .ec:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
   border-color: var(--accent);
 }
 .theme-clean .av {
@@ -513,18 +516,21 @@
   background: var(--accent);
 }
 .theme-clean .av .av-i {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 .theme-clean .sb {
   border-radius: 8px;
   font-size: 9px;
   padding: 3px 8px;
+  font-family: 'JetBrains Mono', monospace;
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
+  color: var(--accent);
 }
 .theme-clean .en {
   letter-spacing: -0.2px;
 }
 .theme-clean .tmr {
-  font-family: 'DM Mono', monospace;
+  font-family: 'JetBrains Mono', monospace;
   color: var(--accent);
 }
 

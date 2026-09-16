@@ -50,7 +50,7 @@
 .theme-clean .ck-ab { border-radius: 10px; text-transform: none; letter-spacing: 0; }
 .ck-ab:hover { border-color: var(--accent); color: var(--accent); }
 .ck-ab.primary { background: var(--accent); color: #000; border-color: var(--accent); }
-.theme-clean .ck-ab.primary { color: #fff; }
+.theme-clean .ck-ab.primary { color: var(--ink-on-accent, #00112b); }
 .ck-ab.primary:hover { opacity: 0.9; }
 .ck-ab.danger { border-color: rgba(239, 68, 68, 0.3); color: var(--status-absent); }
 .ck-ab.danger:hover { background: rgba(239, 68, 68, 0.1); }

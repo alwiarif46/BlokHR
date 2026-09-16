@@ -53,7 +53,7 @@
 }
 
 .theme-clean .scs-tab.active {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 
 .scs-stats {
@@ -110,7 +110,7 @@
 }
 
 .theme-clean .scs-btn {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
 

@@ -216,7 +216,7 @@
 - [ ] `modules/overtime/` + `overtime.test.js`
 - [ ] `modules/analytics/` + `analytics.test.js`
 - [ ] `modules/audit_trail/` + `audit_trail.test.js`
-- [ ] `modules/feature_flags/` + `feature_flags.test.js`
+- [x] `modules/feature_flags/` + `feature_flags.test.js`
 - [ ] `modules/webhooks/` + `webhooks.test.js`
 - [ ] `modules/expenses/` + `expenses.test.js`
 

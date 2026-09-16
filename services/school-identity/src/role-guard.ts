@@ -13,7 +13,8 @@ export type Role =
   | 'teacher'
   | 'office'
   | 'school_admin'
-  | 'admin';
+  | 'admin'
+  | 'parent';
 
 export interface RoutePolicy {
   method: string;
@@ -39,6 +40,7 @@ const ROLE_SET = new Set<string>([
   'office',
   'school_admin',
   'admin',
+  'parent',
 ]);
 
 export type StaffClaims =

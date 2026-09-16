@@ -46,7 +46,7 @@
 }
 
 .theme-clean .lib-tab.active {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 
 .lib-toolbar {
@@ -88,7 +88,7 @@
 }
 
 .theme-clean .lib-btn.primary {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
 
@@ -183,6 +183,30 @@
   text-align: center;
   color: var(--tx3);
   font-size: 12px;
+}
+
+.lib-service-error {
+  max-width: 520px;
+  margin: 32px auto;
+  padding: 24px;
+  text-align: center;
+  border: 1px solid var(--bd2);
+  border-radius: var(--r);
+  background: var(--surface, var(--bg2));
+  color: var(--tx2);
+}
+
+.lib-service-error-title {
+  margin-bottom: 6px;
+  color: var(--tx);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.lib-service-error p {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .lib-row-actions {

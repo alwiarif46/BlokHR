@@ -22,8 +22,6 @@ import { createProfileRouter } from './profile';
 import { createInteractionRouter } from './interactions';
 import { createLeavePolicyRouter } from './leave-policies';
 import { createHolidayRouter } from './holidays';
-import { createTimeTrackingRouter } from './time-tracking';
-import { createOvertimeRouter } from './overtime';
 import { createTimesheetRouter } from './timesheets';
 import { createAnalyticsRouter } from './analytics';
 import { createFaceRecognitionRouter } from './face-recognition';
@@ -119,11 +117,11 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   app.use('/api', createRegularizationRouter(db, logger, notificationDispatcher));
   app.use('/api', createBdMeetingRouter(db, logger, notificationDispatcher));
   app.use('/api', createMeetingRouter(db, logger, config));
-  app.use('/api', createSettingsRouter(db, logger, broadcaster, directory));
+  app.use('/api', createSettingsRouter(db, logger, broadcaster, directory, featureFlags));
   app.use('/api', createSseRouter(broadcaster));
   app.use('/api', createSetupRouter(db, logger, config, entitlements, directory));
   app.use('/api', createAuthRouter(logger));
-  app.use('/api', createMultiAuthRouter(db, logger));
+  app.use('/api', createMultiAuthRouter(db, logger, { config }));
   app.use('/api', createProfileRouter(db, logger));
   app.use('/api', createMemberPreferencesRouter(db, logger));
   app.use('/api', createExportRouter(db, logger));
@@ -141,8 +139,8 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
 
   app.use('/api', createLeavePolicyRouter(db, logger));
   app.use('/api', createHolidayRouter(db, logger));
-  app.use('/api', createTimeTrackingRouter(db, logger));
-  app.use('/api', createOvertimeRouter(db, logger));
+  // Time tracking + overtime extracted to services/time-tracking and services/overtime.
+  // Gateway serves canonical /svc/... routes and legacy /api/clients|/projects|/time-entries|/time-summary|/overtime/* rewrites.
   app.use('/api', createTimesheetRouter(db, logger, eventBus, notificationDispatcher));
   app.use('/api', createAnalyticsRouter(db, logger));
   app.use('/api', createFaceRecognitionRouter(db, config, logger));

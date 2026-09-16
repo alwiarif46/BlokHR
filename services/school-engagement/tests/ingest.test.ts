@@ -236,4 +236,61 @@ describe('school-engagement ingest + digest (P5-03)', () => {
       .set(office);
     expect(after.body.messages).toEqual([]);
   });
+
+  it('fee invoice, transport, and survey ingest paths', async () => {
+    const fee = await request(app)
+      .post('/api/engagement/t1/ingest')
+      .set(internal)
+      .send({
+        type: 'school.fee.invoice_issued',
+        data: {
+          guardian_ref: 'g1',
+          student_ref: 's1',
+          period_label: 'Term1',
+          total_paise: 100000,
+          student_name: 'Asha',
+        },
+      });
+    expect(fee.status).toBe(201);
+    expect(fee.body.templateKey).toBe('fee_reminder');
+
+    const feeDrop = await request(app)
+      .post('/api/engagement/t1/ingest')
+      .set(internal)
+      .send({
+        type: 'school.fee.invoice_issued',
+        data: { student_ref: 's1', period_label: 'Term1', total_paise: 1 },
+      });
+    expect(feeDrop.status).toBe(200);
+    expect(feeDrop.body.dropped).toBe(true);
+
+    const boarded = await request(app)
+      .post('/api/engagement/t1/ingest')
+      .set(internal)
+      .send({
+        type: 'school.transport.boarded',
+        data: {
+          guardian_ref: 'g1',
+          student_ref: 's1',
+          message: 'Boarded at Stop A',
+        },
+      });
+    expect(boarded.status).toBe(201);
+    expect(boarded.body.templateKey).toBe('general');
+
+    const survey = await request(app)
+      .post('/api/engagement/t1/ingest')
+      .set(internal)
+      .send({
+        type: 'school.survey.published',
+        data: {
+          guardian_ref: 'g1',
+          title: 'PTA feedback',
+          surveyId: 'sv1',
+        },
+      });
+    expect(survey.status).toBe(201);
+    expect(survey.body.templateKey).toBe('general');
+    expect(survey.body.status).toBe('queued');
+  });
 });

@@ -35,6 +35,8 @@ import {
   type StaffIntrospectFn,
 } from './guards/staff-introspect';
 import { isPublicSvcPath } from './guards/public-paths';
+import { resolveHrCompatRewrite } from './guards/hr-compat';
+import { createFeatureFlagCache, type FeatureFlagCache } from './guards/feature-flags';
 
 const PROXY_TIMEOUT_MS = 30_000;
 /** 0 = no timeout kill (SSE must stay open). */
@@ -51,6 +53,8 @@ export interface GatewayAppOptions {
   introspect?: IntrospectFn;
   /** Override staff introspect (tests). */
   staffIntrospect?: StaffIntrospectFn;
+  /** Override feature flag cache (tests). */
+  featureFlagCache?: FeatureFlagCache;
 }
 
 function buildProxyHooks(
@@ -127,6 +131,13 @@ export function createGatewayApp(options: GatewayAppOptions): {
     });
   const staffIntrospectCache = new CachedStaffIntrospect(staffIntrospectFn);
 
+  const featureFlagCache =
+    options.featureFlagCache ??
+    createFeatureFlagCache({
+      monolithUrl: config.monolithUrl,
+      logger,
+    });
+
   app.get('/healthz', (_req: Request, res: Response) => {
     res.json({ ok: true, services: [...SERVICE_NAMES] });
   });
@@ -198,6 +209,36 @@ export function createGatewayApp(options: GatewayAppOptions): {
       return;
     }
     req.url = '/api/identity/guardian-auth/login';
+    proxy(req, res, next);
+  });
+
+  app.post('/guardian/claim', (req: Request, res: Response, next: NextFunction) => {
+    const proxy = serviceProxies.get('school-identity');
+    if (!proxy) {
+      res.status(502).json({ error: 'upstream_unavailable', service: 'school-identity' });
+      return;
+    }
+    req.url = '/api/identity/guardian-auth/claim';
+    proxy(req, res, next);
+  });
+
+  app.post('/guardian/otp/request', (req: Request, res: Response, next: NextFunction) => {
+    const proxy = serviceProxies.get('school-identity');
+    if (!proxy) {
+      res.status(502).json({ error: 'upstream_unavailable', service: 'school-identity' });
+      return;
+    }
+    req.url = '/api/identity/guardian-auth/otp/request';
+    proxy(req, res, next);
+  });
+
+  app.post('/guardian/otp/verify', (req: Request, res: Response, next: NextFunction) => {
+    const proxy = serviceProxies.get('school-identity');
+    if (!proxy) {
+      res.status(502).json({ error: 'upstream_unavailable', service: 'school-identity' });
+      return;
+    }
+    req.url = '/api/identity/guardian-auth/otp/verify';
     proxy(req, res, next);
   });
 
@@ -308,6 +349,10 @@ export function createGatewayApp(options: GatewayAppOptions): {
       res.status(404).json({ error: 'unknown_service' });
       return;
     }
+    if (!(await featureFlagCache.isServiceEnabled(service as ServiceName))) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
     const proxy = serviceProxies.get(service);
     if (!proxy) {
       res.status(404).json({ error: 'unknown_service' });
@@ -364,6 +409,73 @@ export function createGatewayApp(options: GatewayAppOptions): {
   // P12-02: never let a browser reach introspect via gateway (would attach X-Blok-Internal).
   app.all('/api/auth/introspect', (_req: Request, res: Response) => {
     res.status(404).json({ error: 'not_found' });
+  });
+
+  /**
+   * Legacy HR flat contracts → time-tracking / overtime (before monolith catch-all).
+   * Staff introspect + header hygiene; 502 includes service metadata.
+   */
+  app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
+    const pathname = (req.originalUrl || req.url || '').split('?')[0] || '';
+    const search = (req.originalUrl || '').includes('?')
+      ? `?${(req.originalUrl || '').split('?').slice(1).join('?')}`
+      : '';
+    // Express mounts at /api so req.path is relative; use original for matching.
+    const fullPath = pathname.startsWith('/api') ? pathname : `/api${pathname === '/' ? '' : pathname}`;
+
+    const token = parseBearer(
+      typeof req.headers.authorization === 'string'
+        ? req.headers.authorization
+        : undefined,
+    );
+    // Peek match without tenant first to avoid introspect on unrelated /api paths.
+    const peek = resolveHrCompatRewrite(req.method, fullPath, search, 'default');
+    if (!peek) {
+      next();
+      return;
+    }
+
+    if (!(await featureFlagCache.isHrCompatEnabled(fullPath))) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+
+    if (!token) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const result = await safeStaffIntrospect(staffIntrospectCache, token, logger);
+    if (result === 'down') {
+      res.status(503).json({ error: 'introspect_unavailable' });
+      return;
+    }
+    if (!result.active) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const match = resolveHrCompatRewrite(
+      req.method,
+      fullPath,
+      search,
+      result.tenantId || 'default',
+    );
+    if (!match) {
+      next();
+      return;
+    }
+
+    const proxy = serviceProxies.get(match.service);
+    if (!proxy) {
+      res.status(502).json({ error: 'upstream_unavailable', service: match.service });
+      return;
+    }
+
+    const sReq = req as BlokProxyRequest;
+    sReq._blokExtraHeaders = staffBlokHeaders(result);
+    req.url = match.upstreamPath;
+    proxy(req, res, next);
   });
 
   const monolithProxy = createProxyMiddleware({

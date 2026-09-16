@@ -91,8 +91,21 @@ const BCRYPT_ROUNDS = 10;
 const MAX_FAILED_ATTEMPTS = 5;
 const LOCKOUT_MINUTES = 15;
 const MAGIC_LINK_EXPIRY_MINUTES = 15;
+const PASSWORD_RESET_EXPIRY_MINUTES = 15;
 /** Staff session lifetime for gateway introspect (P12-01). */
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export const FORGOT_PASSWORD_PUBLIC_MESSAGE =
+  'If an account exists for that email, a reset link has been sent.';
+
+export interface AuthMailSender {
+  isConfigured: boolean;
+  sendSimple(to: string, subject: string, html: string): Promise<{ success: boolean; error?: string }>;
+}
+
+function hashAuthToken(token: string): string {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 export interface StaffIntrospectResult {
   active: boolean;
@@ -131,7 +144,42 @@ export class MultiAuthService {
     private readonly logger: Logger,
     /** Shared with GET /api/user-roles — introspect must not fork role logic. */
     private readonly settingsService: SettingsService,
+    private readonly mailSender?: AuthMailSender,
+    private readonly publicBaseUrl: string = '',
   ) {}
+
+  private resolvePublicBaseUrl(): string {
+    const raw = (this.publicBaseUrl || '').trim().replace(/\/$/, '');
+    return raw || 'http://localhost:8080';
+  }
+
+  /**
+   * Deliver an auth email. When SMTP is missing: log the URL in development/test;
+   * warn in production without leaking to the client.
+   */
+  async deliverAuthLinkEmail(
+    to: string,
+    subject: string,
+    html: string,
+    linkForDevLog: string,
+  ): Promise<void> {
+    if (this.mailSender?.isConfigured) {
+      const sent = await this.mailSender.sendSimple(to, subject, html);
+      if (!sent.success) {
+        this.logger.warn({ to, error: sent.error }, 'Auth email send failed');
+      }
+      return;
+    }
+    const nodeEnv = process.env.NODE_ENV ?? 'development';
+    if (nodeEnv === 'development' || nodeEnv === 'test') {
+      this.logger.info({ to, link: linkForDevLog }, 'Auth link (SMTP not configured)');
+      return;
+    }
+    this.logger.warn(
+      { to },
+      'Auth email skipped — SMTP not configured (set SMTP_HOST/USER/PASS/FROM)',
+    );
+  }
 
   /**
    * Persist a staff session token (previously ephemeral uuid with no server lookup).
@@ -416,6 +464,113 @@ export class MultiAuthService {
 
     this.logger.info({ email, mustChangeOnLogin }, 'Password reset by admin');
     return { success: true };
+  }
+
+  /**
+   * Self-service forgot-password request.
+   * Enumeration-safe: returns success even when the email has no credentials.
+   * Raw token is returned only for the route/mailer — never store plaintext.
+   */
+  async requestPasswordReset(email: string): Promise<{
+    success: true;
+    token?: string;
+    expiresAt?: string;
+  }> {
+    const normalized = email.toLowerCase().trim();
+
+    const branding = await this.db.get<{ auth_local_enabled: number }>(
+      'SELECT auth_local_enabled FROM branding WHERE id = 1',
+    );
+    if (!branding?.auth_local_enabled) {
+      return { success: true };
+    }
+
+    const member = await this.db.get<MemberRow>(
+      'SELECT email, name FROM members WHERE email = ? AND active = 1',
+      [normalized],
+    );
+    const cred = await this.db.get<AuthCredentialRow>(
+      'SELECT email FROM auth_credentials WHERE email = ?',
+      [normalized],
+    );
+    if (!member || !cred) {
+      return { success: true };
+    }
+
+    const id = uuidv4();
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashAuthToken(token);
+    const expiresAt = new Date(
+      Date.now() + PASSWORD_RESET_EXPIRY_MINUTES * 60000,
+    ).toISOString();
+
+    await this.db.run(
+      'UPDATE password_reset_tokens SET used = 1 WHERE email = ? AND used = 0',
+      [normalized],
+    );
+    await this.db.run(
+      `INSERT INTO password_reset_tokens (id, email, token_hash, expires_at)
+       VALUES (?, ?, ?, ?)`,
+      [id, normalized, tokenHash, expiresAt],
+    );
+
+    this.logger.info({ email: normalized }, 'Password reset token generated');
+    return { success: true, token, expiresAt };
+  }
+
+  /** Confirm forgot-password with raw token + new password; revokes sessions. */
+  async confirmPasswordReset(
+    token: string,
+    newPassword: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!token || !token.trim()) {
+      return { success: false, error: 'Invalid or expired reset link' };
+    }
+    if (!newPassword || newPassword.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters' };
+    }
+
+    const tokenHash = hashAuthToken(token.trim());
+    const row = await this.db.get<{
+      id: string;
+      email: string;
+      expires_at: string;
+      used: number;
+    }>('SELECT id, email, expires_at, used FROM password_reset_tokens WHERE token_hash = ?', [
+      tokenHash,
+    ]);
+
+    if (!row || row.used === 1) {
+      return { success: false, error: 'Invalid or expired reset link' };
+    }
+    if (new Date(row.expires_at) < new Date()) {
+      await this.db.run('UPDATE password_reset_tokens SET used = 1 WHERE id = ?', [row.id]);
+      return { success: false, error: 'Reset link has expired' };
+    }
+
+    const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await this.db.run(
+      `UPDATE auth_credentials
+       SET password_hash = ?, must_change_password = 0, failed_attempts = 0,
+           locked_until = NULL, updated_at = datetime('now')
+       WHERE email = ?`,
+      [hash, row.email],
+    );
+    await this.db.run('UPDATE password_reset_tokens SET used = 1 WHERE id = ?', [row.id]);
+    await this.db.run(
+      'UPDATE password_reset_tokens SET used = 1 WHERE email = ? AND used = 0',
+      [row.email],
+    );
+    await this.db.run('DELETE FROM auth_sessions WHERE email = ?', [row.email]);
+
+    this.logger.info({ email: row.email }, 'Password reset confirmed via forgot-password');
+    return { success: true };
+  }
+
+  /** Build absolute auth deep-link URL for emails. */
+  buildAuthDeepLink(queryKey: 'reset' | 'magic', rawToken: string): string {
+    const base = this.resolvePublicBaseUrl();
+    return `${base}/?${queryKey}=${encodeURIComponent(rawToken)}`;
   }
 
   // ── 2. Magic Link ──

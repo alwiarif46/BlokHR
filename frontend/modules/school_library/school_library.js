@@ -24,6 +24,7 @@ let _settings = null;
 let _q = '';
 let _selectedTitleId = '';
 let _busy = false;
+let _loadError = '';
 
 function _esc(s) {
   const d = document.createElement('div');
@@ -66,6 +67,7 @@ export function libGetState() {
     settings: _settings,
     q: _q,
     selectedTitleId: _selectedTitleId,
+    loadError: _loadError,
   };
 }
 
@@ -118,11 +120,12 @@ function _bindTabs() {
       '</button>'
     );
   }).join('');
+
   tabs.querySelectorAll('.lib-tab').forEach(function (btn) {
     btn.addEventListener('click', async function () {
       _view = btn.getAttribute('data-view') || 'catalogue';
-      tabs.querySelectorAll('.lib-tab').forEach(function (b) {
-        b.classList.toggle('active', b === btn);
+      tabs.querySelectorAll('.lib-tab').forEach(function (tab) {
+        tab.classList.toggle('active', tab === btn);
       });
       await libLoadData();
       libRender();
@@ -132,12 +135,13 @@ function _bindTabs() {
 
 export async function libLoadData() {
   const client = _lib();
+  _loadError = '';
   if (_view === 'catalogue') {
     const [titlesRes, settingsRes] = await Promise.all([
       client.get('/titles' + (_q ? '?q=' + encodeURIComponent(_q) : '')),
       client.get('/settings'),
     ]);
-    if (_err(titlesRes)) toast(_err(titlesRes), 'error');
+    if (_err(titlesRes)) _loadError = _err(titlesRes);
     else _titles = (titlesRes && titlesRes.titles) || [];
     if (!_err(settingsRes)) _settings = settingsRes;
     if (_selectedTitleId) {
@@ -154,19 +158,19 @@ export async function libLoadData() {
       client.get('/loans?status=open'),
       client.get('/settings'),
     ]);
-    if (_err(loansRes)) toast(_err(loansRes), 'error');
+    if (_err(loansRes)) _loadError = _err(loansRes);
     else _loans = (loansRes && loansRes.loans) || [];
     if (!_err(settingsRes)) _settings = settingsRes;
   } else if (_view === 'holds') {
     const holdsRes = await client.get('/holds');
-    if (_err(holdsRes)) toast(_err(holdsRes), 'error');
+    if (_err(holdsRes)) _loadError = _err(holdsRes);
     else _holds = (holdsRes && holdsRes.holds) || [];
   } else {
     const [finesRes, settingsRes] = await Promise.all([
       client.get('/fines?status=open'),
       client.get('/settings'),
     ]);
-    if (_err(finesRes)) toast(_err(finesRes), 'error');
+    if (_err(finesRes)) _loadError = _err(finesRes);
     else _fines = (finesRes && finesRes.fines) || [];
     if (!_err(settingsRes)) _settings = settingsRes;
   }
@@ -176,7 +180,14 @@ export function libRender() {
   if (!_container) return;
   const body = _container.querySelector('#libBody');
   if (!body) return;
-  if (_view === 'catalogue') body.innerHTML = _htmlCatalogue();
+  if (_loadError) {
+    body.innerHTML =
+      '<div class="lib-service-error" role="alert">' +
+      '<div class="lib-service-error-title">Library service unavailable</div>' +
+      '<p>We could not load library data. Your current entries have not been changed.</p>' +
+      '<button type="button" class="lib-btn primary" id="libRetry">Retry</button>' +
+      '</div>';
+  } else if (_view === 'catalogue') body.innerHTML = _htmlCatalogue();
   else if (_view === 'circulate') body.innerHTML = _htmlCirculate();
   else if (_view === 'holds') body.innerHTML = _htmlHolds();
   else body.innerHTML = _htmlFines();
@@ -429,6 +440,17 @@ function _htmlFines() {
 function _bindBody() {
   const root = _container.querySelector('#libBody');
   if (!root) return;
+
+  const retry = root.querySelector('#libRetry');
+  if (retry) {
+    retry.addEventListener('click', async function () {
+      retry.disabled = true;
+      retry.textContent = 'Retrying…';
+      await libLoadData();
+      libRender();
+    });
+    return;
+  }
 
   const searchBtn = root.querySelector('#libSearchBtn');
   if (searchBtn) {

@@ -60,6 +60,11 @@ export const FEES_ROUTE_POLICIES: RoutePolicy[] = [
     method: 'GET',
     pattern: /^\/[^/]+\/students\/[^/]+\/ledger\/?$/,
     roles: OFFICE_UP,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/ledger\/?$/,
+    roles: [],
     guardianOk: true,
   },
 ];

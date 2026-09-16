@@ -53,7 +53,10 @@ export async function createSchoolIdentityApp(
   });
 
   app.use('/api/identity/guardian-auth', createGuardianAuthRouter(guardianAuth));
-  app.use('/api/identity', createIdentityRouter(service, { internalSecret }));
+  app.use(
+    '/api/identity',
+    createIdentityRouter(service, { internalSecret, guardianAuth }),
+  );
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     options.logger.error({ err }, 'School identity error');

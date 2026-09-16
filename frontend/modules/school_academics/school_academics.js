@@ -1,7 +1,7 @@
 /**
  * modules/school_academics/school_academics.js
  *
- * Academics: Curriculum | Coverage | Variance | Lessons.
+ * Academics: Curriculum | Coverage | Variance | Lessons | Homework.
  * Courses come from School Settings → Syllabus Packs (install/upload), not this module.
  * Pattern: render… → sacLoadData() → sacRender() → tab actions.
  */
@@ -12,7 +12,7 @@ import { getSession } from '../../shared/session.js';
 import { navigateToModule, registerModule } from '../../shared/router.js';
 import { canAcademicsCourseWrite } from '../../shared/school-roles.js';
 
-const TABS = ['curriculum', 'coverage', 'variance', 'lessons'];
+const TABS = ['curriculum', 'coverage', 'variance', 'lessons', 'homework'];
 const FIELD_BADGE = { activity: 'A', assessment: 'AS', resource: 'R' };
 const DEPTH_BADGE = { introduced: 'I', reinforced: 'R', mastered: 'M' };
 const BODY_SECTIONS = ['objectives', 'activities', 'materials', 'assessment_check'];
@@ -34,6 +34,14 @@ let _tagError = '';
 let _dragUnitId = null;
 /** @type {string|null} set when GET /courses fails (service down / 502) */
 let _loadError = null;
+/** @type {Array} */
+let _assignments = [];
+/** @type {string} */
+let _hwAssignmentId = '';
+/** @type {Array} */
+let _submissions = [];
+/** @type {object|null} */
+let _hwStats = null;
 
 function _esc(s) {
   const d = document.createElement('div');
@@ -253,6 +261,7 @@ export async function sacLoadData() {
   else if (_tab === 'coverage') await _loadCoverage();
   else if (_tab === 'variance') await _loadVariance();
   else if (_tab === 'lessons') await _loadLessons();
+  else if (_tab === 'homework') await _loadHomework();
   else {
     const _exhaustive = _tab;
     void _exhaustive;
@@ -405,6 +414,7 @@ export function sacRender() {
   else if (_tab === 'coverage') _renderCoverage(content);
   else if (_tab === 'variance') _renderVariance(content);
   else if (_tab === 'lessons') _renderLessons(content);
+  else if (_tab === 'homework') _renderHomework(content);
 }
 
 function _renderServiceUnavailable(content) {
@@ -1158,6 +1168,200 @@ export async function sacReviewLesson(id, decision, note) {
   }
   toast((res && res.message) || 'Review failed', 'error');
   return null;
+}
+
+async function _loadHomework() {
+  _assignments = [];
+  _submissions = [];
+  _hwStats = null;
+  if (!_sectionRef) return;
+  const res = await _ac().get(
+    '/assignments?section_ref=' + encodeURIComponent(_sectionRef),
+  );
+  if (res && !res._error) {
+    _assignments = res.assignments || [];
+    if (!_hwAssignmentId && _assignments[0]) _hwAssignmentId = _assignments[0].id;
+  } else if (res && res._error) {
+    toast(res.message || 'Could not load assignments', 'error');
+  }
+  if (_hwAssignmentId) {
+    const [subs, stats] = await Promise.all([
+      _ac().get('/assignments/' + encodeURIComponent(_hwAssignmentId) + '/submissions'),
+      _ac().get('/assignments/' + encodeURIComponent(_hwAssignmentId) + '/stats'),
+    ]);
+    _submissions = subs && !subs._error ? subs.submissions || [] : [];
+    _hwStats = stats && !stats._error ? stats : null;
+  }
+}
+
+function _renderHomework(content) {
+  const session = getSession() || {};
+  const asgOpts = _assignments
+    .map(function (a) {
+      return (
+        '<option value="' +
+        _esc(a.id) +
+        '"' +
+        (a.id === _hwAssignmentId ? ' selected' : '') +
+        '>' +
+        _esc(a.title) +
+        '</option>'
+      );
+    })
+    .join('');
+
+  const subRows = _submissions
+    .map(function (s) {
+      return (
+        '<tr><td class="stt-mono">' +
+        _esc(s.studentId || s.student_id) +
+        '</td><td>' +
+        _esc(s.state) +
+        '</td><td>' +
+        _esc(
+          s.draftGrade != null
+            ? String(s.draftGrade)
+            : s.draft_grade != null
+              ? String(s.draft_grade)
+              : '—',
+        ) +
+        '</td><td>' +
+        '<input class="sac-input" style="width:72px" data-grade-for="' +
+        _esc(s.id) +
+        '" placeholder="Grade" />' +
+        '<button type="button" class="sac-btn ghost" data-hw-grade="' +
+        _esc(s.id) +
+        '">Save</button>' +
+        '<button type="button" class="sac-btn ghost" data-hw-return="' +
+        _esc(s.id) +
+        '">Return</button>' +
+        '</td></tr>'
+      );
+    })
+    .join('');
+
+  const stats =
+    _hwStats &&
+    '<div class="sac-help">Assigned ' +
+      _esc(String(_hwStats.assigned ?? _hwStats.total ?? '—')) +
+      ' · Turned in ' +
+      _esc(String(_hwStats.turned_in ?? _hwStats.turnedIn ?? '—')) +
+      ' · Returned ' +
+      _esc(String(_hwStats.returned ?? '—')) +
+      '</div>';
+
+  content.innerHTML =
+    '<div class="sac-panel">' +
+    '<div class="sac-toolbar">' +
+    '<input class="sac-input" id="sacHwSection" placeholder="Section ref (e.g. 8|A or 8A)" value="' +
+    _esc(_sectionRef) +
+    '" />' +
+    '<button type="button" class="sac-btn" id="sacHwLoad">Load</button>' +
+    '</div>' +
+    '<form class="sac-form" id="sacHwCreate">' +
+    '<h4>New assignment</h4>' +
+    '<input class="sac-input" name="title" placeholder="Title" required />' +
+    '<input class="sac-input" name="due_at" type="datetime-local" required />' +
+    '<input class="sac-input" name="max_points" type="number" placeholder="Max points" value="10" />' +
+    '<input class="sac-input" name="student_ids" placeholder="Student ids (comma-separated)" required />' +
+    '<textarea class="sac-input" name="instructions" placeholder="Instructions" rows="2"></textarea>' +
+    '<button type="submit" class="sac-btn">Create</button>' +
+    '</form>' +
+    '<div class="sac-toolbar"><label>Assignment <select class="sac-input" id="sacHwAsg">' +
+    '<option value="">Select…</option>' +
+    asgOpts +
+    '</select></label>' +
+    '<button type="button" class="sac-btn ghost" id="sacHwSweep">Sweep missing</button></div>' +
+    (stats || '') +
+    '<table class="sac-table"><thead><tr><th>Student</th><th>State</th><th>Grade</th><th></th></tr></thead><tbody>' +
+    (subRows || '<tr><td colspan="4">No submissions</td></tr>') +
+    '</tbody></table></div>';
+
+  content.querySelector('#sacHwLoad').addEventListener('click', function () {
+    _sectionRef = content.querySelector('#sacHwSection').value.trim();
+    _hwAssignmentId = '';
+    sacLoadData();
+  });
+  content.querySelector('#sacHwAsg').addEventListener('change', function (e) {
+    _hwAssignmentId = e.target.value;
+    sacLoadData();
+  });
+  content.querySelector('#sacHwCreate').addEventListener('submit', async function (e) {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const section = content.querySelector('#sacHwSection').value.trim() || _sectionRef;
+    if (!section || !_courseId) {
+      toast('Section ref and course required', 'error');
+      return;
+    }
+    _sectionRef = section;
+    const studentIds = String(fd.get('student_ids') || '')
+      .split(',')
+      .map(function (x) {
+        return x.trim();
+      })
+      .filter(Boolean);
+    const dueRaw = String(fd.get('due_at') || '');
+    const dueAt = dueRaw ? new Date(dueRaw).toISOString() : '';
+    const res = await _ac().post('/assignments', {
+      course_id: _courseId,
+      section_ref: section,
+      title: String(fd.get('title') || ''),
+      instructions: String(fd.get('instructions') || '') || null,
+      max_points: Number(fd.get('max_points') || 10),
+      due_at: dueAt,
+      assigned_by: session.email || session.name || 'teacher',
+      student_ids: studentIds,
+    });
+    if (res && !res._error) {
+      toast('Assignment created', 'success');
+      _hwAssignmentId = res.assignment ? res.assignment.id : '';
+      await _loadHomework();
+      sacRender();
+    } else toast((res && (res.message || res.error)) || 'Create failed', 'error');
+  });
+  content.querySelector('#sacHwSweep').addEventListener('click', async function () {
+    if (!_hwAssignmentId) return;
+    const res = await _ac().post(
+      '/assignments/' + encodeURIComponent(_hwAssignmentId) + '/sweep-missing',
+      {},
+    );
+    if (res && !res._error) {
+      toast('Sweep done', 'success');
+      await _loadHomework();
+      sacRender();
+    } else toast((res && res.message) || 'Sweep failed', 'error');
+  });
+  content.querySelectorAll('[data-hw-grade]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      const sid = btn.getAttribute('data-hw-grade');
+      const input = content.querySelector('[data-grade-for="' + sid + '"]');
+      const grade = input ? Number(input.value) : NaN;
+      if (isNaN(grade)) {
+        toast('Enter a grade', 'warn');
+        return;
+      }
+      const res = await _ac().patch('/submissions/' + encodeURIComponent(sid) + '/grade', {
+        draft_grade: grade,
+      });
+      if (res && !res._error) {
+        toast('Grade saved', 'success');
+        await _loadHomework();
+        sacRender();
+      } else toast((res && res.message) || 'Grade failed', 'error');
+    });
+  });
+  content.querySelectorAll('[data-hw-return]').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      const sid = btn.getAttribute('data-hw-return');
+      const res = await _ac().post('/submissions/' + encodeURIComponent(sid) + '/return', {});
+      if (res && !res._error) {
+        toast('Returned', 'success');
+        await _loadHomework();
+        sacRender();
+      } else toast((res && res.message) || 'Return failed', 'error');
+    });
+  });
 }
 
 /** @returns {object} */

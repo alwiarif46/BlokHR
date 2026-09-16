@@ -37,6 +37,11 @@ export const ENGAGEMENT_ROUTE_POLICIES: RoutePolicy[] = [
     allowDeviceInternal: true,
   },
   {
+    method: 'POST',
+    pattern: /^\/[^/]+\/circulars\/?$/,
+    roles: ['office', 'school_admin', 'admin'],
+  },
+  {
     method: 'GET',
     pattern: /^\/[^/]+\/messages\/?$/,
     roles: ['office', 'school_admin', 'admin'],

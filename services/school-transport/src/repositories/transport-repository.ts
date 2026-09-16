@@ -385,6 +385,35 @@ export class TransportRepository {
     return rows.map(mapRouteStudent);
   }
 
+  async findRouteStudentByStudentRef(
+    tenantId: string,
+    studentRef: string,
+  ): Promise<RouteStudent | null> {
+    const row = await this.db.get<RouteStudentRow>(
+      `SELECT * FROM route_students
+       WHERE tenant_id = ? AND student_ref = ?
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [tenantId, studentRef],
+    );
+    return row ? mapRouteStudent(row) : null;
+  }
+
+  async listBoardingForStudent(
+    tenantId: string,
+    studentRef: string,
+    limit = 50,
+  ): Promise<BoardingEvent[]> {
+    const rows = await this.db.all<BoardingEventRow>(
+      `SELECT * FROM boarding_events
+       WHERE tenant_id = ? AND student_ref = ? AND unmatched = 0
+       ORDER BY at DESC
+       LIMIT ?`,
+      [tenantId, studentRef, limit],
+    );
+    return rows.map(mapBoardingEvent);
+  }
+
   async countRouteStudents(tenantId: string, routeId: string): Promise<number> {
     const row = await this.db.get<{ c: number }>(
       `SELECT COUNT(*) as c FROM route_students

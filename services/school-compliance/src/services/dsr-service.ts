@@ -223,7 +223,13 @@ export class DsrService {
 
   async list(
     tenantId: string,
-    opts: { state?: string; overdue?: boolean; today?: string },
+    opts: {
+      state?: string;
+      overdue?: boolean;
+      today?: string;
+      studentRef?: string;
+      guardianRef?: string;
+    },
   ): Promise<{ requests?: DataRequest[]; error?: ServiceError }> {
     let state: string | undefined;
     if (opts.state != null && opts.state.trim() !== '') {
@@ -239,6 +245,8 @@ export class DsrService {
       state,
       overdueOnly: opts.overdue === true,
       todayIso: today,
+      studentRef: opts.studentRef?.trim() || undefined,
+      guardianRef: opts.guardianRef?.trim() || undefined,
     });
     return { requests };
   }

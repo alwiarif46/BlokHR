@@ -6,7 +6,7 @@
 .ff-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .ff-spacer { flex: 1; }
 .ff-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
-.theme-clean .ff-btn { color: #fff; border-radius: 10px; }
+.theme-clean .ff-btn { color: var(--ink-on-accent, #00112b); border-radius: 10px; }
 .ff-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 .ff-btn.ghost { background: transparent; color: var(--accent); }
 .ff-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
@@ -20,7 +20,7 @@
 .ff-card:hover { border-color: var(--accent); transform: translateY(-2px); }
 .theme-chromium .ff-card { background: linear-gradient(170deg, var(--bg2), var(--bg1)); }
 .theme-neural .ff-card { border-radius: 0; }
-.theme-holodeck .ff-card { border-radius: 0; background: rgba(10, 20, 34, 0.5); }
+.theme-holodeck .ff-card { border-radius: var(--r); background: var(--surface, var(--bg2)); }
 .theme-clean .ff-card { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .ff-card-title { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
 .ff-card-sub { font-size: 10px; color: var(--tx3); }
@@ -33,7 +33,7 @@
 .ff-card-actions button.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
 .ff-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .ff-modal.open { display: flex; }
-.ff-modal-box { background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
+.ff-modal-box { background: var(--surface, var(--bg2)); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
 .theme-clean .ff-modal-box { border-radius: 20px; }
 .ff-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
 .ff-field { margin-bottom: 14px; }
@@ -45,3 +45,17 @@
 .ff-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
 .ff-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }
 .ff-empty-text { font-size: 13px; font-weight: 600; }
+.ff-category { margin-bottom: 24px; }
+.ff-category-title { font-size: 10px; font-weight: 700; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 10px; }
+.ff-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+.ff-card-desc { font-size: 11px; color: var(--tx2); line-height: 1.45; margin-bottom: 8px; }
+.ff-card-meta { font-size: 9px; color: var(--tx3); font-family: monospace; margin-bottom: 10px; }
+.ff-badge-on { background: var(--status-in-dim, rgba(34, 197, 94, 0.15)); color: var(--status-in); }
+.ff-badge-off { background: var(--bg3); color: var(--tx3); }
+.ff-toggle { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+.ff-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.ff-toggle-track { width: 40px; height: 22px; background: var(--bg3); border: 1px solid var(--bd); border-radius: 999px; transition: all 0.2s ease; position: relative; }
+.ff-toggle-track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--tx3); transition: all 0.2s ease; }
+.ff-toggle input:checked + .ff-toggle-track { background: var(--accent-dim); border-color: var(--accent); }
+.ff-toggle input:checked + .ff-toggle-track::after { transform: translateX(18px); background: var(--accent); }
+.ff-toggle-locked { opacity: 0.55; cursor: not-allowed; }

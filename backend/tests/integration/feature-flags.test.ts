@@ -292,6 +292,37 @@ describe('Feature Flags Module', () => {
     });
   });
 
+  // ── Nav module flags (052) ──
+
+  describe('Nav module route guards', () => {
+    it('blocks leaves when disabled', async () => {
+      await featureFlags.toggle('leaves', false, ADMIN);
+      const res = await request(app).get('/api/leaves/balances?email=' + EMAIL);
+      expect(res.status).toBe(404);
+    });
+
+    it('blocks holidays when disabled', async () => {
+      await featureFlags.toggle('holidays', false, ADMIN);
+      const res = await request(app).get('/api/holidays');
+      expect(res.status).toBe(404);
+    });
+
+    it('blocks meetings when disabled', async () => {
+      await featureFlags.toggle('meetings', false, ADMIN);
+      const res = await request(app).get('/api/meetings');
+      expect(res.status).toBe(404);
+    });
+
+    it('lists nav module flags after migration', async () => {
+      const res = await request(app).get('/api/features?all=true');
+      const keys = res.body.features.map((f: { key: string }) => f.key);
+      expect(keys).toContain('dashboard');
+      expect(keys).toContain('attendance');
+      expect(keys).toContain('school_academics');
+      expect(keys).toContain('school_parent_surveys');
+    });
+  });
+
   // ── Data preservation ──
 
   describe('Data preserved when feature disabled', () => {

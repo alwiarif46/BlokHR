@@ -40,7 +40,7 @@
   transition: all 0.2s ease;
 }
 .theme-clean .set-save-all {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
 .set-save-all:hover {
@@ -324,7 +324,7 @@
   width: 100%;
 }
 .theme-clean .set-section-save {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
 .set-section-save:hover {

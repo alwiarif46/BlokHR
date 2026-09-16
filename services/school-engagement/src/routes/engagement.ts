@@ -207,6 +207,30 @@ export function createEngagementRouter(
     }),
   );
 
+  router.post(
+    '/:tenantId/circulars',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await messages.sendCircular(req.params.tenantId, {
+        sectionRef: String(body.section_ref ?? body.sectionRef ?? ''),
+        body: String(body.body ?? ''),
+        title:
+          body.title !== undefined && body.title !== null
+            ? String(body.title)
+            : null,
+        lang: body.lang != null ? String(body.lang) : undefined,
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json({
+        count: result.count ?? result.messages?.length ?? 0,
+        messages: result.messages,
+      });
+    }),
+  );
+
   router.get(
     '/:tenantId/messages',
     asyncHandler(async (req, res) => {
@@ -241,6 +265,13 @@ export function createEngagementRouter(
       }
       if (result.dropped) {
         res.status(200).json({ dropped: true });
+        return;
+      }
+      if (result.messages && result.messages.length > 1) {
+        res.status(201).json({
+          messages: result.messages,
+          count: result.messages.length,
+        });
         return;
       }
       res.status(201).json(result.message);

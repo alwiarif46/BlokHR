@@ -14,6 +14,28 @@ const DEFAULT_SHIFT_START = '09:00';
 const DEFAULT_SHIFT_END = '18:00';
 const DEFAULT_GROUP_ID = 'default';
 
+/** Roles assignable by login email (directory.members.role). */
+export const DIRECTORY_MEMBER_ROLES = [
+  'employee',
+  'manager',
+  'hr',
+  'teacher',
+  'office',
+  'school_admin',
+  'admin',
+  'parent',
+] as const;
+
+export type DirectoryMemberRole = (typeof DIRECTORY_MEMBER_ROLES)[number];
+
+function normalizeMemberRole(role: string | undefined): DirectoryMemberRole | { error: string } {
+  const raw = (role ?? 'employee').trim().toLowerCase();
+  if ((DIRECTORY_MEMBER_ROLES as readonly string[]).includes(raw)) {
+    return raw as DirectoryMemberRole;
+  }
+  return { error: `role must be one of: ${DIRECTORY_MEMBER_ROLES.join(', ')}` };
+}
+
 export interface DirectoryServiceDeps {
   repo: DirectoryRepository;
   seatChecker?: SeatChecker;
@@ -65,6 +87,11 @@ export class DirectoryService {
       return { success: false, error: 'name is required', status: 400 };
     }
 
+    const roleNorm = normalizeMemberRole(input.role);
+    if (typeof roleNorm === 'object' && 'error' in roleNorm) {
+      return { success: false, error: roleNorm.error, status: 400 };
+    }
+
     const existing = await this.deps.repo.getByEmail(tenantId, email);
     if (existing) {
       return { success: false, error: 'Member with this email already exists', status: 409 };
@@ -107,7 +134,7 @@ export class DirectoryService {
       tenantId,
       email,
       name,
-      role: input.role ?? 'employee',
+      role: roleNorm,
       groupId,
       designation: input.designation ?? '',
       phone: input.phone ?? '',
@@ -153,7 +180,16 @@ export class DirectoryService {
       return { success: false, error: 'Member not found', status: 404 };
     }
 
-    const updated = await this.deps.repo.update(tenantId, id, input);
+    let patch: UpdateMemberInput = { ...input };
+    if (input.role !== undefined) {
+      const roleNorm = normalizeMemberRole(input.role);
+      if (typeof roleNorm === 'object' && 'error' in roleNorm) {
+        return { success: false, error: roleNorm.error, status: 400 };
+      }
+      patch = { ...patch, role: roleNorm };
+    }
+
+    const updated = await this.deps.repo.update(tenantId, id, patch);
     if (!updated) {
       return { success: false, error: 'Member not found', status: 404 };
     }

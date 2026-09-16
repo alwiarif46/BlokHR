@@ -66,6 +66,12 @@ export interface Guardian {
   phone: string;
   email: string | null;
   preferredLanguage: string;
+  timezone: string;
+  accessibility: Record<string, unknown>;
+  privacy: Record<string, unknown>;
+  emailVerified: boolean;
+  phoneVerified: boolean;
+  mfaEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -75,6 +81,38 @@ export interface StudentGuardian {
   guardianId: string;
   tenantId: string;
   isPrimary: boolean;
+  canViewEducation: boolean;
+  canViewFinance: boolean;
+  canViewMedical: boolean;
+  canAuthorizePickup: boolean;
+  isEmergencyContact: boolean;
+  isDelegated: boolean;
+  accessStartsOn: string | null;
+  accessEndsOn: string | null;
+  contactRestricted: boolean;
+  custodyNotesRef: string | null;
+  courtOrderRef: string | null;
+}
+
+export type GuardianInvitationStatus =
+  | 'pending'
+  | 'accepted'
+  | 'expired'
+  | 'revoked';
+
+export interface GuardianInvitation {
+  id: string;
+  tenantId: string;
+  guardianId: string;
+  studentId: string | null;
+  phone: string;
+  email: string | null;
+  status: GuardianInvitationStatus;
+  invitedBy: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Enrolment {
@@ -154,13 +192,43 @@ export interface CreateGuardianInput {
   phone: string;
   email?: string | null;
   preferredLanguage?: string;
+  timezone?: string;
 }
 
-export type PatchGuardianInput = Partial<CreateGuardianInput>;
+export type PatchGuardianInput = Partial<CreateGuardianInput> & {
+  timezone?: string;
+  accessibility?: Record<string, unknown>;
+  privacy?: Record<string, unknown>;
+};
 
 export interface LinkGuardianInput {
   guardianId: string;
   isPrimary?: boolean;
+  canViewEducation?: boolean;
+  canViewFinance?: boolean;
+  canViewMedical?: boolean;
+  canAuthorizePickup?: boolean;
+  isEmergencyContact?: boolean;
+  isDelegated?: boolean;
+  accessStartsOn?: string | null;
+  accessEndsOn?: string | null;
+  contactRestricted?: boolean;
+  custodyNotesRef?: string | null;
+  courtOrderRef?: string | null;
+}
+
+export interface GuardianLinkPermissions {
+  canViewEducation: boolean;
+  canViewFinance: boolean;
+  canViewMedical: boolean;
+  canAuthorizePickup: boolean;
+  isEmergencyContact: boolean;
+  isDelegated: boolean;
+  accessStartsOn: string | null;
+  accessEndsOn: string | null;
+  contactRestricted: boolean;
+  custodyNotesRef: string | null;
+  courtOrderRef: string | null;
 }
 
 export type ConsentKind =

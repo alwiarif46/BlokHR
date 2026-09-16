@@ -20,7 +20,7 @@ const THEME_NAMES = {
   chromium: 'Chromium Forge',
   neural: 'Neural Circuit',
   holodeck: 'Holodeck HUD',
-  clean: 'Clean Mode',
+  clean: 'Electric Blue',
 };
 
 let _currentTheme = 'chromium';
@@ -35,14 +35,18 @@ export function getTheme() {
 
 /**
  * Apply a theme by switching body class.
- * Does NOT persist — call prefs.savePrefs({ theme }) for that.
+ * Preserves non-theme body classes (e.g. guardian-body, on-login-screen).
+ * Does NOT persist — call prefs.savePrefs({ theme }) or guardian profile for that.
  *
  * @param {string} name — one of: chromium, neural, holodeck, clean
  */
 export function setTheme(name) {
   const t = VALID_THEMES.indexOf(name) >= 0 ? name : 'chromium';
   _currentTheme = t;
-  document.body.className = 'theme-' + t;
+  const keep = Array.from(document.body.classList).filter(function (c) {
+    return c && !/^theme-/.test(c);
+  });
+  document.body.className = ['theme-' + t].concat(keep).join(' ');
   syncThemeDots();
 }
 
@@ -193,7 +197,7 @@ export function syncThemeDots() {
     btn.classList.toggle('active', btn.dataset.theme === _currentTheme);
   });
   document.querySelectorAll('.lt-btn').forEach(function (btn) {
-    btn.classList.toggle('active', btn.textContent.trim().toLowerCase() === _currentTheme);
+    btn.classList.toggle('active', btn.dataset.theme === _currentTheme);
   });
   const hdrSub = document.getElementById('hdrSub');
   if (hdrSub) {

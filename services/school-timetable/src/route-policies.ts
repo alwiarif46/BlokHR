@@ -104,4 +104,10 @@ export const TIMETABLE_ROUTE_POLICIES: RoutePolicy[] = [
     roles: [],
     internalOnly: true,
   },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/schedule\/?$/,
+    roles: [],
+    guardianOk: true,
+  },
 ];

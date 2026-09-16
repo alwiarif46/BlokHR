@@ -39,6 +39,8 @@ describe('school-roles L6 (P12-06)', () => {
         <div data-module="school_attendance_admin" data-school-roles="office,school_admin"></div>
         <div data-module="school_library" data-school-roles="office,school_admin"></div>
         <div data-module="school_surveys" data-school-roles="school_admin"></div>
+        <div data-module="parent_hub" data-school-roles="parent"></div>
+        <div data-module="dashboard"></div>
       `;
       document.body.appendChild(root);
     });
@@ -56,12 +58,19 @@ describe('school-roles L6 (P12-06)', () => {
           'school_attendance_admin',
           'school_library',
           'school_surveys',
+          'parent_hub',
         ],
       },
       {
         role: 'office',
         visible: ['school_students', 'school_attendance_admin', 'school_library'],
-        hidden: ['school_roll_call', 'school_academics', 'school_hpc', 'school_surveys'],
+        hidden: [
+          'school_roll_call',
+          'school_academics',
+          'school_hpc',
+          'school_surveys',
+          'parent_hub',
+        ],
       },
       {
         role: 'school_admin',
@@ -74,7 +83,7 @@ describe('school-roles L6 (P12-06)', () => {
           'school_library',
           'school_surveys',
         ],
-        hidden: [],
+        hidden: ['parent_hub'],
       },
       {
         role: 'admin',
@@ -86,9 +95,24 @@ describe('school-roles L6 (P12-06)', () => {
           'school_attendance_admin',
           'school_library',
           'school_surveys',
+          'parent_hub',
         ],
         hidden: [],
         isAdmin: true,
+      },
+      {
+        role: 'parent',
+        visible: ['parent_hub'],
+        hidden: [
+          'school_roll_call',
+          'school_academics',
+          'school_hpc',
+          'school_students',
+          'school_attendance_admin',
+          'school_library',
+          'school_surveys',
+          'dashboard',
+        ],
       },
     ];
 

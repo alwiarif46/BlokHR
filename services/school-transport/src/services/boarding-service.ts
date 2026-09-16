@@ -7,6 +7,9 @@ import type {
   BoardingEvent,
   BoardingLeg,
   ManifestStudent,
+  Route,
+  RouteStudent,
+  Stop,
   TransportBinding,
 } from '../types';
 
@@ -325,5 +328,55 @@ export class BoardingService {
     }
 
     return { students };
+  }
+
+  async getGuardianStudentStatus(
+    tenantId: string,
+    studentRef: string,
+    telemetry: {
+      routeEta: (
+        tenantId: string,
+        routeId: string,
+        stopId: string,
+      ) => Promise<{
+        eta?: number | null;
+        stale?: boolean;
+        error?: { error: string; status: number };
+      }>;
+    },
+  ): Promise<{
+    assignment?: RouteStudent;
+    stop?: Stop | null;
+    route?: Route;
+    eta?: { minutes: number | null; stale: boolean } | null;
+    recentBoarding?: BoardingEvent[];
+    error?: ServiceError;
+  }> {
+    const ref = (studentRef || '').trim();
+    if (!ref) return { error: { error: 'student_ref is required', status: 400 } };
+    const assignment = await this.repo.findRouteStudentByStudentRef(tenantId, ref);
+    if (!assignment) {
+      return { error: { error: 'transport assignment not found', status: 404 } };
+    }
+    const route = await this.repo.getRoute(tenantId, assignment.routeId);
+    if (!route) {
+      return { error: { error: 'route not found', status: 404 } };
+    }
+    const stop = await this.repo.getStop(tenantId, assignment.stopId);
+    // Vehicle GPS only via routeEta — never expose raw person GPS.
+    const etaRes = await telemetry.routeEta(tenantId, assignment.routeId, assignment.stopId);
+    const recentBoarding = await this.repo.listBoardingForStudent(tenantId, ref, 20);
+    return {
+      assignment,
+      stop: stop ?? null,
+      route,
+      eta: etaRes.error
+        ? null
+        : {
+            minutes: etaRes.eta ?? null,
+            stale: Boolean(etaRes.stale),
+          },
+      recentBoarding,
+    };
   }
 }

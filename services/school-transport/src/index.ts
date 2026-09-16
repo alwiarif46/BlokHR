@@ -17,6 +17,7 @@ import {
 import { TelemetryService } from './services/telemetry-service';
 import { haversineKm, computeEta } from './services/eta-math';
 import { createTransportRouter } from './routes/transport';
+import { resolveInternalSecret } from './internal-auth';
 
 export interface SchoolTransportAppOptions {
   dbPath: string;
@@ -24,6 +25,7 @@ export interface SchoolTransportAppOptions {
   logger: Logger;
   clock?: () => Date;
   events?: EventPublisher;
+  internalSecret?: string;
 }
 
 export async function createSchoolTransportApp(
@@ -50,6 +52,8 @@ export async function createSchoolTransportApp(
       : new LogEventPublisher(options.logger));
   const boarding = new BoardingService(repo, events, clock);
   const telemetry = new TelemetryService(repo, events, clock);
+  const internalSecret =
+    options.internalSecret ?? resolveInternalSecret(process.env);
 
   const app = express();
   app.use(cors());
@@ -59,7 +63,10 @@ export async function createSchoolTransportApp(
     res.json({ ok: true });
   });
 
-  app.use('/api/transport', createTransportRouter(service, boarding, telemetry));
+  app.use(
+    '/api/transport',
+    createTransportRouter(service, boarding, telemetry, { internalSecret }),
+  );
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
     options.logger.error({ err }, 'School transport error');

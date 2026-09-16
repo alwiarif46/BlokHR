@@ -213,7 +213,7 @@
 }
 .theme-clean .pf-save {
   border-radius: 10px;
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   text-transform: none;
   letter-spacing: 0;
 }

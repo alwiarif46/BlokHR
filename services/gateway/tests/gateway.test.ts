@@ -425,7 +425,7 @@ describe('Gateway G-03 — SSE passthrough', () => {
 });
 
 describe('Gateway G-03 — root dev:school script', () => {
-  it('names monolith, identity, timetable, academics, and gateway processes', () => {
+  it('starts every SERVICE_MAP service plus monolith and gateway', () => {
     const rootPkgPath = path.resolve(__dirname, '../../../package.json');
     const pkg = JSON.parse(fs.readFileSync(rootPkgPath, 'utf8')) as {
       scripts?: Record<string, string>;
@@ -435,15 +435,14 @@ describe('Gateway G-03 — root dev:school script', () => {
     const script = pkg.scripts?.['dev:school'] || '';
     expect(script).toContain('concurrently');
     expect(script).toMatch(/monolith/i);
-    expect(script).toMatch(/identity/i);
-    expect(script).toMatch(/timetable/i);
-    expect(script).toMatch(/academics/i);
     expect(script).toMatch(/gateway/i);
     expect(script).toContain('backend');
-    expect(script).toContain('school-identity');
-    expect(script).toContain('school-timetable');
-    expect(script).toContain('school-academics');
     expect(script).toContain('services/gateway');
+
+    for (const name of SERVICE_NAMES) {
+      const folder = name === 'learning' ? 'services/learning' : `services/${name}`;
+      expect(script).toContain(folder);
+    }
   });
 });
 

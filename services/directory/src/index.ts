@@ -64,7 +64,7 @@ export {
   createDirectoryRouter,
 };
 export * from './types';
-export { DIRECTORY_DEFAULTS } from './directory-service';
+export { DIRECTORY_DEFAULTS, DIRECTORY_MEMBER_ROLES } from './directory-service';
 
 export { asRole, guardRoutes } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';

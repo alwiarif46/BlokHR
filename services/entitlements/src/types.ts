@@ -62,8 +62,16 @@ export const DEFAULT_CLOUD_MODULES = [
   'capture_qr',
 ];
 
+/**
+ * HR work-time modules — not in trial/starter defaults (avoids silently
+ * changing commercial tiers). Backfill tenants that already had the
+ * matching feature flags enabled; otherwise entitle explicitly per plan.
+ */
+export const HR_WORK_TIME_MODULES = ['time_tracking', 'overtime'] as const;
+
 export const DEFAULT_ENTERPRISE_MODULES = [
   ...DEFAULT_CLOUD_MODULES,
+  ...HR_WORK_TIME_MODULES,
   'analytics',
   'webhooks',
   'workflows',
@@ -95,6 +103,7 @@ export const DEFAULT_SCHOOL_MODULES = [
   'school_attendance',
   'school_academics',
   'school_engagement',
+  'school_surveys',
 ] as const;
 
 /** School vertical — premium / paid add-ons. */
@@ -107,6 +116,16 @@ export const SCHOOL_PREMIUM_MODULES = [
   'school_operations',
   'school_library',
   'school_nudge',
+  'school_family_hub',
+  'school_parent_portal',
+  /** Feature-flag stubs — not wired to UI modules yet. */
+  'school_family_health',
+  'school_family_meals',
+  'school_family_activities',
+  'school_family_pickup',
+  'school_family_community',
+  'school_family_fundraising',
+  'school_family_ai',
 ] as const;
 
 /** Never in any default set — must be explicitly entitled. */

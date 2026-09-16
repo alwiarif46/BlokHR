@@ -155,6 +155,11 @@ export const ACADEMICS_ROUTE_POLICIES: RoutePolicy[] = [
   },
   {
     method: 'GET',
+    pattern: /^\/[^/]+\/assignments\/?$/,
+    roles: TEACHER_ADMIN,
+  },
+  {
+    method: 'GET',
     pattern: /^\/[^/]+\/assignments\/[^/]+\/submissions\/?$/,
     roles: TEACHER_ADMIN,
   },
@@ -199,5 +204,11 @@ export const ACADEMICS_ROUTE_POLICIES: RoutePolicy[] = [
     method: 'PATCH',
     pattern: /^\/[^/]+\/submissions\/[^/]+\/excuse\/?$/,
     roles: TEACHER_ADMIN,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/assignments\/?$/,
+    roles: [],
+    guardianOk: true,
   },
 ];

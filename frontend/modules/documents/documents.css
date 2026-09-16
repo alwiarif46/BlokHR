@@ -14,7 +14,7 @@
 .doc-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
 .theme-clean .doc-tab { border-radius: 10px; }
 .doc-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
-.theme-clean .doc-btn { color: #fff; border-radius: 10px; }
+.theme-clean .doc-btn { color: var(--ink-on-accent, #00112b); border-radius: 10px; }
 .doc-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 .doc-btn.ghost { background: transparent; color: var(--accent); }
 .doc-btn.sm { padding: 4px 10px; font-size: 10px; }
@@ -29,7 +29,7 @@
 .doc-card:hover { border-color: var(--accent); transform: translateY(-2px); }
 .theme-chromium .doc-card { background: linear-gradient(170deg, var(--bg2), var(--bg1)); }
 .theme-neural .doc-card { border-radius: 0; }
-.theme-holodeck .doc-card { border-radius: 0; background: rgba(10, 20, 34, 0.5); }
+.theme-holodeck .doc-card { border-radius: var(--r); background: var(--surface, var(--bg2)); }
 .theme-clean .doc-card { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .doc-card-title { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
 .doc-card-sub { font-size: 10px; color: var(--tx3); }
@@ -42,7 +42,7 @@
 .doc-card-actions button.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
 .doc-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .doc-modal.open { display: flex; }
-.doc-modal-box { background: var(--bg1); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
+.doc-modal-box { background: var(--surface, var(--bg2)); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
 .doc-modal-box.wide { width: 640px; }
 .theme-clean .doc-modal-box { border-radius: 20px; }
 .doc-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }

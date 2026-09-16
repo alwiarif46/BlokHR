@@ -198,9 +198,12 @@ var _modNames = {
   school_roll_call: 'Roll Call',
   school_attendance_admin: 'Attendance Admin',
   school_academics: 'Academics',
+  school_timetable: 'Timetable',
+  school_circulars: 'Circulars',
   school_hpc: 'HPC',
   school_library: 'Library',
-  school_surveys: 'Parent Surveys',
+  school_surveys: 'Parents & Guardians',
+  parent_hub: 'Parent Portal',
   school_settings: 'School Settings',
 };
 
@@ -209,14 +212,104 @@ export const SCHOOL_MODULE_GROUP = [
   'school_students',
   'school_roll_call',
   'school_attendance_admin',
+  'school_timetable',
   'school_academics',
+  'school_circulars',
   'school_hpc',
   'school_library',
   'school_surveys',
+  'parent_hub',
   'school_settings',
 ];
 
 export const SCHOOL_VERTICAL_FLAG = 'school_vertical';
+
+/** School nav modules require school_vertical master + per-module flag. */
+export const SCHOOL_MODULE_FLAGS = {
+  school_register: 'school_register',
+  school_students: 'school_students',
+  school_roll_call: 'school_roll_call',
+  school_attendance_admin: 'school_attendance_admin',
+  school_academics: 'school_academics',
+  school_timetable: 'school_timetable',
+  school_circulars: 'school_circulars',
+  school_hpc: 'school_hpc',
+  school_library: 'school_library',
+  school_surveys: 'school_parent_surveys',
+  parent_hub: 'parent_hub',
+  school_settings: 'school_settings',
+};
+
+/** Sidebar module key → feature flag key (when not set via data-flag). */
+export const MODULE_FLAG_MAP = {
+  dashboard: 'dashboard',
+  attendance: 'attendance',
+  holidays: 'holidays',
+  meetings: 'meetings',
+  my_prefs: 'my_preferences',
+  leaves: 'leaves',
+  regularizations: 'regularizations',
+  profile: 'profiles',
+  org_chart: 'org_chart',
+  training: 'training_lms',
+  surveys: 'surveys',
+  ai_chatbot: 'ai_chatbot',
+  documents: 'document_mgmt',
+  workflows: 'workflows',
+  assets: 'asset_mgmt',
+  visitors: 'visitor_mgmt',
+  expenses: 'expense_mgmt',
+  timesheets: 'timesheets',
+  capture_admin: 'capture_admin',
+  iris_scan: 'iris_scan',
+  face_recognition: 'face_recognition',
+  time_tracking: 'time_tracking',
+  overtime: 'overtime',
+  geo_fencing: 'geo_fencing',
+  analytics: 'analytics',
+  people: 'people',
+  leave_policies: 'leave_policies',
+  audit_trail: 'audit_trail',
+  feature_flags: 'feature_flags',
+  webhooks: 'webhooks',
+  settings: 'settings',
+  ...SCHOOL_MODULE_FLAGS,
+};
+
+function _flagForModule(mod) {
+  return MODULE_FLAG_MAP[mod] || null;
+}
+
+function _isSchoolModule(mod) {
+  return Object.prototype.hasOwnProperty.call(SCHOOL_MODULE_FLAGS, mod);
+}
+
+/**
+ * Whether a module's feature flag(s) allow navigation.
+ * @param {string} mod
+ * @returns {boolean}
+ */
+export function isModuleEnabled(mod) {
+  var flag = _flagForModule(mod);
+  if (!flag) return true;
+  if (_isSchoolModule(mod)) {
+    return isFeatureEnabled(SCHOOL_VERTICAL_FLAG) && isFeatureEnabled(flag);
+  }
+  return isFeatureEnabled(flag);
+}
+
+function _findFirstVisibleModule() {
+  var items = document.querySelectorAll('.sb-item[data-module]:not(.sb-collapse)');
+  for (var i = 0; i < items.length; i++) {
+    var item = items[i];
+    var mod = item.dataset.module;
+    if (!mod) continue;
+    if (item.classList.contains('hidden')) continue;
+    if (item.style.display === 'none') continue;
+    if (isModuleEnabled(mod)) return mod;
+  }
+  return 'attendance';
+}
 
 /* ── Navigate ── */
 
@@ -228,6 +321,9 @@ export const SCHOOL_VERTICAL_FLAG = 'school_vertical';
  * @param {string} mod — module key (e.g. 'attendance', 'leaves', 'settings')
  */
 export function navigateToModule(mod) {
+  if (!isModuleEnabled(mod)) {
+    mod = _findFirstVisibleModule();
+  }
   _activeModule = mod;
 
   /* Update sidebar active state */
@@ -362,6 +458,7 @@ export async function loadFeatureFlags() {
   var data = await api.get('/api/features');
   if (!data || data._error) {
     _featureFlags = {};
+    applyFeatureFlags();
     return;
   }
   /* Handle both array and object shapes */
@@ -374,7 +471,13 @@ export async function loadFeatureFlags() {
     _featureFlags = data.features || data || {};
   }
   applyFeatureFlags();
+  if (!isModuleEnabled(_activeModule)) {
+    navigateToModule(_findFirstVisibleModule());
+  }
 }
+
+/** Alias for admin UI after toggling flags. */
+export const refreshFeatureFlags = loadFeatureFlags;
 
 /**
  * Get current feature flags object.
@@ -390,15 +493,29 @@ export function getFeatureFlags() {
  * `school_vertical` is opt-in (hidden unless explicitly true).
  */
 export function applyFeatureFlags() {
-  document.querySelectorAll('.sb-item[data-flag]').forEach(function (item) {
-    var flag = item.dataset.flag;
-    var enabled = isFeatureEnabled(flag);
+  document.querySelectorAll('.sb-item[data-module]').forEach(function (item) {
+    if (item.classList.contains('sb-collapse')) return;
+    var mod = item.dataset.module;
+    var flag = item.dataset.flag || _flagForModule(mod);
+    var enabled = true;
+    if (flag) {
+      if (item.dataset.schoolModule === '1' || _isSchoolModule(mod)) {
+        enabled = isFeatureEnabled(SCHOOL_VERTICAL_FLAG) && isFeatureEnabled(flag);
+      } else {
+        enabled = isFeatureEnabled(flag);
+      }
+    }
     item.classList.toggle('hidden', !enabled);
   });
   document.querySelectorAll('[data-flag-group]').forEach(function (el) {
     var flag = el.dataset.flagGroup;
     var enabled = isFeatureEnabled(flag);
     el.classList.toggle('hidden', !enabled);
+  });
+  document.querySelectorAll('.sb-item[data-flag]:not([data-module])').forEach(function (item) {
+    var flag = item.dataset.flag;
+    var enabled = isFeatureEnabled(flag);
+    item.classList.toggle('hidden', !enabled);
   });
 }
 

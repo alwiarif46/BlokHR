@@ -11,6 +11,7 @@ import { SettingsService } from '../services/settings-service';
 import { TenantSettingsService, SettingsValidationError } from '../services/tenant-settings-service';
 import type { SseBroadcaster } from '../sse/broadcaster';
 import type { DirectoryService } from '@blokhr/directory';
+import type { FeatureFlagService } from '../services/feature-flags';
 
 /**
  * Settings & Roles routes:
@@ -28,6 +29,7 @@ export function createSettingsRouter(
   logger: Logger,
   broadcaster?: SseBroadcaster,
   directory?: DirectoryService,
+  featureFlags?: FeatureFlagService,
 ): Router {
   const router = Router();
   const settingsRepo = new SettingsRepository(db);
@@ -51,6 +53,17 @@ export function createSettingsRouter(
     asyncHandler(async (_req: Request, res: Response) => {
       const settings = await service.getSettings();
       const tenant = await tenantService.getFullBundle(true);
+      if (featureFlags && tenant.settings_json && typeof tenant.settings_json === 'object') {
+        const keys = Object.keys(tenant.settings_json as Record<string, unknown>);
+        const allowed = new Set(featureFlags.filterSettingsKeys(keys));
+        const filtered: Record<string, unknown> = {};
+        for (const key of keys) {
+          if (allowed.has(key)) {
+            filtered[key] = (tenant.settings_json as Record<string, unknown>)[key];
+          }
+        }
+        tenant.settings_json = filtered as typeof tenant.settings_json;
+      }
       res.json({ ...settings, tenant_settings: tenant });
     }),
   );

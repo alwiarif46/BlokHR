@@ -54,7 +54,7 @@
 }
 
 .theme-clean .rc-btn {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
 

@@ -46,7 +46,7 @@
 }
 
 .theme-clean .sac-tab.active {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 
 .sac-toolbar {
@@ -81,7 +81,7 @@
 }
 
 .theme-clean .sac-btn {
-  color: #fff;
+  color: var(--ink-on-accent, #00112b);
 }
 
 .sac-btn.ghost {
