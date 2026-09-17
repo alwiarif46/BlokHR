@@ -1,4 +1,5 @@
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 // ── Row types for each report ──
 
@@ -98,8 +99,9 @@ export class AnalyticsRepository {
     groupId?: string;
     email?: string;
   }): Promise<AttendanceOverviewRow[]> {
-    const conditions: string[] = ['m.active = 1'];
-    const params: unknown[] = [];
+    const tenantId = getTenantId();
+    const conditions: string[] = ['m.tenant_id = ?', 'm.active = 1'];
+    const params: unknown[] = [tenantId];
 
     if (filters.groupId) {
       conditions.push('m.group_id = ?');
@@ -142,12 +144,12 @@ export class AnalyticsRepository {
           SUM(total_worked_minutes) as total_worked_minutes,
           SUM(total_break_minutes) as total_break_minutes
         FROM attendance_daily
-        WHERE date >= ? AND date <= ?
+        WHERE tenant_id = ? AND date >= ? AND date <= ?
         GROUP BY email
       ) att ON att.email = m.email
       ${where}
       ORDER BY g.name, m.name`,
-      [filters.startDate, filters.endDate, ...params],
+      [tenantId, filters.startDate, filters.endDate, ...params],
     );
   }
 
@@ -159,11 +161,13 @@ export class AnalyticsRepository {
     endDate: string;
     groupId?: string;
   }): Promise<LeaveReportRow[]> {
+    const tenantId = getTenantId();
     const conditions: string[] = [
+      'lr.tenant_id = ?',
       'lr.start_date <= ?',
       'lr.end_date >= ?',
     ];
-    const params: unknown[] = [filters.endDate, filters.startDate];
+    const params: unknown[] = [tenantId, filters.endDate, filters.startDate];
 
     if (filters.groupId) {
       conditions.push('m.group_id = ?');
@@ -179,7 +183,7 @@ export class AnalyticsRepository {
         COUNT(*) as request_count,
         SUM(lr.days_requested) as total_days
       FROM leave_requests lr
-      LEFT JOIN members m ON lr.person_email = m.email
+      LEFT JOIN members m ON m.tenant_id = lr.tenant_id AND lr.person_email = m.email
       ${where}
       GROUP BY lr.leave_type, lr.status
       ORDER BY lr.leave_type, lr.status`,
@@ -196,12 +200,14 @@ export class AnalyticsRepository {
     groupId?: string;
     email?: string;
   }): Promise<LeaveByEmployeeRow[]> {
+    const tenantId = getTenantId();
     const conditions: string[] = [
+      'lr.tenant_id = ?',
       'lr.start_date <= ?',
       'lr.end_date >= ?',
       "lr.status = 'Approved'",
     ];
-    const params: unknown[] = [filters.endDate, filters.startDate];
+    const params: unknown[] = [tenantId, filters.endDate, filters.startDate];
 
     if (filters.groupId) {
       conditions.push('m.group_id = ?');
@@ -222,7 +228,7 @@ export class AnalyticsRepository {
         SUM(lr.days_requested) as total_days,
         COUNT(*) as request_count
       FROM leave_requests lr
-      LEFT JOIN members m ON lr.person_email = m.email
+      LEFT JOIN members m ON m.tenant_id = lr.tenant_id AND lr.person_email = m.email
       ${where}
       GROUP BY lr.person_email, lr.leave_type
       ORDER BY m.name, lr.leave_type`,
@@ -240,11 +246,13 @@ export class AnalyticsRepository {
     email?: string;
     status?: string;
   }): Promise<OvertimeReportRow[]> {
+    const tenantId = getTenantId();
     const conditions: string[] = [
+      'm.tenant_id = ?',
       'ot.date >= ?',
       'ot.date <= ?',
     ];
-    const params: unknown[] = [filters.startDate, filters.endDate];
+    const params: unknown[] = [tenantId, filters.startDate, filters.endDate];
 
     if (filters.groupId) {
       conditions.push('m.group_id = ?');
@@ -290,6 +298,7 @@ export class AnalyticsRepository {
     periodStartDate: string,
     periodEndDate: string,
   ): Promise<DepartmentDashboardRow[]> {
+    const tenantId = getTenantId();
     return this.db.all<DepartmentDashboardRow>(
       `SELECT
         g.id as group_id,
@@ -305,7 +314,7 @@ export class AnalyticsRepository {
       FROM groups g
       LEFT JOIN (
         SELECT group_id, COUNT(*) as cnt
-        FROM members WHERE active = 1
+        FROM members WHERE tenant_id = ? AND active = 1
         GROUP BY group_id
       ) hc ON hc.group_id = g.id
       LEFT JOIN (
@@ -315,8 +324,8 @@ export class AnalyticsRepository {
           SUM(CASE WHEN ad.status = 'absent' THEN 1 ELSE 0 END) as absent_today,
           SUM(CASE WHEN ad.status = 'leave' THEN 1 ELSE 0 END) as on_leave_today
         FROM attendance_daily ad
-        JOIN members m ON ad.email = m.email
-        WHERE ad.date = ?
+        JOIN members m ON ad.tenant_id = m.tenant_id AND ad.email = m.email
+        WHERE ad.tenant_id = ? AND ad.date = ?
         GROUP BY m.group_id
       ) td ON td.group_id = g.id
       LEFT JOIN (
@@ -325,12 +334,12 @@ export class AnalyticsRepository {
           COUNT(*) as total_records,
           SUM(CASE WHEN ad.status IN ('in', 'out', 'break') THEN 1 ELSE 0 END) as present_records
         FROM attendance_daily ad
-        JOIN members m ON ad.email = m.email
-        WHERE ad.date >= ? AND ad.date <= ?
+        JOIN members m ON ad.tenant_id = m.tenant_id AND ad.email = m.email
+        WHERE ad.tenant_id = ? AND ad.date >= ? AND ad.date <= ?
         GROUP BY m.group_id
       ) pr ON pr.group_id = g.id
       ORDER BY g.name`,
-      [today, periodStartDate, periodEndDate],
+      [tenantId, tenantId, today, tenantId, periodStartDate, periodEndDate],
     );
   }
 
@@ -344,11 +353,13 @@ export class AnalyticsRepository {
     projectId?: string;
     clientId?: string;
   }): Promise<UtilizationRow[]> {
+    const tenantId = getTenantId();
     const conditions: string[] = [
+      'm.tenant_id = ?',
       't.date >= ?',
       't.date <= ?',
     ];
-    const params: unknown[] = [filters.startDate, filters.endDate];
+    const params: unknown[] = [tenantId, filters.startDate, filters.endDate];
 
     if (filters.email) {
       conditions.push('t.email = ?');
@@ -394,11 +405,13 @@ export class AnalyticsRepository {
     endDate: string;
     groupId?: string;
   }): Promise<TrendRow[]> {
+    const tenantId = getTenantId();
     const conditions: string[] = [
+      'ad.tenant_id = ?',
       'ad.date >= ?',
       'ad.date <= ?',
     ];
-    const params: unknown[] = [filters.startDate, filters.endDate];
+    const params: unknown[] = [tenantId, filters.startDate, filters.endDate];
 
     if (filters.groupId) {
       conditions.push('m.group_id = ?');
@@ -415,7 +428,7 @@ export class AnalyticsRepository {
         SUM(CASE WHEN ad.status = 'leave' THEN 1 ELSE 0 END) as leave_count,
         COUNT(*) as total_members
       FROM attendance_daily ad
-      LEFT JOIN members m ON ad.email = m.email
+      LEFT JOIN members m ON ad.tenant_id = m.tenant_id AND ad.email = m.email
       ${where}
       GROUP BY ad.date
       ORDER BY ad.date`,
@@ -432,11 +445,13 @@ export class AnalyticsRepository {
     groupId?: string;
     groupBy: 'week' | 'month';
   }): Promise<TrendAggRow[]> {
+    const tenantId = getTenantId();
     const conditions: string[] = [
+      'ad.tenant_id = ?',
       'ad.date >= ?',
       'ad.date <= ?',
     ];
-    const params: unknown[] = [filters.startDate, filters.endDate];
+    const params: unknown[] = [tenantId, filters.startDate, filters.endDate];
 
     if (filters.groupId) {
       conditions.push('m.group_id = ?');
@@ -467,7 +482,7 @@ export class AnalyticsRepository {
           SUM(CASE WHEN ad.status = 'leave' THEN 1 ELSE 0 END) as day_leave,
           COUNT(*) as day_total
         FROM attendance_daily ad
-        LEFT JOIN members m ON ad.email = m.email
+        LEFT JOIN members m ON ad.tenant_id = m.tenant_id AND ad.email = m.email
         ${where}
         GROUP BY ad.date
       )
@@ -479,8 +494,8 @@ export class AnalyticsRepository {
 
   /** Get active member count (for rate calculations). */
   async getActiveMemberCount(groupId?: string): Promise<number> {
-    const conditions: string[] = ['active = 1'];
-    const params: unknown[] = [];
+    const conditions: string[] = ['tenant_id = ?', 'active = 1'];
+    const params: unknown[] = [getTenantId()];
     if (groupId) {
       conditions.push('group_id = ?');
       params.push(groupId);

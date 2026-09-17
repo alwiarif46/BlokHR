@@ -95,6 +95,7 @@ export function extractRequestTenant(opts: {
   headerTenant?: string;
   path: string;
   apiPrefix: string;
+  reservedSegments?: string[];
 }): string | null {
   const fromHeader = String(opts.headerTenant || '')
     .trim()
@@ -110,5 +111,7 @@ export function extractRequestTenant(opts: {
   }
   const seg = rest.split('/').filter(Boolean)[0] || '';
   const tid = seg.toLowerCase();
+  const reserved = new Set((opts.reservedSegments ?? []).map((s) => s.toLowerCase()));
+  if (reserved.has(tid)) return null;
   return TENANT_RE.test(tid) ? tid : null;
 }

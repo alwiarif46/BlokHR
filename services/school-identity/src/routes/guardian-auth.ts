@@ -12,12 +12,33 @@ function asyncHandler(
 export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
   const router = Router();
 
+  function resolveTenantInput(
+    req: Request,
+    body: Record<string, unknown>,
+  ): { tenantId: string; mismatch: boolean } {
+    const headerTenant = String(req.headers['x-blok-tenant'] ?? '')
+      .trim()
+      .toLowerCase();
+    const bodyTenant = String(body.tenant_id ?? body.tenantId ?? '')
+      .trim()
+      .toLowerCase();
+    return {
+      tenantId: bodyTenant || headerTenant,
+      mismatch: !!(headerTenant && bodyTenant && headerTenant !== bodyTenant),
+    };
+  }
+
   router.post(
     '/set-password',
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
+      const tenant = resolveTenantInput(req, body);
+      if (tenant.mismatch) {
+        res.status(403).json({ error: 'tenant_mismatch' });
+        return;
+      }
       const result = await auth.setPassword({
-        tenantId: String(body.tenant_id ?? body.tenantId ?? ''),
+        tenantId: tenant.tenantId,
         guardianId: String(body.guardian_id ?? body.guardianId ?? ''),
         password: String(body.password ?? ''),
       });
@@ -33,13 +54,15 @@ export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
     '/login',
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
+      const tenant = resolveTenantInput(req, body);
+      if (tenant.mismatch) {
+        res.status(403).json({ error: 'tenant_mismatch' });
+        return;
+      }
       const result = await auth.login({
         phone: String(body.phone ?? ''),
         password: String(body.password ?? ''),
-        tenantId:
-          body.tenant_id != null || body.tenantId != null
-            ? String(body.tenant_id ?? body.tenantId)
-            : undefined,
+        tenantId: tenant.tenantId,
       });
       if (result.error) {
         res.status(result.error.status).json({
@@ -61,6 +84,11 @@ export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
     '/otp/request',
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
+      const tenant = resolveTenantInput(req, body);
+      if (tenant.mismatch) {
+        res.status(403).json({ error: 'tenant_mismatch' });
+        return;
+      }
       const result = await auth.requestOtp({
         phone: String(body.phone ?? ''),
         purpose: String(body.purpose ?? 'login') as
@@ -68,10 +96,7 @@ export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
           | 'reset'
           | 'claim'
           | 'verify_phone',
-        tenantId:
-          body.tenant_id != null || body.tenantId != null
-            ? String(body.tenant_id ?? body.tenantId)
-            : undefined,
+        tenantId: tenant.tenantId,
       });
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
@@ -89,6 +114,11 @@ export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
     '/otp/verify',
     asyncHandler(async (req, res) => {
       const body = req.body as Record<string, unknown>;
+      const tenant = resolveTenantInput(req, body);
+      if (tenant.mismatch) {
+        res.status(403).json({ error: 'tenant_mismatch' });
+        return;
+      }
       const result = await auth.verifyOtp({
         phone: String(body.phone ?? ''),
         otp: String(body.otp ?? ''),
@@ -101,10 +131,7 @@ export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
           body.new_password != null || body.newPassword != null
             ? String(body.new_password ?? body.newPassword)
             : undefined,
-        tenantId:
-          body.tenant_id != null || body.tenantId != null
-            ? String(body.tenant_id ?? body.tenantId)
-            : String(req.headers['x-blok-tenant'] ?? ''),
+        tenantId: tenant.tenantId,
       });
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });

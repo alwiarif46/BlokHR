@@ -1,4 +1,5 @@
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface ClientRow {
   [key: string]: unknown;
@@ -47,12 +48,21 @@ export class TimeTrackingRepository {
   // ── Clients ──
 
   async getClients(includeInactive = false): Promise<ClientRow[]> {
-    const where = includeInactive ? '' : 'WHERE active = 1';
-    return this.db.all<ClientRow>(`SELECT * FROM clients ${where} ORDER BY name`);
+    const tenantId = getTenantId();
+    const where = includeInactive
+      ? 'WHERE tenant_id = ?'
+      : 'WHERE tenant_id = ? AND active = 1';
+    return this.db.all<ClientRow>(
+      `SELECT * FROM clients ${where} ORDER BY name`,
+      [tenantId],
+    );
   }
 
   async getClientById(id: string): Promise<ClientRow | null> {
-    return this.db.get<ClientRow>('SELECT * FROM clients WHERE id = ?', [id]);
+    return this.db.get<ClientRow>(
+      'SELECT * FROM clients WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   async createClient(data: {
@@ -64,10 +74,12 @@ export class TimeTrackingRepository {
     contactName?: string;
     contactEmail?: string;
   }): Promise<ClientRow> {
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO clients (id, name, code, billing_rate_hourly, currency, contact_name, contact_email)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO clients (tenant_id, id, name, code, billing_rate_hourly, currency, contact_name, contact_email)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         data.id,
         data.name,
         data.code ?? '',
@@ -103,31 +115,38 @@ export class TimeTrackingRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE clients SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE clients SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   // ── Projects ──
 
   async getProjects(clientId?: string, includeInactive = false): Promise<ProjectRow[]> {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const tenantId = getTenantId();
+    const conditions: string[] = ['p.tenant_id = ?', 'c.tenant_id = ?'];
+    const params: unknown[] = [tenantId, tenantId];
     if (clientId) {
       conditions.push('p.client_id = ?');
       params.push(clientId);
     }
     if (!includeInactive) conditions.push("p.status = 'active'");
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = `WHERE ${conditions.join(' AND ')}`;
     return this.db.all<ProjectRow>(
       `SELECT p.*, c.name as client_name FROM projects p
-       LEFT JOIN clients c ON p.client_id = c.id
+       LEFT JOIN clients c ON p.client_id = c.id AND c.tenant_id = p.tenant_id
        ${where} ORDER BY c.name, p.name`,
       params,
     );
   }
 
   async getProjectById(id: string): Promise<ProjectRow | null> {
-    return this.db.get<ProjectRow>('SELECT * FROM projects WHERE id = ?', [id]);
+    return this.db.get<ProjectRow>(
+      'SELECT * FROM projects WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   async createProject(data: {
@@ -142,11 +161,13 @@ export class TimeTrackingRepository {
     startDate?: string;
     endDate?: string;
   }): Promise<ProjectRow> {
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO projects (id, client_id, name, code, billable, billing_rate_hourly,
+      `INSERT INTO projects (tenant_id, id, client_id, name, code, billable, billing_rate_hourly,
          budget_hours, budget_amount, start_date, end_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         data.id,
         data.clientId,
         data.name,
@@ -188,8 +209,11 @@ export class TimeTrackingRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE projects SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   // ── Time entries ──
@@ -201,8 +225,9 @@ export class TimeTrackingRepository {
     endDate?: string;
     billable?: boolean;
   }): Promise<TimeEntryRow[]> {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const tenantId = getTenantId();
+    const conditions: string[] = ['t.tenant_id = ?', 'p.tenant_id = ?', 'c.tenant_id = ?'];
+    const params: unknown[] = [tenantId, tenantId, tenantId];
     if (filters.email) {
       conditions.push('t.email = ?');
       params.push(filters.email);
@@ -223,19 +248,22 @@ export class TimeTrackingRepository {
       conditions.push('t.billable = ?');
       params.push(filters.billable ? 1 : 0);
     }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = `WHERE ${conditions.join(' AND ')}`;
     return this.db.all<TimeEntryRow>(
       `SELECT t.*, p.name as project_name, p.client_id, c.name as client_name
        FROM time_entries t
-       LEFT JOIN projects p ON t.project_id = p.id
-       LEFT JOIN clients c ON p.client_id = c.id
+       LEFT JOIN projects p ON t.project_id = p.id AND p.tenant_id = t.tenant_id
+       LEFT JOIN clients c ON p.client_id = c.id AND c.tenant_id = t.tenant_id
        ${where} ORDER BY t.date DESC, t.created_at DESC`,
       params,
     );
   }
 
   async getEntryById(id: number): Promise<TimeEntryRow | null> {
-    return this.db.get<TimeEntryRow>('SELECT * FROM time_entries WHERE id = ?', [id]);
+    return this.db.get<TimeEntryRow>(
+      'SELECT * FROM time_entries WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   async createEntry(data: {
@@ -247,10 +275,12 @@ export class TimeTrackingRepository {
     billable?: boolean;
     billingRate?: number;
   }): Promise<TimeEntryRow> {
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO time_entries (email, project_id, date, hours, description, billable, billing_rate_hourly)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO time_entries (tenant_id, email, project_id, date, hours, description, billable, billing_rate_hourly)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         data.email,
         data.projectId,
         data.date,
@@ -261,8 +291,8 @@ export class TimeTrackingRepository {
       ],
     );
     const row = await this.db.get<TimeEntryRow>(
-      'SELECT * FROM time_entries WHERE email = ? AND project_id = ? AND date = ? ORDER BY id DESC LIMIT 1',
-      [data.email, data.projectId, data.date],
+      'SELECT * FROM time_entries WHERE tenant_id = ? AND email = ? AND project_id = ? AND date = ? ORDER BY id DESC LIMIT 1',
+      [tenantId, data.email, data.projectId, data.date],
     );
     if (!row) throw new Error('Failed to create time entry');
     return row;
@@ -288,18 +318,24 @@ export class TimeTrackingRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE time_entries SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE time_entries SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   async deleteEntry(id: number): Promise<void> {
-    await this.db.run('DELETE FROM time_entries WHERE id = ?', [id]);
+    await this.db.run('DELETE FROM time_entries WHERE tenant_id = ? AND id = ?', [
+      getTenantId(),
+      id,
+    ]);
   }
 
   async approveEntry(id: number, approverEmail: string): Promise<void> {
     await this.db.run(
-      "UPDATE time_entries SET approved = 1, approved_by = ?, updated_at = datetime('now') WHERE id = ?",
-      [approverEmail, id],
+      "UPDATE time_entries SET approved = 1, approved_by = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [approverEmail, getTenantId(), id],
     );
   }
 
@@ -318,8 +354,9 @@ export class TimeTrackingRepository {
     billableAmount: number;
     entries: number;
   }> {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const tenantId = getTenantId();
+    const conditions: string[] = ['t.tenant_id = ?', 'p.tenant_id = ?', 'c.tenant_id = ?'];
+    const params: unknown[] = [tenantId, tenantId, tenantId];
     if (filters.email) {
       conditions.push('t.email = ?');
       params.push(filters.email);
@@ -340,7 +377,7 @@ export class TimeTrackingRepository {
       conditions.push('t.date <= ?');
       params.push(filters.endDate);
     }
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = `WHERE ${conditions.join(' AND ')}`;
 
     const row = await this.db.get<{
       total_hours: number;
@@ -357,8 +394,8 @@ export class TimeTrackingRepository {
          COALESCE(SUM(CASE WHEN t.billable = 1 THEN t.hours * COALESCE(t.billing_rate_hourly, p.billing_rate_hourly, c.billing_rate_hourly, 0) ELSE 0 END), 0) as billable_amount,
          COUNT(*) as entry_count
        FROM time_entries t
-       LEFT JOIN projects p ON t.project_id = p.id
-       LEFT JOIN clients c ON p.client_id = c.id
+       LEFT JOIN projects p ON t.project_id = p.id AND p.tenant_id = t.tenant_id
+       LEFT JOIN clients c ON p.client_id = c.id AND c.tenant_id = t.tenant_id
        ${where}`,
       params,
     );

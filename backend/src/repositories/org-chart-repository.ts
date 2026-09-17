@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 // ── Row types ──
 
@@ -141,8 +142,8 @@ export class OrgChartRepository {
   async deletePosition(id: string): Promise<void> {
     // Unlink members from this position before delete
     await this.db.run(
-      "UPDATE members SET position_id = NULL, updated_at = datetime('now') WHERE position_id = ?",
-      [id],
+      "UPDATE members SET position_id = NULL, updated_at = datetime('now') WHERE tenant_id = ? AND position_id = ?",
+      [getTenantId(), id],
     );
     // Reparent child positions to this position's parent
     const pos = await this.getPositionById(id);
@@ -162,6 +163,7 @@ export class OrgChartRepository {
    * Uses GROUP_CONCAT to aggregate multiple holders per position.
    */
   async getOrgTree(): Promise<OrgTreeNode[]> {
+    const tenantId = getTenantId();
     return this.db.all<OrgTreeNode>(
       `SELECT
          p.id,
@@ -176,10 +178,11 @@ export class OrgChartRepository {
          COALESCE(GROUP_CONCAT(m.name), '') AS holder_names,
          COUNT(m.email) AS holder_count
        FROM org_positions p
-       LEFT JOIN groups g ON g.id = p.group_id
-       LEFT JOIN members m ON m.position_id = p.id AND m.active = 1
+       LEFT JOIN groups g ON g.id = p.group_id AND g.tenant_id = ?
+       LEFT JOIN members m ON m.position_id = p.id AND m.tenant_id = ? AND m.active = 1
        GROUP BY p.id
        ORDER BY p.level ASC, p.title ASC`,
+      [tenantId, tenantId],
     );
   }
 
@@ -224,24 +227,24 @@ export class OrgChartRepository {
   /** Set a member's reports_to field. */
   async setReportsTo(email: string, managerEmail: string): Promise<void> {
     await this.db.run(
-      "UPDATE members SET reports_to = ?, updated_at = datetime('now') WHERE email = ?",
-      [managerEmail, email],
+      "UPDATE members SET reports_to = ?, updated_at = datetime('now') WHERE tenant_id = ? AND email = ?",
+      [managerEmail, getTenantId(), email],
     );
   }
 
   /** Set a member's position_id. */
   async assignPosition(email: string, positionId: string | null): Promise<void> {
     await this.db.run(
-      "UPDATE members SET position_id = ?, updated_at = datetime('now') WHERE email = ?",
-      [positionId, email],
+      "UPDATE members SET position_id = ?, updated_at = datetime('now') WHERE tenant_id = ? AND email = ?",
+      [positionId, getTenantId(), email],
     );
   }
 
   /** Get the manager email for a given employee. Returns empty string if none set. */
   async getManagerEmail(email: string): Promise<string> {
     const row = await this.db.get<{ reports_to: string }>(
-      'SELECT reports_to FROM members WHERE email = ?',
-      [email],
+      'SELECT reports_to FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), email],
     );
     return row?.reports_to ?? '';
   }
@@ -259,9 +262,9 @@ export class OrgChartRepository {
          m.active
        FROM members m
        LEFT JOIN org_positions p ON p.id = m.position_id
-       WHERE m.reports_to = ? AND m.active = 1
+       WHERE m.tenant_id = ? AND m.reports_to = ? AND m.active = 1
        ORDER BY m.name ASC`,
-      [managerEmail],
+      [getTenantId(), managerEmail],
     );
   }
 
@@ -271,16 +274,17 @@ export class OrgChartRepository {
    * Returns count for span-of-control analytics.
    */
   async getSubordinateCount(managerEmail: string): Promise<number> {
+    const tenantId = getTenantId();
     const row = await this.db.get<{ cnt: number }>(
       `WITH RECURSIVE subordinates AS (
-         SELECT email FROM members WHERE reports_to = ? AND active = 1
+         SELECT email FROM members WHERE tenant_id = ? AND reports_to = ? AND active = 1
          UNION ALL
          SELECT m.email FROM members m
          INNER JOIN subordinates s ON m.reports_to = s.email
-         WHERE m.active = 1
+         WHERE m.tenant_id = ? AND m.active = 1
        )
        SELECT COUNT(*) AS cnt FROM subordinates`,
-      [managerEmail],
+      [tenantId, managerEmail, tenantId],
     );
     return row?.cnt ?? 0;
   }
@@ -290,6 +294,7 @@ export class OrgChartRepository {
    * Only includes active members who have at least 1 direct report.
    */
   async getSpanOfControl(): Promise<SpanOfControlRow[]> {
+    const tenantId = getTenantId();
     return this.db.all<SpanOfControlRow>(
       `SELECT
          mgr.email,
@@ -298,11 +303,13 @@ export class OrgChartRepository {
          COALESCE(p.title, '') AS position_title,
          COUNT(rep.email) AS direct_report_count
        FROM members mgr
-       INNER JOIN members rep ON rep.reports_to = mgr.email AND rep.active = 1
+       INNER JOIN members rep
+         ON rep.tenant_id = mgr.tenant_id AND rep.reports_to = mgr.email AND rep.active = 1
        LEFT JOIN org_positions p ON p.id = mgr.position_id
-       WHERE mgr.active = 1
+       WHERE mgr.tenant_id = ? AND mgr.active = 1
        GROUP BY mgr.email
        ORDER BY direct_report_count DESC, mgr.name ASC`,
+      [tenantId],
     );
   }
 
@@ -315,16 +322,17 @@ export class OrgChartRepository {
   async wouldCreateCycle(email: string, managerEmail: string): Promise<boolean> {
     if (email === managerEmail) return true;
     // Walk up from managerEmail. If we ever reach email, it's a cycle.
+    const tenantId = getTenantId();
     const rows = await this.db.all<{ email: string }>(
       `WITH RECURSIVE chain AS (
-         SELECT email, reports_to FROM members WHERE email = ?
+         SELECT email, reports_to FROM members WHERE tenant_id = ? AND email = ?
          UNION ALL
          SELECT m.email, m.reports_to FROM members m
          INNER JOIN chain c ON m.email = c.reports_to
-         WHERE c.reports_to != '' AND m.email != ?
+         WHERE m.tenant_id = ? AND c.reports_to != '' AND m.email != ?
        )
        SELECT email FROM chain`,
-      [managerEmail, managerEmail],
+      [tenantId, managerEmail, tenantId, managerEmail],
     );
     return rows.some((r) => r.email === email);
   }
@@ -419,10 +427,11 @@ export class OrgChartRepository {
          COUNT(m.email) AS holder_count,
          (p.max_headcount - COUNT(m.email)) AS vacancies
        FROM org_positions p
-       LEFT JOIN members m ON m.position_id = p.id AND m.active = 1
+       LEFT JOIN members m ON m.position_id = p.id AND m.tenant_id = ? AND m.active = 1
        GROUP BY p.id
        HAVING vacancies > 0
        ORDER BY vacancies DESC, p.level ASC`,
+      [getTenantId()],
     );
   }
 }

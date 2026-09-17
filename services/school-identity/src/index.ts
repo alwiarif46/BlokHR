@@ -80,9 +80,10 @@ export async function createSchoolIdentityApp(
         headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
         path: req.path,
         apiPrefix: '/api/identity',
+        reservedSegments: ['guardian-auth', 'state-packs'],
       });
       if (!tid) {
-        next();
+        res.status(400).json({ error: 'tenant_required' });
         return;
       }
       try {

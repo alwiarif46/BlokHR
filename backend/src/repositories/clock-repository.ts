@@ -64,20 +64,21 @@ export class ClockRepository {
     date: string,
     groupId: string,
   ): Promise<AttendanceRecord> {
+    const tenantId = getTenantId();
     const existing = await this.db.get<AttendanceRecord>(
-      'SELECT * FROM attendance_daily WHERE email = ? AND date = ?',
-      [email, date],
+      'SELECT * FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date = ?',
+      [tenantId, email, date],
     );
     if (existing) return existing;
 
     await this.db.run(
-      `INSERT INTO attendance_daily (email, name, date, group_id)
-       VALUES (?, ?, ?, ?)`,
-      [email, name, date, groupId],
+      `INSERT INTO attendance_daily (tenant_id, email, name, date, group_id)
+       VALUES (?, ?, ?, ?, ?)`,
+      [tenantId, email, name, date, groupId],
     );
     const created = await this.db.get<AttendanceRecord>(
-      'SELECT * FROM attendance_daily WHERE email = ? AND date = ?',
-      [email, date],
+      'SELECT * FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date = ?',
+      [tenantId, email, date],
     );
     if (!created) throw new Error(`Failed to create attendance record for ${email} on ${date}`);
     return created;
@@ -85,15 +86,19 @@ export class ClockRepository {
 
   /** Get attendance record for a specific employee and date. */
   async getDaily(email: string, date: string): Promise<AttendanceRecord | null> {
+    const tenantId = getTenantId();
     return this.db.get<AttendanceRecord>(
-      'SELECT * FROM attendance_daily WHERE email = ? AND date = ?',
-      [email, date],
+      'SELECT * FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date = ?',
+      [tenantId, email, date],
     );
   }
 
   /** Get all attendance records for a date. */
   async getAllForDate(date: string): Promise<AttendanceRecord[]> {
-    return this.db.all<AttendanceRecord>('SELECT * FROM attendance_daily WHERE date = ?', [date]);
+    return this.db.all<AttendanceRecord>(
+      'SELECT * FROM attendance_daily WHERE tenant_id = ? AND date = ?',
+      [getTenantId(), date],
+    );
   }
 
   /** Update attendance daily record fields. */
@@ -125,10 +130,10 @@ export class ClockRepository {
       vals.push(val);
     }
     sets.push("updated_at = datetime('now')");
-    vals.push(email, date);
+    vals.push(getTenantId(), email, date);
 
     await this.db.run(
-      `UPDATE attendance_daily SET ${sets.join(', ')} WHERE email = ? AND date = ?`,
+      `UPDATE attendance_daily SET ${sets.join(', ')} WHERE tenant_id = ? AND email = ? AND date = ?`,
       vals,
     );
   }
@@ -142,24 +147,24 @@ export class ClockRepository {
     source: string,
   ): Promise<void> {
     await this.db.run(
-      'INSERT INTO clock_events (email, date, event_type, event_time, source) VALUES (?, ?, ?, ?, ?)',
-      [email, date, eventType, eventTime, source],
+      'INSERT INTO clock_events (tenant_id, email, date, event_type, event_time, source) VALUES (?, ?, ?, ?, ?, ?)',
+      [getTenantId(), email, date, eventType, eventTime, source],
     );
   }
 
   /** Get all clock events for an employee on a date, ordered by time. */
   async getClockEvents(email: string, date: string): Promise<ClockEvent[]> {
     return this.db.all<ClockEvent>(
-      'SELECT * FROM clock_events WHERE email = ? AND date = ? ORDER BY event_time ASC',
-      [email, date],
+      'SELECT * FROM clock_events WHERE tenant_id = ? AND email = ? AND date = ? ORDER BY event_time ASC',
+      [getTenantId(), email, date],
     );
   }
 
   /** Get or create monthly late count. */
   async getMonthlyLateCount(email: string, yearMonth: string): Promise<number> {
     const row = await this.db.get<MonthlyLateCount>(
-      'SELECT late_count FROM monthly_late_counts WHERE email = ? AND year_month = ?',
-      [email, yearMonth],
+      'SELECT late_count FROM monthly_late_counts WHERE tenant_id = ? AND email = ? AND year_month = ?',
+      [getTenantId(), email, yearMonth],
     );
     return row ? row.late_count : 0;
   }
@@ -167,9 +172,9 @@ export class ClockRepository {
   /** Increment monthly late count. Returns new count. */
   async incrementMonthlyLateCount(email: string, yearMonth: string): Promise<number> {
     await this.db.run(
-      `INSERT INTO monthly_late_counts (email, year_month, late_count) VALUES (?, ?, 1)
-       ON CONFLICT(email, year_month) DO UPDATE SET late_count = late_count + 1`,
-      [email, yearMonth],
+      `INSERT INTO monthly_late_counts (tenant_id, email, year_month, late_count) VALUES (?, ?, ?, 1)
+       ON CONFLICT(tenant_id, email, year_month) DO UPDATE SET late_count = late_count + 1`,
+      [getTenantId(), email, yearMonth],
     );
     return this.getMonthlyLateCount(email, yearMonth);
   }
@@ -191,8 +196,8 @@ export class ClockRepository {
   /** Get the last clock event for an employee on a date. */
   async getLastClockEvent(email: string, date: string): Promise<ClockEvent | null> {
     return this.db.get<ClockEvent>(
-      'SELECT * FROM clock_events WHERE email = ? AND date = ? ORDER BY event_time DESC LIMIT 1',
-      [email, date],
+      'SELECT * FROM clock_events WHERE tenant_id = ? AND email = ? AND date = ? ORDER BY event_time DESC LIMIT 1',
+      [getTenantId(), email, date],
     );
   }
 

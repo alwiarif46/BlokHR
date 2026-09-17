@@ -148,16 +148,22 @@ export class ProfileService {
     private readonly eventBus?: EventBus,
   ) {}
 
+  private tid(): string {
+    return getTenantId();
+  }
+
   /** Resolve member by id, exact email, or unique local-part (OAuth UPN). */
   async resolveMember(memberIdOrEmail: string): Promise<MemberRow | null> {
-    let member = await this.db.get<MemberRow>('SELECT * FROM members WHERE id = ?', [
-      memberIdOrEmail,
-    ]);
+    const tenantId = this.tid();
+    let member = await this.db.get<MemberRow>(
+      'SELECT * FROM members WHERE tenant_id = ? AND id = ?',
+      [tenantId, memberIdOrEmail],
+    );
     if (member) return member;
 
     member = await this.db.get<MemberRow>(
-      'SELECT * FROM members WHERE lower(email) = lower(?)',
-      [memberIdOrEmail],
+      'SELECT * FROM members WHERE tenant_id = ? AND lower(email) = lower(?)',
+      [tenantId, memberIdOrEmail],
     );
     if (member) return member;
 
@@ -166,8 +172,8 @@ export class ProfileService {
     const local = memberIdOrEmail.slice(0, at).toLowerCase();
     const matches = await this.db.all<MemberRow>(
       `SELECT * FROM members
-       WHERE active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
-      [local],
+       WHERE tenant_id = ? AND active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
+      [tenantId, local],
     );
     if (matches.length === 1) return matches[0];
     return null;
@@ -325,8 +331,11 @@ export class ProfileService {
     }
 
     sets.push("updated_at = datetime('now')");
-    vals.push(member.id);
-    await this.db.run(`UPDATE members SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(this.tid(), member.id);
+    await this.db.run(
+      `UPDATE members SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
 
     this.logger.info(
       { memberId: member.id, email: member.email, fields: Object.keys(filteredFields) },
@@ -359,8 +368,8 @@ export class ProfileService {
          certified_by = ?,
          profile_unlocked = 0,
          updated_at = datetime('now')
-       WHERE id = ?`,
-      [callerEmail, member.id],
+       WHERE tenant_id = ? AND id = ?`,
+      [callerEmail, this.tid(), member.id],
     );
 
     this.logger.info(
@@ -391,8 +400,8 @@ export class ProfileService {
     if (!member) return { success: false, error: 'Member not found' };
 
     await this.db.run(
-      "UPDATE members SET profile_unlocked = 1, updated_at = datetime('now') WHERE id = ?",
-      [member.id],
+      "UPDATE members SET profile_unlocked = 1, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [this.tid(), member.id],
     );
 
     this.logger.info({ memberId: member.id, email: member.email }, 'Profile unlocked by admin');
@@ -435,15 +444,15 @@ export class ProfileService {
 
     const admins = await this.db.all<{ email: string; [key: string]: unknown }>(
       'SELECT email FROM admins WHERE tenant_id = ?',
-      [getTenantId()],
+      [this.tid()],
     );
     if (admins.length === 0) return;
 
     const recipients: Array<{ email: string; name: string; role: string }> = [];
     for (const admin of admins) {
       const info = await this.db.get<MemberNotifInfo>(
-        'SELECT email, name, teams_user_id FROM members WHERE email = ? AND active = 1',
-        [admin.email],
+        'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+        [this.tid(), admin.email],
       );
       if (info) {
         recipients.push({ email: info.email, name: info.name, role: 'admin' });

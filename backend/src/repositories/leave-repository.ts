@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface LeaveRequest {
   [key: string]: unknown;
@@ -78,11 +79,13 @@ export class LeaveRepository {
     policyName: string;
   }): Promise<LeaveRequest> {
     const id = uuidv4();
+    const tenantId = getTenantId();
     await this.db.run(
       `INSERT INTO leave_requests
-       (id, person_name, person_email, leave_type, policy_name, kind, start_date, end_date, days_requested, reason, paid_type)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (tenant_id, id, person_name, person_email, leave_type, policy_name, kind, start_date, end_date, days_requested, reason, paid_type)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         id,
         data.personName,
         data.personEmail,
@@ -96,24 +99,29 @@ export class LeaveRepository {
         data.paidType,
       ],
     );
-    const created = await this.db.get<LeaveRequest>('SELECT * FROM leave_requests WHERE id = ?', [
-      id,
-    ]);
+    const created = await this.db.get<LeaveRequest>(
+      'SELECT * FROM leave_requests WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
     if (!created) throw new Error('Failed to create leave request');
     return created;
   }
 
   /** Get all leave requests for an employee. */
   async getLeavesByEmail(email: string): Promise<LeaveRequest[]> {
+    const tenantId = getTenantId();
     return this.db.all<LeaveRequest>(
-      'SELECT * FROM leave_requests WHERE person_email = ? ORDER BY created_at DESC',
-      [email],
+      'SELECT * FROM leave_requests WHERE tenant_id = ? AND person_email = ? ORDER BY created_at DESC',
+      [tenantId, email],
     );
   }
 
   /** Get a leave request by ID. */
   async getLeaveById(id: string): Promise<LeaveRequest | null> {
-    return this.db.get<LeaveRequest>('SELECT * FROM leave_requests WHERE id = ?', [id]);
+    return this.db.get<LeaveRequest>(
+      'SELECT * FROM leave_requests WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   /** Update leave request status and related fields. */
@@ -138,13 +146,19 @@ export class LeaveRepository {
       vals.push(val);
     }
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE leave_requests SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE leave_requests SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   /** Delete a leave request. */
   async deleteLeave(id: string): Promise<void> {
-    await this.db.run('DELETE FROM leave_requests WHERE id = ?', [id]);
+    await this.db.run('DELETE FROM leave_requests WHERE tenant_id = ? AND id = ?', [
+      getTenantId(),
+      id,
+    ]);
   }
 
   /** Get leave policy for a leave type and member type. */
@@ -157,9 +171,10 @@ export class LeaveRepository {
 
   /** Get member info needed for leave calculations. */
   async getMemberForLeave(email: string): Promise<MemberForLeave | null> {
+    const tenantId = getTenantId();
     const exact = await this.db.get<MemberForLeave>(
-      'SELECT email, name, member_type_id, joining_date FROM members WHERE lower(email) = lower(?) AND active = 1',
-      [email],
+      'SELECT email, name, member_type_id, joining_date FROM members WHERE tenant_id = ? AND lower(email) = lower(?) AND active = 1',
+      [tenantId, email],
     );
     if (exact) return exact;
 
@@ -170,8 +185,8 @@ export class LeaveRepository {
     const local = email.slice(0, at).toLowerCase();
     const matches = await this.db.all<MemberForLeave>(
       `SELECT email, name, member_type_id, joining_date FROM members
-       WHERE active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
-      [local],
+       WHERE tenant_id = ? AND active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
+      [tenantId, local],
     );
     if (matches.length === 1) return matches[0];
     return null;
@@ -179,18 +194,19 @@ export class LeaveRepository {
 
   /** Get PTO balance for an employee, leave type, and year. */
   async getPtoBalance(email: string, leaveType: string, year: number): Promise<PtoBalance | null> {
+    const tenantId = getTenantId();
     return this.db.get<PtoBalance>(
-      'SELECT * FROM pto_balances WHERE email = ? AND leave_type = ? AND year = ?',
-      [email, leaveType, year],
+      'SELECT * FROM pto_balances WHERE tenant_id = ? AND email = ? AND leave_type = ? AND year = ?',
+      [tenantId, email, leaveType, year],
     );
   }
 
   /** Get all PTO balances for an employee for a year. */
   async getAllPtoBalances(email: string, year: number): Promise<PtoBalance[]> {
-    return this.db.all<PtoBalance>('SELECT * FROM pto_balances WHERE email = ? AND year = ?', [
-      email,
-      year,
-    ]);
+    return this.db.all<PtoBalance>(
+      'SELECT * FROM pto_balances WHERE tenant_id = ? AND email = ? AND year = ?',
+      [getTenantId(), email, year],
+    );
   }
 
   /**
@@ -243,40 +259,53 @@ export class LeaveRepository {
       }
       if (sets.length === 0) return;
       sets.push("updated_at = datetime('now')");
-      vals.push(email, leaveType, year);
+      vals.push(getTenantId(), email, leaveType, year);
       await this.db.run(
-        `UPDATE pto_balances SET ${sets.join(', ')} WHERE email = ? AND leave_type = ? AND year = ?`,
+        `UPDATE pto_balances SET ${sets.join(', ')} WHERE tenant_id = ? AND email = ? AND leave_type = ? AND year = ?`,
         vals,
       );
     } else {
       await this.db.run(
-        'INSERT INTO pto_balances (email, leave_type, year, accrued, used, carry_forward) VALUES (?, ?, ?, ?, ?, ?)',
-        [email, leaveType, year, fields.accrued ?? 0, fields.used ?? 0, fields.carry_forward ?? 0],
+        'INSERT INTO pto_balances (tenant_id, email, leave_type, year, accrued, used, carry_forward) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [
+          getTenantId(),
+          email,
+          leaveType,
+          year,
+          fields.accrued ?? 0,
+          fields.used ?? 0,
+          fields.carry_forward ?? 0,
+        ],
       );
     }
   }
 
   /** Get approved leaves overlapping a date (to check if someone is on leave today). */
   async getApprovedLeavesForDate(date: string): Promise<LeaveRequest[]> {
+    const tenantId = getTenantId();
     return this.db.all<LeaveRequest>(
       `SELECT * FROM leave_requests
-       WHERE status = 'Approved' AND start_date <= ? AND end_date >= ?`,
-      [date, date],
+       WHERE tenant_id = ? AND status = 'Approved' AND start_date <= ? AND end_date >= ?`,
+      [tenantId, date, date],
     );
   }
 
   /** Count pending leaves (for pending actions). */
   async countPendingLeaves(): Promise<number> {
+    const tenantId = getTenantId();
     const row = await this.db.get<{ cnt: number }>(
-      "SELECT COUNT(*) as cnt FROM leave_requests WHERE status IN ('Pending', 'Approved by Manager')",
+      "SELECT COUNT(*) as cnt FROM leave_requests WHERE tenant_id = ? AND status IN ('Pending', 'Approved by Manager')",
+      [tenantId],
     );
     return row?.cnt ?? 0;
   }
 
   /** Get all pending leaves with details (for pending actions detail). */
   async getPendingLeavesDetail(): Promise<LeaveRequest[]> {
+    const tenantId = getTenantId();
     return this.db.all<LeaveRequest>(
-      "SELECT * FROM leave_requests WHERE status IN ('Pending', 'Approved by Manager') ORDER BY created_at DESC",
+      "SELECT * FROM leave_requests WHERE tenant_id = ? AND status IN ('Pending', 'Approved by Manager') ORDER BY created_at DESC",
+      [tenantId],
     );
   }
 }

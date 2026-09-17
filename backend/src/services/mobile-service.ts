@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Logger } from 'pino';
+import { getTenantId } from '../tenant/context';
 import type { DatabaseEngine } from '../db/engine';
 import type { AuditService } from '../audit/audit-service';
 import {
@@ -105,8 +106,8 @@ export class MobileService {
     }
 
     const member = await this.db.get<MemberRow>(
-      'SELECT email FROM members WHERE email = ? AND active = 1',
-      [data.email],
+      'SELECT email FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), data.email],
     );
     if (!member) return { success: false, error: 'Employee not found or inactive' };
 
@@ -144,8 +145,8 @@ export class MobileService {
     if (!data.publicKey) return { success: false, error: 'publicKey is required' };
 
     const member = await this.db.get<MemberRow>(
-      'SELECT email FROM members WHERE email = ? AND active = 1',
-      [data.email],
+      'SELECT email FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), data.email],
     );
     if (!member) return { success: false, error: 'Employee not found or inactive' };
 
@@ -175,8 +176,8 @@ export class MobileService {
     if (!cred) return { success: false, error: 'Credential not found' };
 
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name FROM members WHERE email = ? AND active = 1',
-      [cred.email],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), cred.email],
     );
     if (!member) return { success: false, error: 'Employee not found or inactive' };
 

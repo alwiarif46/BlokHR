@@ -126,6 +126,11 @@ export interface AppConfig {
   defaultTenantId: string;
   /** JSON map of hostname → tenant id for multi-tenant Host resolution. */
   tenantHostMap: string;
+  /**
+   * When true, accept client X-User-Email / X-User-Name as identity.
+   * Default: only in test (production/dev require Bearer session tokens).
+   */
+  allowHeaderIdentity: boolean;
   trialSeatLimit: number;
   razorpayKeyId: string | undefined;
   razorpayKeySecret: string | undefined;
@@ -253,6 +258,12 @@ export function loadConfig(): AppConfig {
     transportDbPath: envDefault('TRANSPORT_DB_PATH', './transport.db'),
     defaultTenantId: envDefault('DEFAULT_TENANT_ID', 'default'),
     tenantHostMap: envDefault('TENANT_HOST_MAP', ''),
+    allowHeaderIdentity: (() => {
+      const raw = env('ALLOW_HEADER_IDENTITY');
+      if (raw === '1' || raw === 'true') return true;
+      if (raw === '0' || raw === 'false') return false;
+      return envDefault('NODE_ENV', 'production') === 'test';
+    })(),
     trialSeatLimit: envInt('TRIAL_SEAT_LIMIT', 25),
     razorpayKeyId: env('RAZORPAY_KEY_ID'),
     razorpayKeySecret: env('RAZORPAY_KEY_SECRET'),

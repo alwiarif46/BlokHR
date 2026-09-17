@@ -89,8 +89,8 @@ export class ExpenseService {
     }
 
     const member = await this.db.get<MemberRow>(
-      'SELECT email FROM members WHERE email = ? AND active = 1',
-      [data.email],
+      'SELECT email FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), data.email],
     );
     if (!member) return { success: false, error: 'Employee not found or inactive' };
 
@@ -456,19 +456,19 @@ export class ExpenseService {
 
     if (role === 'manager') {
       const claimant = await this.db.get<MemberRow>(
-        'SELECT email, reports_to FROM members WHERE email = ?',
-        [claimantEmail],
+        'SELECT email, reports_to FROM members WHERE tenant_id = ? AND email = ?',
+        [getTenantId(), claimantEmail],
       );
       if (claimant && claimant.reports_to && claimant.reports_to === actorEmail) {
         return true;
       }
       const assignment = await this.db.get<{ id: number }>(
         `SELECT id FROM role_assignments
-         WHERE assignee_email = ? AND role_type = 'manager'
+         WHERE tenant_id = ? AND assignee_email = ? AND role_type = 'manager'
            AND (scope_type = 'global'
              OR (scope_type = 'member' AND scope_value = ?)
              OR scope_type = 'group')`,
-        [actorEmail, claimantEmail],
+        [getTenantId(), actorEmail, claimantEmail],
       );
       return !!assignment;
     }
@@ -476,8 +476,8 @@ export class ExpenseService {
     if (role === 'hr') {
       const assignment = await this.db.get<{ id: number }>(
         `SELECT id FROM role_assignments
-         WHERE assignee_email = ? AND role_type = 'hr'`,
-        [actorEmail],
+         WHERE tenant_id = ? AND assignee_email = ? AND role_type = 'hr'`,
+        [getTenantId(), actorEmail],
       );
       return !!assignment;
     }
@@ -496,13 +496,13 @@ export class ExpenseService {
     const recipients: { email: string; name: string; role: string }[] = [];
     if (role === 'manager') {
       const claimant = await this.db.get<MemberRow>(
-        'SELECT email, name, reports_to FROM members WHERE email = ?',
-        [receipt.email],
+        'SELECT email, name, reports_to FROM members WHERE tenant_id = ? AND email = ?',
+        [getTenantId(), receipt.email],
       );
       if (claimant?.reports_to) {
         const mgr = await this.db.get<MemberRow>(
-          'SELECT email, name FROM members WHERE email = ?',
-          [claimant.reports_to],
+          'SELECT email, name FROM members WHERE tenant_id = ? AND email = ?',
+          [getTenantId(), claimant.reports_to],
         );
         if (mgr) recipients.push({ email: mgr.email, name: mgr.name, role: 'manager' });
       }
@@ -531,8 +531,8 @@ export class ExpenseService {
   ): Promise<void> {
     if (!this.dispatcher) return;
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name FROM members WHERE email = ?',
-      [receipt.email],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), receipt.email],
     );
     if (!member) return;
     await this.dispatcher.notify({

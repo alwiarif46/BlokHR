@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../../db/engine';
+import { getTenantId } from '../../tenant/context';
 import type { ClockService, ClockActionResult } from '../clock-service';
 import { findBestMatch } from './iris-api-client';
 
@@ -74,8 +75,8 @@ export class IrisScanService {
   async enroll(email: string, irisTemplate: string): Promise<IrisEnrollResult> {
     // Validate member
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name, active FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT email, name, active FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), email],
     );
     if (!member) {
       return { success: false, error: 'Employee not found or inactive' };
@@ -87,9 +88,10 @@ export class IrisScanService {
     }
 
     // Check for existing enrollment
+    const tenantId = getTenantId();
     const existing = await this.db.get<IrisEnrollmentRow>(
-      'SELECT * FROM iris_enrollments WHERE email = ?',
-      [email],
+      'SELECT * FROM iris_enrollments WHERE tenant_id = ? AND email = ?',
+      [tenantId, email],
     );
 
     if (existing) {
@@ -97,21 +99,21 @@ export class IrisScanService {
       await this.db.run(
         `UPDATE iris_enrollments SET iris_template = ?, status = 'enrolled',
          error_message = '', enrolled_at = datetime('now'), updated_at = datetime('now')
-         WHERE email = ?`,
-        [irisTemplate, email],
+         WHERE tenant_id = ? AND email = ?`,
+        [irisTemplate, tenantId, email],
       );
     } else {
       // Create new enrollment
       await this.db.run(
-        `INSERT INTO iris_enrollments (email, iris_template, status, enrolled_at)
-         VALUES (?, ?, 'enrolled', datetime('now'))`,
-        [email, irisTemplate],
+        `INSERT INTO iris_enrollments (tenant_id, email, iris_template, status, enrolled_at)
+         VALUES (?, ?, ?, 'enrolled', datetime('now'))`,
+        [tenantId, email, irisTemplate],
       );
     }
 
     const enrollment = await this.db.get<IrisEnrollmentRow>(
-      'SELECT * FROM iris_enrollments WHERE email = ?',
-      [email],
+      'SELECT * FROM iris_enrollments WHERE tenant_id = ? AND email = ?',
+      [tenantId, email],
     );
 
     this.logger.info({ email }, 'Iris template enrolled');
@@ -134,8 +136,10 @@ export class IrisScanService {
     const threshold = settings?.iris_match_threshold ?? 0.32;
 
     // Load all enrolled templates
+    const tenantId = getTenantId();
     const enrollments = await this.db.all<IrisEnrollmentRow>(
-      "SELECT email, iris_template FROM iris_enrollments WHERE status = 'enrolled'",
+      "SELECT email, iris_template FROM iris_enrollments WHERE tenant_id = ? AND status = 'enrolled'",
+      [tenantId],
     );
 
     if (enrollments.length === 0) {
@@ -155,8 +159,8 @@ export class IrisScanService {
 
     // Resolve member name for clock
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name FROM members WHERE email = ? AND active = 1',
-      [match.email],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [tenantId, match.email],
     );
     if (!member) {
       return { success: false, error: 'Matched employee is no longer active' };
@@ -183,8 +187,8 @@ export class IrisScanService {
   /** Get enrollment status for an employee. */
   async getStatus(email: string): Promise<IrisStatusResult> {
     const enrollment = await this.db.get<IrisEnrollmentRow>(
-      'SELECT * FROM iris_enrollments WHERE email = ?',
-      [email],
+      'SELECT * FROM iris_enrollments WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), email],
     );
 
     if (!enrollment) {
@@ -202,15 +206,18 @@ export class IrisScanService {
   /** Remove an iris enrollment. */
   async removeEnrollment(email: string): Promise<{ success: boolean; error?: string }> {
     const enrollment = await this.db.get<IrisEnrollmentRow>(
-      'SELECT * FROM iris_enrollments WHERE email = ?',
-      [email],
+      'SELECT * FROM iris_enrollments WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), email],
     );
 
     if (!enrollment) {
       return { success: false, error: 'No enrollment found for this employee' };
     }
 
-    await this.db.run('DELETE FROM iris_enrollments WHERE email = ?', [email]);
+    await this.db.run('DELETE FROM iris_enrollments WHERE tenant_id = ? AND email = ?', [
+      getTenantId(),
+      email,
+    ]);
     this.logger.info({ email }, 'Iris enrollment removed');
     return { success: true };
   }

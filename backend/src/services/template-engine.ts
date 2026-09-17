@@ -364,8 +364,8 @@ export class TemplateEngine {
               pan_number, aadhaar_number, uan_number, bank_account_number,
               bank_ifsc, bank_name, ac_parentage, basic_salary, da,
               reports_to, position_id
-       FROM members WHERE email = ?`,
-      [context.email],
+       FROM members WHERE tenant_id = ? AND email = ?`,
+      [getTenantId(), context.email],
     );
 
     if (member) {
@@ -395,8 +395,8 @@ export class TemplateEngine {
       // Group name
       if (member.group_id) {
         const group = await context.db.get<GroupLookupRow>(
-          'SELECT id, name FROM groups WHERE id = ?',
-          [member.group_id],
+          'SELECT id, name FROM groups WHERE tenant_id = ? AND id = ?',
+          [getTenantId(), member.group_id],
         );
         vars.department = group?.name ?? '';
       } else {
@@ -553,8 +553,8 @@ export class TemplateEngine {
         carry_forward: number;
         [key: string]: unknown;
       }>(
-        'SELECT accrued, used, carry_forward FROM pto_balances WHERE email = ? AND leave_type = ? AND year = ?',
-        [context.email, leaveType, currentYear],
+        'SELECT accrued, used, carry_forward FROM pto_balances WHERE tenant_id = ? AND email = ? AND leave_type = ? AND year = ?',
+        [getTenantId(), context.email, leaveType, currentYear],
       );
 
       let balance = 0;

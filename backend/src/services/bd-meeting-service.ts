@@ -203,15 +203,17 @@ export class BdMeetingService {
    * Matches group name containing "business development" (case-insensitive).
    */
   private async isBdMember(email: string): Promise<boolean> {
+    const tenantId = getTenantId();
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name, group_id FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT email, name, group_id FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [tenantId, email],
     );
     if (!member || !member.group_id) return false;
 
-    const group = await this.db.get<GroupRow>('SELECT id, name FROM groups WHERE id = ?', [
-      member.group_id,
-    ]);
+    const group = await this.db.get<GroupRow>(
+      'SELECT id, name FROM groups WHERE tenant_id = ? AND id = ?',
+      [tenantId, member.group_id],
+    );
     if (!group) return false;
 
     return group.name.toLowerCase().includes('business development');
@@ -223,20 +225,21 @@ export class BdMeetingService {
     employeeEmail: string,
     roleType: string,
   ): Promise<MemberNotifInfo[]> {
+    const tenantId = getTenantId();
     const member = await this.db.get<{ group_id: string }>(
-      'SELECT group_id FROM members WHERE email = ? AND active = 1',
-      [employeeEmail],
+      'SELECT group_id FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [tenantId, employeeEmail],
     );
     if (!member) return [];
 
     const roles = await this.db.all<RoleRow>(
       `SELECT DISTINCT assignee_email FROM role_assignments
-       WHERE role_type = ? AND (
+       WHERE tenant_id = ? AND role_type = ? AND (
          scope_type = 'global'
          OR (scope_type = 'group' AND scope_value = ?)
          OR (scope_type = 'member' AND scope_value = ?)
        )`,
-      [roleType, member.group_id ?? '', 'member:' + employeeEmail],
+      [tenantId, roleType, member.group_id ?? '', 'member:' + employeeEmail],
     );
 
     const admins = await this.db.all<{ email: string; [key: string]: unknown }>(
@@ -252,8 +255,8 @@ export class BdMeetingService {
     const result: MemberNotifInfo[] = [];
     for (const email of allEmails) {
       const info = await this.db.get<MemberNotifInfo>(
-        'SELECT email, name, teams_user_id FROM members WHERE email = ? AND active = 1',
-        [email],
+        'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+        [tenantId, email],
       );
       if (info) result.push(info);
     }
@@ -301,14 +304,14 @@ export class BdMeetingService {
   private async notifyQualified(meeting: BdMeeting, qualifierEmail: string): Promise<void> {
     if (!this.dispatcher) return;
     const qualifierInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [qualifierEmail],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), qualifierEmail],
     );
 
     // Notify employee of qualification
     const employeeInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [meeting.email],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), meeting.email],
     );
     if (employeeInfo) {
       await this.dispatcher.notify({
@@ -355,8 +358,8 @@ export class BdMeetingService {
   private async notifyApproved(meeting: BdMeeting, approverEmail: string): Promise<void> {
     if (!this.dispatcher) return;
     const approverInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [approverEmail],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), approverEmail],
     );
     const cardData = this.buildCardData(meeting, {
       approverName: approverInfo?.name ?? approverEmail,
@@ -365,8 +368,8 @@ export class BdMeetingService {
 
     // Notify employee
     const employeeInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [meeting.email],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), meeting.email],
     );
     if (employeeInfo) {
       await this.dispatcher.notify({
@@ -381,8 +384,8 @@ export class BdMeetingService {
     // Notify qualifier
     if (meeting.qualifier_email) {
       const qualInfo = await this.db.get<MemberNotifInfo>(
-        'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-        [meeting.qualifier_email],
+        'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+        [getTenantId(), meeting.qualifier_email],
       );
       if (qualInfo) {
         await this.dispatcher.notify({
@@ -411,8 +414,8 @@ export class BdMeetingService {
   ): Promise<void> {
     if (!this.dispatcher) return;
     const rejectorInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [rejectorEmail],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), rejectorEmail],
     );
     const cardData = this.buildCardData(meeting, {
       status: 'rejected',
@@ -422,8 +425,8 @@ export class BdMeetingService {
 
     // Notify employee
     const employeeInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [meeting.email],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), meeting.email],
     );
     if (employeeInfo) {
       await this.dispatcher.notify({

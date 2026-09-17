@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { AuditService } from '../audit/audit-service';
 import type { NotificationDispatcher } from './notification/dispatcher';
 import {
@@ -86,8 +87,8 @@ export class VisitorService {
 
     // Validate host exists
     const host = await this.db.get<MemberRow>(
-      'SELECT email, name, active FROM members WHERE email = ? AND active = 1',
-      [data.hostEmail],
+      'SELECT email, name, active FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), data.hostEmail],
     );
     if (!host) return { success: false, error: 'Host employee not found or inactive' };
 
@@ -229,9 +230,10 @@ export class VisitorService {
   // ── Notification ──
   private async notifyHost(visit: VisitorVisitRow, eventType: string): Promise<void> {
     if (!this.dispatcher) return;
-    const host = await this.db.get<MemberRow>('SELECT email, name FROM members WHERE email = ?', [
-      visit.host_email,
-    ]);
+    const host = await this.db.get<MemberRow>(
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), visit.host_email],
+    );
     if (!host) return;
     await this.dispatcher.notify({
       eventType: `visitor:${eventType}`,

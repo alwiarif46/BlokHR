@@ -176,6 +176,26 @@ Repeat for `directory.db`, `school-attendance.db`, and other school `*.db` files
 
 Gateway path checks (Phase 1) still apply: Host-resolved tenant must match `:tenantId` in `/svc/...` paths (`tenant_mismatch` → 403).
 
+### Fact-table tenant migration (required)
+
+Deploy includes migrations that add `tenant_id` across operational and domain tables:
+
+- `058_fact_tables_tenant_scope.sql` — attendance_daily, clock_events, monthly_late_counts, leave_requests, pto_balances
+- `059_domain_tables_tenant_scope.sql` — groups, role_assignments, regularizations, overtime_records, timesheets, time_entries, holidays
+- `060_pii_domain_tenant_scope.sql` — bd_meetings, documents, visitors, assets, expense_receipts, surveys, face/iris enrollments, clients/projects, chat_sessions
+
+Run backend migrations **before** serving traffic from this release.
+
+### Identity / tenant trust (production)
+
+| Env | Purpose |
+|-----|---------|
+| `INTERNAL_SECRET` | **Required** in production. Gateway must send `X-Blok-Internal` matching this value. Backend only trusts inbound `X-Blok-Tenant` when the secret matches. |
+| `ALLOW_HEADER_IDENTITY` | Defaults off outside `NODE_ENV=test`. When off, identity comes from Bearer `auth_sessions` tokens only (not spoofable `X-User-Email`). |
+| `TENANT_HOST_MAP` | Hostname → tenant_id for N tenants (not a two-tenant special case). |
+
+Direct hits to the backend URL without the gateway cannot select another tenant via `X-Blok-Tenant`. Session tokens are bound to the issuing tenant; using a token on a different Host returns `403 tenant_mismatch`.
+
 Arif Vercel / Ubaid Railway ownership is **unchanged**.
 
 ---

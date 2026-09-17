@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { AuditService } from '../audit/audit-service';
 import type { NotificationDispatcher } from './notification/dispatcher';
 import {
@@ -313,8 +314,8 @@ export class DocumentService {
 
     // Validate member exists
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name, active FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT email, name, active FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), email],
     );
     if (!member) {
       return { success: false, error: 'Employee not found or inactive' };
@@ -501,8 +502,8 @@ export class DocumentService {
 
     // Validate target employee
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name, active FROM members WHERE email = ? AND active = 1',
-      [targetEmail],
+      'SELECT email, name, active FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), targetEmail],
     );
     if (!member) {
       return { success: false, error: 'Target employee not found or inactive' };
@@ -556,8 +557,8 @@ export class DocumentService {
     }
 
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name, active FROM members WHERE email = ? AND active = 1',
-      [targetEmail],
+      'SELECT email, name, active FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), targetEmail],
     );
     if (!member) {
       return { success: false, error: 'Target employee not found or inactive' };
@@ -596,7 +597,8 @@ export class DocumentService {
 
     // Get all active employees
     const members = await this.db.all<MemberRow>(
-      'SELECT email, name, active FROM members WHERE active = 1',
+      'SELECT email, name, active FROM members WHERE tenant_id = ? AND active = 1',
+      [getTenantId()],
     );
 
     if (members.length === 0) return;

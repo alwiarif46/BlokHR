@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { EventBus } from '../events';
 import type { AuditService } from '../audit/audit-service';
 import {
@@ -95,8 +96,8 @@ export class OrgChartService {
     // Validate group exists if provided
     if (data.groupId) {
       const group = await this.db.get<{ id: string; [key: string]: unknown }>(
-        'SELECT id FROM groups WHERE id = ?',
-        [data.groupId],
+        'SELECT id FROM groups WHERE tenant_id = ? AND id = ?',
+        [getTenantId(), data.groupId],
       );
       if (!group) {
         return { success: false, error: 'Group not found' };
@@ -274,9 +275,10 @@ export class OrgChartService {
     actorEmail: string,
   ): Promise<ServiceResult> {
     // Validate employee exists and is active
+    const tenantId = getTenantId();
     const member = await this.db.get<MemberRow>(
-      'SELECT * FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT * FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [tenantId, email],
     );
     if (!member) {
       return { success: false, error: 'Employee not found or inactive' };
@@ -286,8 +288,8 @@ export class OrgChartService {
     if (managerEmail !== '') {
       // Validate manager exists and is active
       const manager = await this.db.get<MemberRow>(
-        'SELECT email FROM members WHERE email = ? AND active = 1',
-        [managerEmail],
+        'SELECT email FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+        [tenantId, managerEmail],
       );
       if (!manager) {
         return { success: false, error: 'Manager not found or inactive' };
@@ -329,8 +331,8 @@ export class OrgChartService {
     actorEmail: string,
   ): Promise<ServiceResult> {
     const member = await this.db.get<MemberRow>(
-      'SELECT * FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT * FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), email],
     );
     if (!member) {
       return { success: false, error: 'Employee not found or inactive' };
@@ -407,8 +409,8 @@ export class OrgChartService {
 
     // Validate nominee exists and is active
     const nominee = await this.db.get<MemberRow>(
-      'SELECT email, name FROM members WHERE email = ? AND active = 1',
-      [data.nomineeEmail],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), data.nomineeEmail],
     );
     if (!nominee) {
       return { success: false, error: 'Nominee not found or inactive' };
@@ -575,8 +577,8 @@ export class OrgChartService {
     groupId?: string;
   }): Promise<FlightRiskScore[]> {
     // Build member filter
-    const conditions: string[] = ['m.active = 1'];
-    const params: unknown[] = [];
+    const conditions: string[] = ['m.tenant_id = ?', 'm.active = 1'];
+    const params: unknown[] = [getTenantId()];
     if (filters?.email) {
       conditions.push('m.email = ?');
       params.push(filters.email);
@@ -651,8 +653,8 @@ export class OrgChartService {
          COUNT(*) AS total,
          SUM(CASE WHEN status IN ('in', 'out') THEN 1 ELSE 0 END) AS present
        FROM attendance_daily
-       WHERE email = ? AND date >= ? AND date <= ?`,
-      [email, startDate, endDate],
+       WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ?`,
+      [getTenantId(), email, startDate, endDate],
     );
     const total = row?.total ?? 0;
     if (total === 0) return 50; // No data → moderate risk
@@ -672,9 +674,9 @@ export class OrgChartService {
   ): Promise<number> {
     const row = await this.db.get<{ cnt: number; [key: string]: unknown }>(
       `SELECT COUNT(*) AS cnt FROM leave_requests
-       WHERE person_email = ? AND start_date >= ? AND start_date <= ?
+       WHERE tenant_id = ? AND person_email = ? AND start_date >= ? AND start_date <= ?
        AND status != 'cancelled'`,
-      [email, startDate, endDate],
+      [getTenantId(), email, startDate, endDate],
     );
     const count = row?.cnt ?? 0;
     // 0–5 → 0, 6–10 → linear to 50, 11–15 → linear to 80, 15+ → 100
@@ -687,8 +689,8 @@ export class OrgChartService {
   private async scoreOvertime(email: string, startDate: string, endDate: string): Promise<number> {
     const row = await this.db.get<{ total_min: number; [key: string]: unknown }>(
       `SELECT COALESCE(SUM(ot_minutes), 0) AS total_min FROM overtime_records
-       WHERE email = ? AND date >= ? AND date <= ? AND status = 'approved'`,
-      [email, startDate, endDate],
+       WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ? AND status = 'approved'`,
+      [getTenantId(), email, startDate, endDate],
     );
     const hours = (row?.total_min ?? 0) / 60;
     // 0–20h → 0, 20–40h → linear to 40, 40–60h → linear to 70, 60+ → 100
@@ -701,8 +703,8 @@ export class OrgChartService {
   private async scoreLate(email: string, startDate: string, endDate: string): Promise<number> {
     const row = await this.db.get<{ cnt: number; [key: string]: unknown }>(
       `SELECT COUNT(*) AS cnt FROM attendance_daily
-       WHERE email = ? AND date >= ? AND date <= ? AND is_late = 1`,
-      [email, startDate, endDate],
+       WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ? AND is_late = 1`,
+      [getTenantId(), email, startDate, endDate],
     );
     const count = row?.cnt ?? 0;
     // 0–3 → 0, 4–7 → linear to 50, 8–10 → linear to 80, 10+ → 100

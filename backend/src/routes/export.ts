@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import { AppError, asyncHandler } from '../app';
+import { getTenantId } from '../tenant/context';
 
 /**
  * CSV Export routes:
@@ -11,6 +12,17 @@ import { AppError, asyncHandler } from '../app';
  */
 export function createExportRouter(db: DatabaseEngine, logger: Logger): Router {
   const router = Router();
+
+  async function requireAdmin(req: Request): Promise<string> {
+    const callerEmail = (req.identity?.email ?? '').toLowerCase().trim();
+    if (!callerEmail) throw new AppError('Authentication required', 401);
+    const admin = await db.get<{ email: string }>(
+      'SELECT email FROM admins WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), callerEmail],
+    );
+    if (!admin) throw new AppError('Admin access required', 403);
+    return callerEmail;
+  }
 
   function validateDates(startDate: string | undefined, endDate: string | undefined): { start: string; end: string } {
     if (!startDate || !endDate) throw new AppError('startDate and endDate are required (YYYY-MM-DD)', 400);
@@ -43,6 +55,7 @@ export function createExportRouter(db: DatabaseEngine, logger: Logger): Router {
   router.get(
     '/export/attendance',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req);
       const { start, end } = validateDates(
         req.query.startDate as string | undefined,
         req.query.endDate as string | undefined,
@@ -54,9 +67,9 @@ export function createExportRouter(db: DatabaseEngine, logger: Logger): Router {
         SELECT ad.email, ad.name, ad.group_id, ad.date, ad.first_in, ad.last_out,
                ad.total_worked_minutes, ad.is_late, ad.status_source
         FROM attendance_daily ad
-        WHERE ad.date >= ? AND ad.date <= ?
+        WHERE ad.tenant_id = ? AND ad.date >= ? AND ad.date <= ?
       `;
-      const params: unknown[] = [start, end];
+      const params: unknown[] = [getTenantId(), start, end];
       if (groupId) { sql += ' AND ad.group_id = ?'; params.push(groupId); }
       if (email) { sql += ' AND ad.email = ?'; params.push(email); }
       sql += ' ORDER BY ad.date, ad.name';
@@ -75,6 +88,7 @@ export function createExportRouter(db: DatabaseEngine, logger: Logger): Router {
   router.get(
     '/export/leaves',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req);
       const { start, end } = validateDates(
         req.query.startDate as string | undefined,
         req.query.endDate as string | undefined,
@@ -87,10 +101,10 @@ export function createExportRouter(db: DatabaseEngine, logger: Logger): Router {
         SELECT lr.person_email, lr.person_name, lr.leave_type, lr.kind, lr.start_date, lr.end_date,
                lr.days_requested, lr.status, lr.reason, lr.manager_approver_email, lr.hr_approver_email
         FROM leave_requests lr
-        LEFT JOIN members m ON m.email = lr.person_email
-        WHERE lr.start_date >= ? AND lr.start_date <= ?
+        LEFT JOIN members m ON m.tenant_id = lr.tenant_id AND m.email = lr.person_email
+        WHERE lr.tenant_id = ? AND lr.start_date >= ? AND lr.start_date <= ?
       `;
-      const params: unknown[] = [start, end];
+      const params: unknown[] = [getTenantId(), start, end];
       if (groupId) { sql += ' AND m.group_id = ?'; params.push(groupId); }
       if (email) { sql += ' AND lr.person_email = ?'; params.push(email); }
       if (status) { sql += ' AND lr.status = ?'; params.push(status); }
@@ -110,6 +124,7 @@ export function createExportRouter(db: DatabaseEngine, logger: Logger): Router {
   router.get(
     '/export/lates',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req);
       const { start, end } = validateDates(
         req.query.startDate as string | undefined,
         req.query.endDate as string | undefined,
@@ -120,9 +135,9 @@ export function createExportRouter(db: DatabaseEngine, logger: Logger): Router {
       let sql = `
         SELECT ad.email, ad.name, ad.group_id, ad.date, ad.first_in, ad.total_worked_minutes
         FROM attendance_daily ad
-        WHERE ad.date >= ? AND ad.date <= ? AND ad.is_late = 1
+        WHERE ad.tenant_id = ? AND ad.date >= ? AND ad.date <= ? AND ad.is_late = 1
       `;
-      const params: unknown[] = [start, end];
+      const params: unknown[] = [getTenantId(), start, end];
       if (groupId) { sql += ' AND ad.group_id = ?'; params.push(groupId); }
       if (email) { sql += ' AND ad.email = ?'; params.push(email); }
       sql += ' ORDER BY ad.date, ad.name';

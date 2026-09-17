@@ -3,7 +3,7 @@ import type { SseBroadcaster } from '../sse/broadcaster';
 
 /**
  * SSE route:
- *   GET /api/sse — opens a server-sent events connection.
+ *   GET /api/sse — opens a server-sent events connection for the Host-resolved tenant.
  *
  * The frontend's initSSE() calls this endpoint and listens for:
  *   - attendance-update
@@ -11,8 +11,8 @@ import type { SseBroadcaster } from '../sse/broadcaster';
  *   - leave-update
  *   - meeting-update
  *
- * The connection stays open. The broadcaster pushes events as they happen.
- * Client disconnect is handled automatically by the broadcaster.
+ * The connection stays open. The broadcaster pushes events as they happen,
+ * partitioned by tenant. Client disconnect is handled automatically.
  */
 export function createSseRouter(broadcaster: SseBroadcaster): Router {
   const router = Router();
@@ -23,7 +23,7 @@ export function createSseRouter(broadcaster: SseBroadcaster): Router {
     req.socket.setNoDelay(true);
     req.socket.setKeepAlive(true);
 
-    broadcaster.addClient(res);
+    broadcaster.addClient(res, req.tenantId);
 
     // Do NOT call res.end() — the connection stays open.
     // The broadcaster handles cleanup on disconnect.
@@ -34,7 +34,7 @@ export function createSseRouter(broadcaster: SseBroadcaster): Router {
     req.socket.setTimeout(0);
     req.socket.setNoDelay(true);
     req.socket.setKeepAlive(true);
-    broadcaster.addClient(res);
+    broadcaster.addClient(res, req.tenantId);
   });
 
   return router;

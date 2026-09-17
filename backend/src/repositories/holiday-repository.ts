@@ -1,4 +1,5 @@
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface HolidayRow {
   [key: string]: unknown;
@@ -24,26 +25,32 @@ export class HolidayRepository {
   /** Get all active holidays for a year. */
   async getByYear(year: number): Promise<HolidayRow[]> {
     return this.db.all<HolidayRow>(
-      'SELECT * FROM holidays WHERE year = ? AND active = 1 ORDER BY date',
-      [year],
+      'SELECT * FROM holidays WHERE tenant_id = ? AND year = ? AND active = 1 ORDER BY date',
+      [getTenantId(), year],
     );
   }
 
   /** Get all holidays (including inactive) for admin. */
   async getAllByYear(year: number): Promise<HolidayRow[]> {
-    return this.db.all<HolidayRow>('SELECT * FROM holidays WHERE year = ? ORDER BY date', [year]);
+    return this.db.all<HolidayRow>(
+      'SELECT * FROM holidays WHERE tenant_id = ? AND year = ? ORDER BY date',
+      [getTenantId(), year],
+    );
   }
 
   /** Get a holiday by ID. */
   async getById(id: number): Promise<HolidayRow | null> {
-    return this.db.get<HolidayRow>('SELECT * FROM holidays WHERE id = ?', [id]);
+    return this.db.get<HolidayRow>(
+      'SELECT * FROM holidays WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   /** Check if a date is a mandatory holiday. */
   async isMandatoryHoliday(date: string): Promise<boolean> {
     const row = await this.db.get<{ cnt: number }>(
-      "SELECT COUNT(*) as cnt FROM holidays WHERE date = ? AND type = 'mandatory' AND active = 1",
-      [date],
+      "SELECT COUNT(*) as cnt FROM holidays WHERE tenant_id = ? AND date = ? AND type = 'mandatory' AND active = 1",
+      [getTenantId(), date],
     );
     return (row?.cnt ?? 0) > 0;
   }
@@ -51,20 +58,22 @@ export class HolidayRepository {
   /** Get all mandatory holiday dates for a year (for scheduler/leave calc). */
   async getMandatoryDates(year: number): Promise<string[]> {
     const rows = await this.db.all<{ date: string }>(
-      "SELECT date FROM holidays WHERE year = ? AND type = 'mandatory' AND active = 1 ORDER BY date",
-      [year],
+      "SELECT date FROM holidays WHERE tenant_id = ? AND year = ? AND type = 'mandatory' AND active = 1 ORDER BY date",
+      [getTenantId(), year],
     );
     return rows.map((r) => r.date);
   }
 
   /** Check if a date is a holiday for a specific employee (mandatory OR selected optional). */
   async isHolidayForEmployee(date: string, email: string): Promise<boolean> {
+    const tenantId = getTenantId();
     const row = await this.db.get<{ cnt: number }>(
       `SELECT COUNT(*) as cnt FROM holidays h
-       LEFT JOIN employee_holiday_selections s ON h.id = s.holiday_id AND s.email = ?
-       WHERE h.date = ? AND h.active = 1
+       LEFT JOIN employee_holiday_selections s
+         ON h.id = s.holiday_id AND s.tenant_id = h.tenant_id AND s.email = ?
+       WHERE h.tenant_id = ? AND h.date = ? AND h.active = 1
          AND (h.type = 'mandatory' OR s.id IS NOT NULL)`,
-      [email, date],
+      [email, tenantId, date],
     );
     return (row?.cnt ?? 0) > 0;
   }
@@ -76,15 +85,14 @@ export class HolidayRepository {
     type: string;
     year: number;
   }): Promise<HolidayRow> {
-    await this.db.run('INSERT INTO holidays (date, name, type, year) VALUES (?, ?, ?, ?)', [
-      data.date,
-      data.name,
-      data.type,
-      data.year,
-    ]);
+    const tenantId = getTenantId();
+    await this.db.run(
+      'INSERT INTO holidays (tenant_id, date, name, type, year) VALUES (?, ?, ?, ?, ?)',
+      [tenantId, data.date, data.name, data.type, data.year],
+    );
     const row = await this.db.get<HolidayRow>(
-      'SELECT * FROM holidays WHERE date = ? AND name = ?',
-      [data.date, data.name],
+      'SELECT * FROM holidays WHERE tenant_id = ? AND date = ? AND name = ?',
+      [tenantId, data.date, data.name],
     );
     if (!row) throw new Error('Failed to create holiday');
     return row;
@@ -115,34 +123,42 @@ export class HolidayRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE holidays SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE holidays SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   /** Delete a holiday. */
   async remove(id: number): Promise<void> {
-    await this.db.run('DELETE FROM employee_holiday_selections WHERE holiday_id = ?', [id]);
-    await this.db.run('DELETE FROM holidays WHERE id = ?', [id]);
+    const tenantId = getTenantId();
+    await this.db.run(
+      'DELETE FROM employee_holiday_selections WHERE tenant_id = ? AND holiday_id = ?',
+      [tenantId, id],
+    );
+    await this.db.run('DELETE FROM holidays WHERE tenant_id = ? AND id = ?', [tenantId, id]);
   }
 
   // ── Employee selections ──
 
   /** Get an employee's selected optional holidays for a year. */
   async getSelections(email: string, year: number): Promise<HolidayRow[]> {
+    const tenantId = getTenantId();
     return this.db.all<HolidayRow>(
       `SELECT h.* FROM holidays h
-       INNER JOIN employee_holiday_selections s ON h.id = s.holiday_id
-       WHERE s.email = ? AND s.year = ? AND h.active = 1
+       INNER JOIN employee_holiday_selections s ON h.id = s.holiday_id AND s.tenant_id = h.tenant_id
+       WHERE h.tenant_id = ? AND s.email = ? AND s.year = ? AND h.active = 1
        ORDER BY h.date`,
-      [email, year],
+      [tenantId, email, year],
     );
   }
 
   /** Count an employee's selections for a year. */
   async countSelections(email: string, year: number): Promise<number> {
     const row = await this.db.get<{ cnt: number }>(
-      'SELECT COUNT(*) as cnt FROM employee_holiday_selections WHERE email = ? AND year = ?',
-      [email, year],
+      'SELECT COUNT(*) as cnt FROM employee_holiday_selections WHERE tenant_id = ? AND email = ? AND year = ?',
+      [getTenantId(), email, year],
     );
     return row?.cnt ?? 0;
   }
@@ -150,16 +166,16 @@ export class HolidayRepository {
   /** Add a selection. */
   async addSelection(email: string, holidayId: number, year: number): Promise<void> {
     await this.db.run(
-      'INSERT OR IGNORE INTO employee_holiday_selections (email, holiday_id, year) VALUES (?, ?, ?)',
-      [email, holidayId, year],
+      'INSERT OR IGNORE INTO employee_holiday_selections (tenant_id, email, holiday_id, year) VALUES (?, ?, ?, ?)',
+      [getTenantId(), email, holidayId, year],
     );
   }
 
   /** Remove a selection. */
   async removeSelection(email: string, holidayId: number): Promise<void> {
     await this.db.run(
-      'DELETE FROM employee_holiday_selections WHERE email = ? AND holiday_id = ?',
-      [email, holidayId],
+      'DELETE FROM employee_holiday_selections WHERE tenant_id = ? AND email = ? AND holiday_id = ?',
+      [getTenantId(), email, holidayId],
     );
   }
 

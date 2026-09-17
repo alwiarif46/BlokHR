@@ -75,6 +75,8 @@ function _todayStr() {
  */
 export function renderAttendancePage(container) {
   _container = container;
+  _allPeople = [];
+  _gridFilter = 'all';
 
   container.innerHTML =
     '<div class="toolbar" id="attToolbar">' +
@@ -505,6 +507,12 @@ onSSE('attendance-update', function (data) {
   }
   attRenderStats();
   attRender();
+});
+
+// Tenant switch in shell should drop previous roster snapshot immediately.
+document.addEventListener('blokhr:tenant:changed', function () {
+  _allPeople = [];
+  _gridFilter = 'all';
 });
 
 /* ══════════════════════════════════════════════════════════════

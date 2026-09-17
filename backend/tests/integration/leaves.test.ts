@@ -213,7 +213,7 @@ describe('Leave Module', () => {
 
     it('rejects missing email', async () => {
       const res = await request(app).get('/api/leaves');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
     });
   });
 
@@ -489,7 +489,7 @@ describe('Leave Module', () => {
 
     it('rejects missing email', async () => {
       const res = await request(app).get('/api/pto-balance');
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
     });
   });
 });

@@ -2,6 +2,7 @@ import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import type { MemberShiftInfo, ClockRepository } from '../repositories/clock-repository';
 import type { SseBroadcaster } from '../sse/broadcaster';
+import { getTenantId } from '../tenant/context';
 
 /** Scheduler settings from system_settings table. */
 interface SchedulerConfig {
@@ -51,6 +52,18 @@ export class SchedulerService {
     private readonly logger: Logger,
   ) {}
 
+  /**
+   * Tenant registry for background jobs — one row per school/company in branding.
+   * Never hardcodes tenant IDs; works for N tenants.
+   */
+  async listTenants(): Promise<string[]> {
+    const rows = await this.db.all<{ tenant_id: string }>(
+      "SELECT tenant_id FROM branding WHERE TRIM(COALESCE(tenant_id, '')) != '' ORDER BY tenant_id",
+    );
+    const ids = rows.map((r) => r.tenant_id.trim()).filter(Boolean);
+    return ids.length > 0 ? ids : [getTenantId()];
+  }
+
   // ═══════════════════════════════════════════════════════════════
   //  1. AUTO-CUTOFF — shift-aware per-employee
   // ═══════════════════════════════════════════════════════════════
@@ -66,6 +79,7 @@ export class SchedulerService {
    * Returns the number of employees cut off.
    */
   async autoCutoff(now?: Date): Promise<{ cutoffCount: number; errors: string[] }> {
+    const tenantId = getTenantId();
     const config = await this.getConfig();
     if (!config.autoCutoffEnabled) {
       return { cutoffCount: 0, errors: [] };
@@ -79,9 +93,9 @@ export class SchedulerService {
 
     const activeRecords = await this.db.all<AttendanceRow>(
       `SELECT * FROM attendance_daily
-       WHERE status IN ('in', 'break')
+       WHERE tenant_id = ? AND status IN ('in', 'break')
          AND date IN (?, ?)`,
-      [utcToday, utcYesterday],
+      [tenantId, utcToday, utcYesterday],
     );
 
     if (activeRecords.length === 0) {
@@ -146,14 +160,14 @@ export class SchedulerService {
              last_out = ?,
              total_worked_minutes = ?,
              updated_at = datetime('now')
-           WHERE email = ? AND date = ?`,
-          [shiftEndUtc.toISOString(), creditedMinutes, record.email, record.date],
+           WHERE tenant_id = ? AND email = ? AND date = ?`,
+          [shiftEndUtc.toISOString(), creditedMinutes, tenantId, record.email, record.date],
         );
 
         await this.db.run(
-          `INSERT INTO clock_events (email, date, event_type, event_time, source)
-           VALUES (?, ?, 'out', ?, 'auto-cutoff')`,
-          [record.email, record.date, shiftEndUtc.toISOString()],
+          `INSERT INTO clock_events (tenant_id, email, date, event_type, event_time, source)
+           VALUES (?, ?, ?, 'out', ?, 'auto-cutoff')`,
+          [tenantId, record.email, record.date, shiftEndUtc.toISOString()],
         );
 
         cutoffCount++;
@@ -192,6 +206,7 @@ export class SchedulerService {
    * and who are not on approved leave.
    */
   async markAbsences(forDate?: string): Promise<{ absentCount: number }> {
+    const tenantId = getTenantId();
     const config = await this.getConfig();
     if (!config.absenceMarkingEnabled) {
       return { absentCount: 0 };
@@ -215,21 +230,23 @@ export class SchedulerService {
       name: string;
       group_id: string;
       [key: string]: unknown;
-    }>('SELECT email, name, group_id FROM members WHERE active = 1');
+    }>('SELECT email, name, group_id FROM members WHERE tenant_id = ? AND active = 1', [
+      tenantId,
+    ]);
 
     // Get emails that already have attendance for this date
     const attended = await this.db.all<{ email: string; [key: string]: unknown }>(
-      'SELECT email FROM attendance_daily WHERE date = ?',
-      [date],
+      'SELECT email FROM attendance_daily WHERE tenant_id = ? AND date = ?',
+      [tenantId, date],
     );
     const attendedSet = new Set(attended.map((r) => r.email.toLowerCase()));
 
     // Get emails on approved leave for this date
     const onLeave = await this.db.all<{ person_email: string; [key: string]: unknown }>(
       `SELECT person_email FROM leave_requests
-       WHERE status IN ('Approved', 'Approved by Manager')
+       WHERE tenant_id = ? AND status IN ('Approved', 'Approved by Manager')
          AND start_date <= ? AND end_date >= ?`,
-      [date, date],
+      [tenantId, date, date],
     );
     const leaveSet = new Set(onLeave.map((r) => r.person_email.toLowerCase()));
 
@@ -240,10 +257,10 @@ export class SchedulerService {
 
       await this.db.run(
         `INSERT OR IGNORE INTO attendance_daily
-           (email, name, date, status, status_source, group_id, total_worked_minutes,
+           (tenant_id, email, name, date, status, status_source, group_id, total_worked_minutes,
             is_late, late_minutes, created_at, updated_at)
-         VALUES (?, ?, ?, 'absent', 'auto', ?, 0, 0, 0, datetime('now'), datetime('now'))`,
-        [member.email, member.name, date, member.group_id ?? ''],
+         VALUES (?, ?, ?, ?, 'absent', 'auto', ?, 0, 0, 0, datetime('now'), datetime('now'))`,
+        [tenantId, member.email, member.name, date, member.group_id ?? ''],
       );
       absentCount++;
     }
@@ -269,6 +286,7 @@ export class SchedulerService {
    * computes accrual via the accrual engine, and credits pto_balances.
    */
   async accruePto(forMonth?: number, forYear?: number): Promise<{ accrualCount: number }> {
+    const tenantId = getTenantId();
     const now = new Date();
     const month = forMonth ?? now.getMonth() + 1;
     const year = forYear ?? now.getFullYear();
@@ -280,7 +298,8 @@ export class SchedulerService {
       member_type_id: string;
       [key: string]: unknown;
     }>(
-      "SELECT email, joining_date, COALESCE(member_type_id, 'fte') as member_type_id FROM members WHERE active = 1",
+      "SELECT email, joining_date, COALESCE(member_type_id, 'fte') as member_type_id FROM members WHERE tenant_id = ? AND active = 1",
+      [tenantId],
     );
 
     // Get all active leave policies
@@ -328,12 +347,12 @@ export class SchedulerService {
 
         // Upsert into pto_balances
         await this.db.run(
-          `INSERT INTO pto_balances (email, leave_type, year, accrued, used, carry_forward, updated_at)
-           VALUES (?, ?, ?, ?, 0, 0, datetime('now'))
-           ON CONFLICT(email, leave_type, year) DO UPDATE SET
+          `INSERT INTO pto_balances (tenant_id, email, leave_type, year, accrued, used, carry_forward, updated_at)
+           VALUES (?, ?, ?, ?, ?, 0, 0, datetime('now'))
+           ON CONFLICT(tenant_id, email, leave_type, year) DO UPDATE SET
              accrued = accrued + ?,
              updated_at = datetime('now')`,
-          [member.email, policy.leave_type, year, monthlyAccrual, monthlyAccrual],
+          [tenantId, member.email, policy.leave_type, year, monthlyAccrual, monthlyAccrual],
         );
 
         accrualCount++;
@@ -359,8 +378,10 @@ export class SchedulerService {
     pendingProfiles: number;
     total: number;
   }> {
+    const tenantId = getTenantId();
     const leaves = await this.db.get<{ cnt: number }>(
-      "SELECT COUNT(*) as cnt FROM leave_requests WHERE status = 'Pending'",
+      "SELECT COUNT(*) as cnt FROM leave_requests WHERE tenant_id = ? AND status = 'Pending'",
+      [tenantId],
     );
     const regs = await this.db.get<{ cnt: number }>(
       "SELECT COUNT(*) as cnt FROM regularizations WHERE status = 'pending'",
@@ -369,7 +390,8 @@ export class SchedulerService {
       "SELECT COUNT(*) as cnt FROM bd_meetings WHERE status = 'pending'",
     );
     const profiles = await this.db.get<{ cnt: number }>(
-      'SELECT COUNT(*) as cnt FROM members WHERE active = 1 AND certified_at IS NULL',
+      'SELECT COUNT(*) as cnt FROM members WHERE tenant_id = ? AND active = 1 AND certified_at IS NULL',
+      [tenantId],
     );
 
     const result = {

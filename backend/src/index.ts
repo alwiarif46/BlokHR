@@ -124,23 +124,28 @@ async function main(): Promise<void> {
   });
 
   // ── 8. Routes ──
-  const app = createApp(config, logger, (a) => {
-    mountCommercialRouters(a, config, commercial);
-    mountDirectoryRouter(a, directory, config, db, featureFlags);
-    mountLearningRouter(a, learning, config, db, featureFlags);
-    mountKioskRouter(a, kiosk, config, db, featureFlags);
-    mountCapturePlatform(a, capturePlatform, config, db, featureFlags);
-    registerAllRoutes(a, {
-      db,
-      config,
-      logger,
-      broadcaster,
-      featureFlags,
-      eventBus,
-      entitlements: commercial.entitlements,
-      directory: directory.service,
-    });
-  });
+  const app = createApp(
+    config,
+    logger,
+    (a) => {
+      mountCommercialRouters(a, config, commercial);
+      mountDirectoryRouter(a, directory, config, db, featureFlags);
+      mountLearningRouter(a, learning, config, db, featureFlags);
+      mountKioskRouter(a, kiosk, config, db, featureFlags);
+      mountCapturePlatform(a, capturePlatform, config, db, featureFlags);
+      registerAllRoutes(a, {
+        db,
+        config,
+        logger,
+        broadcaster,
+        featureFlags,
+        eventBus,
+        entitlements: commercial.entitlements,
+        directory: directory.service,
+      });
+    },
+    db,
+  );
   logger.info('Routes registered');
 
   // ── 9. Scheduler ──

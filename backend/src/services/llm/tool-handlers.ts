@@ -18,6 +18,7 @@ import { TimeTrackingRepository } from '../../repositories/time-tracking-reposit
 import { SettingsRepository } from '../../repositories/settings-repository';
 import { SettingsService } from '../settings-service';
 import { MeetingRepository } from '../../repositories/meeting-repository';
+import { getTenantId } from '../../tenant/context';
 import { v4 as uuidv4 } from 'uuid';
 
 type Params = Record<string, unknown>;
@@ -60,7 +61,7 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
 
   const h = new Map<string, Handler>();
   const getName = async (email: string): Promise<string> => {
-    const r = await db.get<{ name: string; [key: string]: unknown }>('SELECT name FROM members WHERE email = ?', [email]);
+    const r = await db.get<{ name: string; [key: string]: unknown }>('SELECT name FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), email]);
     return r?.name ?? email;
   };
 
@@ -72,48 +73,48 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
   h.set('clock_back', async (_p, e) => doClock('back', e));
 
   // MY ATTENDANCE
-  h.set('my_attendance_today', async (_p, e) => db.get('SELECT * FROM attendance_daily WHERE email = ? AND date = ?', [e, today()]));
-  h.set('my_attendance_for_date', async (p, e) => db.get('SELECT * FROM attendance_daily WHERE email = ? AND date = ?', [e, p.date]));
-  h.set('my_attendance_range', async (p, e) => db.all('SELECT * FROM attendance_daily WHERE email = ? AND date >= ? AND date <= ? ORDER BY date', [e, p.startDate, p.endDate]));
+  h.set('my_attendance_today', async (_p, e) => db.get('SELECT * FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date = ?', [getTenantId(), e, today()]));
+  h.set('my_attendance_for_date', async (p, e) => db.get('SELECT * FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date = ?', [getTenantId(), e, p.date]));
+  h.set('my_attendance_range', async (p, e) => db.all('SELECT * FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ? ORDER BY date', [getTenantId(), e, p.startDate, p.endDate]));
   h.set('am_i_late_today', async (_p, e) => {
-    const r = await db.get<{ is_late: number; late_minutes: number; [key: string]: unknown }>('SELECT is_late, late_minutes FROM attendance_daily WHERE email = ? AND date = ?', [e, today()]);
+    const r = await db.get<{ is_late: number; late_minutes: number; [key: string]: unknown }>('SELECT is_late, late_minutes FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date = ?', [getTenantId(), e, today()]);
     return r ? { isLate: r.is_late === 1, lateMinutes: r.late_minutes } : { isLate: false, message: 'No attendance record yet' };
   });
   h.set('my_late_count_month', async (p, e) => {
     const m = (p.month as string) || thisMonth();
-    const r = await db.get<{ late_count: number; [key: string]: unknown }>('SELECT late_count FROM monthly_late_counts WHERE email = ? AND year_month = ?', [e, m]);
+    const r = await db.get<{ late_count: number; [key: string]: unknown }>('SELECT late_count FROM monthly_late_counts WHERE tenant_id = ? AND email = ? AND year_month = ?', [getTenantId(), e, m]);
     return { month: m, lateCount: r?.late_count ?? 0 };
   });
   h.set('my_worked_hours_today', async (_p, e) => {
-    const r = await db.get<{ total_worked_minutes: number; [key: string]: unknown }>('SELECT total_worked_minutes FROM attendance_daily WHERE email = ? AND date = ?', [e, today()]);
+    const r = await db.get<{ total_worked_minutes: number; [key: string]: unknown }>('SELECT total_worked_minutes FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date = ?', [getTenantId(), e, today()]);
     const min = r?.total_worked_minutes ?? 0; return { workedMinutes: min, workedHours: Math.round(min / 60 * 10) / 10 };
   });
   h.set('my_worked_hours_range', async (p, e) => {
-    const r = await db.get<{ total: number; [key: string]: unknown }>('SELECT COALESCE(SUM(total_worked_minutes), 0) as total FROM attendance_daily WHERE email = ? AND date >= ? AND date <= ?', [e, p.startDate, p.endDate]);
+    const r = await db.get<{ total: number; [key: string]: unknown }>('SELECT COALESCE(SUM(total_worked_minutes), 0) as total FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ?', [getTenantId(), e, p.startDate, p.endDate]);
     const min = r?.total ?? 0; return { startDate: p.startDate, endDate: p.endDate, workedMinutes: min, workedHours: Math.round(min / 60 * 10) / 10 };
   });
   h.set('my_break_time_today', async (_p, e) => {
-    const r = await db.get<{ total_break_minutes: number; [key: string]: unknown }>('SELECT total_break_minutes FROM attendance_daily WHERE email = ? AND date = ?', [e, today()]);
+    const r = await db.get<{ total_break_minutes: number; [key: string]: unknown }>('SELECT total_break_minutes FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date = ?', [getTenantId(), e, today()]);
     return { breakMinutes: r?.total_break_minutes ?? 0 };
   });
-  h.set('my_clock_events_today', async (_p, e) => db.all('SELECT event_type, event_time, source FROM clock_events WHERE email = ? AND date = ? ORDER BY event_time', [e, today()]));
-  h.set('my_clock_events_for_date', async (p, e) => db.all('SELECT event_type, event_time, source FROM clock_events WHERE email = ? AND date = ? ORDER BY event_time', [e, p.date]));
+  h.set('my_clock_events_today', async (_p, e) => db.all('SELECT event_type, event_time, source FROM clock_events WHERE tenant_id = ? AND email = ? AND date = ? ORDER BY event_time', [getTenantId(), e, today()]));
+  h.set('my_clock_events_for_date', async (p, e) => db.all('SELECT event_type, event_time, source FROM clock_events WHERE tenant_id = ? AND email = ? AND date = ? ORDER BY event_time', [getTenantId(), e, p.date]));
 
   // MY REGULARIZATION
   h.set('submit_regularization', async (p, e) => regService.submit({ email: e, name: await getName(e), date: p.date as string, correctionType: (p.correctionType as string) || 'time_correction', inTime: (p.inTime as string) || '', outTime: (p.outTime as string) || '', reason: p.reason as string }));
-  h.set('my_regularizations', async (_p, e) => db.all('SELECT * FROM regularizations WHERE email = ? ORDER BY created_at DESC', [e]));
-  h.set('my_pending_regularizations', async (_p, e) => db.all("SELECT * FROM regularizations WHERE email = ? AND status = 'pending' ORDER BY created_at DESC", [e]));
-  h.set('regularization_status', async (p) => db.get('SELECT * FROM regularizations WHERE id = ?', [p.id]));
+  h.set('my_regularizations', async (_p, e) => db.all('SELECT * FROM regularizations WHERE tenant_id = ? AND email = ? ORDER BY created_at DESC', [getTenantId(), e]));
+  h.set('my_pending_regularizations', async (_p, e) => db.all("SELECT * FROM regularizations WHERE tenant_id = ? AND email = ? AND status = 'pending' ORDER BY created_at DESC", [getTenantId(), e]));
+  h.set('regularization_status', async (p) => db.get('SELECT * FROM regularizations WHERE tenant_id = ? AND id = ?', [getTenantId(), p.id]));
 
   // MY LEAVES
-  h.set('my_leave_balance', async (_p, e) => db.all('SELECT leave_type, accrued, used, carry_forward FROM pto_balances WHERE email = ? AND year = ?', [e, new Date().getFullYear()]));
-  h.set('my_leave_balance_by_type', async (p, e) => { const r = await db.get('SELECT * FROM pto_balances WHERE email = ? AND year = ? AND leave_type = ?', [e, new Date().getFullYear(), p.leaveType]); return r ?? { message: `No balance for ${p.leaveType}` }; });
+  h.set('my_leave_balance', async (_p, e) => db.all('SELECT leave_type, accrued, used, carry_forward FROM pto_balances WHERE tenant_id = ? AND email = ? AND year = ?', [getTenantId(), e, new Date().getFullYear()]));
+  h.set('my_leave_balance_by_type', async (p, e) => { const r = await db.get('SELECT * FROM pto_balances WHERE tenant_id = ? AND email = ? AND year = ? AND leave_type = ?', [getTenantId(), e, new Date().getFullYear(), p.leaveType]); return r ?? { message: `No balance for ${p.leaveType}` }; });
   h.set('request_leave', async (p, e) => leaveService.submit({ personEmail: e, personName: await getName(e), leaveType: p.leaveType as string, startDate: p.startDate as string, endDate: p.endDate as string, kind: (p.kind as string) || 'FullDay', reason: (p.reason as string) || '' }));
   h.set('cancel_my_leave', async (p, e) => leaveService.deleteOrCancel(p.id as string, e));
-  h.set('my_leave_requests', async (_p, e) => db.all('SELECT * FROM leave_requests WHERE person_email = ? ORDER BY created_at DESC', [e]));
-  h.set('my_pending_leaves', async (_p, e) => db.all("SELECT * FROM leave_requests WHERE person_email = ? AND status IN ('Pending', 'Approved by Manager') ORDER BY created_at DESC", [e]));
-  h.set('my_upcoming_leaves', async (_p, e) => db.all("SELECT * FROM leave_requests WHERE person_email = ? AND status = 'Approved' AND start_date >= ? ORDER BY start_date", [e, today()]));
-  h.set('my_leave_history', async (p, e) => db.all('SELECT * FROM leave_requests WHERE person_email = ? AND start_date <= ? AND end_date >= ? ORDER BY start_date', [e, p.endDate, p.startDate]));
+  h.set('my_leave_requests', async (_p, e) => db.all('SELECT * FROM leave_requests WHERE tenant_id = ? AND person_email = ? ORDER BY created_at DESC', [getTenantId(), e]));
+  h.set('my_pending_leaves', async (_p, e) => db.all("SELECT * FROM leave_requests WHERE tenant_id = ? AND person_email = ? AND status IN ('Pending', 'Approved by Manager') ORDER BY created_at DESC", [getTenantId(), e]));
+  h.set('my_upcoming_leaves', async (_p, e) => db.all("SELECT * FROM leave_requests WHERE tenant_id = ? AND person_email = ? AND status = 'Approved' AND start_date >= ? ORDER BY start_date", [getTenantId(), e, today()]));
+  h.set('my_leave_history', async (p, e) => db.all('SELECT * FROM leave_requests WHERE tenant_id = ? AND person_email = ? AND start_date <= ? AND end_date >= ? ORDER BY start_date', [getTenantId(), e, p.endDate, p.startDate]));
 
   // MY TIME TRACKING
   h.set('log_time_entry', async (p, e) => ttRepo.createEntry({ email: e, projectId: p.projectId as string, date: p.date as string, hours: p.hours as number, description: (p.description as string) || '', billable: p.billable !== false }));
@@ -128,7 +129,7 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
   h.set('my_overtime_records', async (p, e) => otService.getByEmail(e, p.startDate as string | undefined, p.endDate as string | undefined));
   h.set('my_overtime_summary', async (p, e) => otService.getSummary(e, p.startDate as string, p.endDate as string));
   h.set('my_ot_remaining_quarter', async (_p, e) => { const q = currentQuarter(); const s = await otService.getSummary(e, q.start, q.end) as { totalOtMinutes?: number }; const cap = await db.get<{ ot_max_quarterly_hours: number; [key: string]: unknown }>('SELECT ot_max_quarterly_hours FROM system_settings WHERE id = 1', []); const capH = cap?.ot_max_quarterly_hours ?? 125; const usedH = Math.round((s?.totalOtMinutes ?? 0) / 60 * 10) / 10; return { quarterStart: q.start, quarterEnd: q.end, capHours: capH, usedHours: usedH, remainingHours: Math.max(0, capH - usedH) }; });
-  h.set('my_overtime_for_date', async (p, e) => db.all('SELECT * FROM overtime_records WHERE email = ? AND date = ?', [e, p.date]));
+  h.set('my_overtime_for_date', async (p, e) => db.all('SELECT * FROM overtime_records WHERE tenant_id = ? AND email = ? AND date = ?', [getTenantId(), e, p.date]));
 
   // MY TIMESHEETS
   h.set('my_timesheets', async (_p, e) => tsService.list({ email: e }));
@@ -137,13 +138,13 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
   h.set('my_timesheet_detail', async (p) => tsService.getDetail(p.id as string));
 
   // MY PROFILE
-  h.set('my_profile', async (_p, e) => db.get('SELECT email, name, designation, group_id, member_type_id, role, phone, joining_date, location, timezone, individual_shift_start, individual_shift_end FROM members WHERE email = ?', [e]));
-  h.set('my_shift', async (_p, e) => { const m = await db.get<{ individual_shift_start: string | null; individual_shift_end: string | null; group_id: string; [key: string]: unknown }>('SELECT individual_shift_start, individual_shift_end, group_id FROM members WHERE email = ?', [e]); if (!m) return { error: 'Not found' }; if (m.individual_shift_start && m.individual_shift_end) return { type: 'individual', start: m.individual_shift_start, end: m.individual_shift_end }; const g = await db.get<{ shift_start: string; shift_end: string; name: string; [key: string]: unknown }>('SELECT shift_start, shift_end, name FROM groups WHERE id = ?', [m.group_id]); return { type: 'group', groupName: g?.name, start: g?.shift_start, end: g?.shift_end }; });
-  h.set('my_department', async (_p, e) => { const r = await db.get<{ group_id: string; [key: string]: unknown }>('SELECT group_id FROM members WHERE email = ?', [e]); if (!r?.group_id) return { department: 'Unassigned' }; const g = await db.get<{ name: string; [key: string]: unknown }>('SELECT name FROM groups WHERE id = ?', [r.group_id]); return { departmentId: r.group_id, departmentName: g?.name }; });
-  h.set('my_joining_date', async (_p, e) => { const r = await db.get<{ joining_date: string; [key: string]: unknown }>('SELECT joining_date FROM members WHERE email = ?', [e]); return { joiningDate: r?.joining_date || 'Not set' }; });
+  h.set('my_profile', async (_p, e) => db.get('SELECT email, name, designation, group_id, member_type_id, role, phone, joining_date, location, timezone, individual_shift_start, individual_shift_end FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), e]));
+  h.set('my_shift', async (_p, e) => { const m = await db.get<{ individual_shift_start: string | null; individual_shift_end: string | null; group_id: string; [key: string]: unknown }>('SELECT individual_shift_start, individual_shift_end, group_id FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), e]); if (!m) return { error: 'Not found' }; if (m.individual_shift_start && m.individual_shift_end) return { type: 'individual', start: m.individual_shift_start, end: m.individual_shift_end }; const g = await db.get<{ shift_start: string; shift_end: string; name: string; [key: string]: unknown }>('SELECT shift_start, shift_end, name FROM groups WHERE id = ?', [m.group_id]); return { type: 'group', groupName: g?.name, start: g?.shift_start, end: g?.shift_end }; });
+  h.set('my_department', async (_p, e) => { const r = await db.get<{ group_id: string; [key: string]: unknown }>('SELECT group_id FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), e]); if (!r?.group_id) return { department: 'Unassigned' }; const g = await db.get<{ name: string; [key: string]: unknown }>('SELECT name FROM groups WHERE id = ?', [r.group_id]); return { departmentId: r.group_id, departmentName: g?.name }; });
+  h.set('my_joining_date', async (_p, e) => { const r = await db.get<{ joining_date: string; [key: string]: unknown }>('SELECT joining_date FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), e]); return { joiningDate: r?.joining_date || 'Not set' }; });
 
   // MY TARGETS
-  h.set('my_attendance_target', async (p, e) => { const m = await db.get<{ individual_shift_start: string | null; individual_shift_end: string | null; group_id: string; [key: string]: unknown }>('SELECT individual_shift_start, individual_shift_end, group_id FROM members WHERE email = ?', [e]); let sm = 540; if (m?.individual_shift_start && m?.individual_shift_end) sm = parseShiftMinutes(m.individual_shift_start, m.individual_shift_end); else if (m?.group_id) { const g = await db.get<{ shift_start: string; shift_end: string; [key: string]: unknown }>('SELECT shift_start, shift_end FROM groups WHERE id = ?', [m.group_id]); if (g) sm = parseShiftMinutes(g.shift_start, g.shift_end); } const a = await db.get<{ total: number; days: number; [key: string]: unknown }>(`SELECT COALESCE(SUM(total_worked_minutes), 0) as total, COUNT(*) as days FROM attendance_daily WHERE email = ? AND date >= ? AND date <= ? AND status IN ('in', 'out', 'break')`, [e, p.startDate, p.endDate]); const wd = countWeekdays(p.startDate as string, p.endDate as string); const expM = wd * sm; const actM = a?.total ?? 0; return { startDate: p.startDate, endDate: p.endDate, workdays: wd, shiftHoursPerDay: Math.round(sm / 60 * 10) / 10, expectedHours: Math.round(expM / 60 * 10) / 10, actualHours: Math.round(actM / 60 * 10) / 10, achievementPct: expM > 0 ? Math.round(actM / expM * 1000) / 10 : 0, presentDays: a?.days ?? 0 }; });
+  h.set('my_attendance_target', async (p, e) => { const m = await db.get<{ individual_shift_start: string | null; individual_shift_end: string | null; group_id: string; [key: string]: unknown }>('SELECT individual_shift_start, individual_shift_end, group_id FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), e]); let sm = 540; if (m?.individual_shift_start && m?.individual_shift_end) sm = parseShiftMinutes(m.individual_shift_start, m.individual_shift_end); else if (m?.group_id) { const g = await db.get<{ shift_start: string; shift_end: string; [key: string]: unknown }>('SELECT shift_start, shift_end FROM groups WHERE id = ?', [m.group_id]); if (g) sm = parseShiftMinutes(g.shift_start, g.shift_end); } const a = await db.get<{ total: number; days: number; [key: string]: unknown }>(`SELECT COALESCE(SUM(total_worked_minutes), 0) as total, COUNT(*) as days FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ? AND status IN ('in', 'out', 'break')`, [getTenantId(), e, p.startDate, p.endDate]); const wd = countWeekdays(p.startDate as string, p.endDate as string); const expM = wd * sm; const actM = a?.total ?? 0; return { startDate: p.startDate, endDate: p.endDate, workdays: wd, shiftHoursPerDay: Math.round(sm / 60 * 10) / 10, expectedHours: Math.round(expM / 60 * 10) / 10, actualHours: Math.round(actM / 60 * 10) / 10, achievementPct: expM > 0 ? Math.round(actM / expM * 1000) / 10 : 0, presentDays: a?.days ?? 0 }; });
   h.set('my_billable_target', async (p, e) => { const s = await ttRepo.getSummary({ email: e, startDate: p.startDate as string, endDate: p.endDate as string }); const projs = await db.all<{ budget_hours: number | null; [key: string]: unknown }>('SELECT p.budget_hours FROM time_entries t JOIN projects p ON t.project_id = p.id WHERE t.email = ? AND t.date >= ? AND t.date <= ? AND p.budget_hours IS NOT NULL GROUP BY p.id', [e, p.startDate, p.endDate]); const budget = projs.reduce((acc, r) => acc + (r.budget_hours ?? 0), 0); return { startDate: p.startDate, endDate: p.endDate, billableHours: s.billableHours, nonBillableHours: s.nonBillableHours, totalHours: s.totalHours, budgetHours: budget, utilizationPct: s.totalHours > 0 ? Math.round(s.billableHours / s.totalHours * 1000) / 10 : 0 }; });
   h.set('my_ot_cap_status', async (_p, e) => h.get('my_ot_remaining_quarter')!({}, e));
 
@@ -157,34 +158,34 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
   h.set('my_tracked_meetings', async (p, e) => { const c = ['ma.email = ?']; const pr: unknown[] = [e]; if (p.startDate) { c.push('ma.session_date >= ?'); pr.push(p.startDate); } if (p.endDate) { c.push('ma.session_date <= ?'); pr.push(p.endDate); } return db.all(`SELECT ma.*, tm.name as meeting_name, tm.platform FROM meeting_attendance ma JOIN tracked_meetings tm ON ma.meeting_id = tm.id WHERE ${c.join(' AND ')} ORDER BY ma.session_date DESC`, pr); });
   h.set('log_meeting', async (p, e) => { const id = uuidv4(); const aid = uuidv4(); const n = await getName(e); await db.run('INSERT INTO tracked_meetings (id, name, platform, added_by) VALUES (?, ?, ?, ?)', [id, p.title, p.platform || 'manual', e]); await db.run('INSERT INTO meeting_attendance (id, meeting_id, session_date, email, display_name, total_seconds, credit) VALUES (?, ?, ?, ?, ?, ?, 100)', [aid, id, p.date, e, n, Math.round((p.hours as number) * 3600)]); return { success: true, meetingId: id }; });
   h.set('submit_bd_meeting', async (p, e) => { const n = await getName(e); return bdService.submit({ email: e, name: n, client: (p.client as string) || (p.title as string) || '', date: p.date as string, time: '', location: '', notes: (p.description as string) || '' }); });
-  h.set('my_bd_meetings', async (_p, e) => db.all('SELECT * FROM bd_meetings WHERE email = ? ORDER BY created_at DESC', [e]));
+  h.set('my_bd_meetings', async (_p, e) => db.all('SELECT * FROM bd_meetings WHERE tenant_id = ? AND email = ? ORDER BY created_at DESC', [getTenantId(), e]));
 
   // MY PENDING
   h.set('my_pending_actions', async () => settingsService.getPendingCounts());
 
   // ADMIN ATTENDANCE
-  h.set('who_is_present_today', async () => db.all("SELECT email, name, total_worked_minutes, first_in FROM attendance_daily WHERE date = ? AND status IN ('in', 'out', 'break') ORDER BY name", [today()]));
-  h.set('who_is_absent_today', async () => db.all("SELECT email, name FROM attendance_daily WHERE date = ? AND status = 'absent' ORDER BY name", [today()]));
-  h.set('who_is_late_today', async () => db.all('SELECT email, name, late_minutes FROM attendance_daily WHERE date = ? AND is_late = 1 ORDER BY late_minutes DESC', [today()]));
-  h.set('who_is_on_leave_today', async () => db.all("SELECT person_email as email, person_name as name, leave_type FROM leave_requests WHERE status = 'Approved' AND start_date <= ? AND end_date >= ? ORDER BY person_name", [today(), today()]));
-  h.set('who_is_on_break_today', async () => db.all("SELECT email, name, last_break_start FROM attendance_daily WHERE date = ? AND status = 'break' ORDER BY name", [today()]));
-  h.set('attendance_for_date', async (p) => db.all('SELECT * FROM attendance_daily WHERE date = ? ORDER BY name', [p.date]));
-  h.set('attendance_for_employee', async (p) => db.all('SELECT * FROM attendance_daily WHERE email = ? AND date >= ? AND date <= ? ORDER BY date', [p.email, p.startDate, p.endDate]));
+  h.set('who_is_present_today', async () => db.all("SELECT email, name, total_worked_minutes, first_in FROM attendance_daily WHERE tenant_id = ? AND date = ? AND status IN ('in', 'out', 'break') ORDER BY name", [getTenantId(), today()]));
+  h.set('who_is_absent_today', async () => db.all("SELECT email, name FROM attendance_daily WHERE tenant_id = ? AND date = ? AND status = 'absent' ORDER BY name", [getTenantId(), today()]));
+  h.set('who_is_late_today', async () => db.all('SELECT email, name, late_minutes FROM attendance_daily WHERE tenant_id = ? AND date = ? AND is_late = 1 ORDER BY late_minutes DESC', [getTenantId(), today()]));
+  h.set('who_is_on_leave_today', async () => db.all("SELECT person_email as email, person_name as name, leave_type FROM leave_requests WHERE tenant_id = ? AND status = 'Approved' AND start_date <= ? AND end_date >= ? ORDER BY person_name", [getTenantId(), today(), today()]));
+  h.set('who_is_on_break_today', async () => db.all("SELECT email, name, last_break_start FROM attendance_daily WHERE tenant_id = ? AND date = ? AND status = 'break' ORDER BY name", [getTenantId(), today()]));
+  h.set('attendance_for_date', async (p) => db.all('SELECT * FROM attendance_daily WHERE tenant_id = ? AND date = ? ORDER BY name', [getTenantId(), p.date]));
+  h.set('attendance_for_employee', async (p) => db.all('SELECT * FROM attendance_daily WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ? ORDER BY date', [getTenantId(), p.email, p.startDate, p.endDate]));
   h.set('attendance_for_employee_range', async (p) => h.get('attendance_for_employee')!(p, ''));
-  h.set('department_attendance', async (p) => { const d = (p.date as string) || today(); return db.all('SELECT ad.* FROM attendance_daily ad JOIN members m ON ad.email = m.email WHERE m.group_id = ? AND ad.date = ? ORDER BY ad.name', [p.groupId, d]); });
+  h.set('department_attendance', async (p) => { const d = (p.date as string) || today(); return db.all('SELECT ad.* FROM attendance_daily ad JOIN members m ON ad.email = m.email AND ad.tenant_id = m.tenant_id WHERE m.tenant_id = ? AND m.group_id = ? AND ad.date = ? ORDER BY ad.name', [getTenantId(), p.groupId, d]); });
 
   // ADMIN LEAVES
-  h.set('pending_leave_approvals', async () => db.all("SELECT * FROM leave_requests WHERE status IN ('Pending', 'Approved by Manager') ORDER BY created_at"));
-  h.set('approve_leave', async (p, caller) => { const lv = await db.get<{ status: string; [key: string]: unknown }>('SELECT status FROM leave_requests WHERE id = ?', [p.id]); const a = (p.approverEmail as string) || caller; if (lv?.status === 'Approved by Manager') return leaveService.hrApprove(p.id as string, a); return leaveService.managerApprove(p.id as string, a); });
+  h.set('pending_leave_approvals', async () => db.all("SELECT * FROM leave_requests WHERE tenant_id = ? AND status IN ('Pending', 'Approved by Manager') ORDER BY created_at", [getTenantId()]));
+  h.set('approve_leave', async (p, caller) => { const lv = await db.get<{ status: string; [key: string]: unknown }>('SELECT status FROM leave_requests WHERE tenant_id = ? AND id = ?', [getTenantId(), p.id]); const a = (p.approverEmail as string) || caller; if (lv?.status === 'Approved by Manager') return leaveService.hrApprove(p.id as string, a); return leaveService.managerApprove(p.id as string, a); });
   h.set('reject_leave', async (p, caller) => leaveService.reject(p.id as string, (p.approverEmail as string) || caller, p.reason as string));
   h.set('leave_report', async (p) => analyticsService.getLeaveReport({ startDate: p.startDate as string, endDate: p.endDate as string, groupId: p.groupId as string | undefined }));
-  h.set('leaves_for_employee', async (p) => db.all('SELECT * FROM leave_requests WHERE person_email = ? ORDER BY created_at DESC', [p.email]));
+  h.set('leaves_for_employee', async (p) => db.all('SELECT * FROM leave_requests WHERE tenant_id = ? AND person_email = ? ORDER BY created_at DESC', [getTenantId(), p.email]));
 
   // ADMIN REGULARIZATION
-  h.set('pending_regularizations', async () => db.all("SELECT * FROM regularizations WHERE status = 'pending' ORDER BY created_at"));
+  h.set('pending_regularizations', async () => db.all("SELECT * FROM regularizations WHERE tenant_id = ? AND status = 'pending' ORDER BY created_at", [getTenantId()]));
   h.set('approve_regularization', async (p, caller) => regService.approve(String(p.id), 'manager', (p.approverEmail as string) || caller));
   h.set('reject_regularization', async (p, caller) => regService.reject(String(p.id), (p.approverEmail as string) || caller, p.reason as string));
-  h.set('regularizations_for_employee', async (p) => db.all('SELECT * FROM regularizations WHERE email = ? ORDER BY created_at DESC', [p.email]));
+  h.set('regularizations_for_employee', async (p) => db.all('SELECT * FROM regularizations WHERE tenant_id = ? AND email = ? ORDER BY created_at DESC', [getTenantId(), p.email]));
 
   // ADMIN OVERTIME
   h.set('pending_overtime_approvals', async () => otService.getPending());
@@ -193,7 +194,7 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
   h.set('overtime_report', async (p) => analyticsService.getOvertimeReport({ startDate: p.startDate as string, endDate: p.endDate as string, groupId: p.groupId as string | undefined, email: p.email as string | undefined }));
 
   // ADMIN BD
-  h.set('pending_bd_meetings', async () => db.all("SELECT * FROM bd_meetings WHERE status IN ('pending', 'qualified') ORDER BY created_at"));
+  h.set('pending_bd_meetings', async () => db.all("SELECT * FROM bd_meetings WHERE tenant_id = ? AND status IN ('pending', 'qualified') ORDER BY created_at", [getTenantId()]));
   h.set('approve_bd_meeting', async (p, caller) => bdService.approve(String(p.id), (p.approverEmail as string) || caller));
   h.set('reject_bd_meeting', async (p, caller) => bdService.reject(String(p.id), (p.approverEmail as string) || caller, (p.reason as string) || ''));
 
@@ -205,13 +206,13 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
 
   // ADMIN TARGETS
   h.set('employee_attendance_target', async (p) => h.get('my_attendance_target')!(p, p.email as string));
-  h.set('group_attendance_target', async (p) => { const members = await db.all<{ email: string; [key: string]: unknown }>('SELECT email FROM members WHERE group_id = ? AND active = 1', [p.groupId]); const res = []; for (const m of members) res.push({ email: m.email, ...(await h.get('my_attendance_target')!({ startDate: p.startDate, endDate: p.endDate }, m.email) as object) }); return res; });
+  h.set('group_attendance_target', async (p) => { const members = await db.all<{ email: string; [key: string]: unknown }>('SELECT email FROM members WHERE tenant_id = ? AND group_id = ? AND active = 1', [getTenantId(), p.groupId]); const res = []; for (const m of members) res.push({ email: m.email, ...(await h.get('my_attendance_target')!({ startDate: p.startDate, endDate: p.endDate }, m.email) as object) }); return res; });
   h.set('employee_billable_target', async (p) => h.get('my_billable_target')!(p, p.email as string));
 
   // ADMIN PEOPLE
-  h.set('employee_info', async (p) => db.get('SELECT email, name, designation, group_id, member_type_id, role, phone, joining_date, location, timezone, active FROM members WHERE email = ?', [p.email]));
-  h.set('employee_count', async (p) => { const c = ['active = 1']; const pr: unknown[] = []; if (p.groupId) { c.push('group_id = ?'); pr.push(p.groupId); } const r = await db.get<{ cnt: number; [key: string]: unknown }>(`SELECT COUNT(*) as cnt FROM members WHERE ${c.join(' AND ')}`, pr); return { count: r?.cnt ?? 0, groupId: p.groupId || 'all' }; });
-  h.set('employee_list_department', async (p) => db.all('SELECT email, name, designation, role FROM members WHERE group_id = ? AND active = 1 ORDER BY name', [p.groupId]));
+  h.set('employee_info', async (p) => db.get('SELECT email, name, designation, group_id, member_type_id, role, phone, joining_date, location, timezone, active FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), p.email]));
+  h.set('employee_count', async (p) => { const c = ['tenant_id = ?', 'active = 1']; const pr: unknown[] = [getTenantId()]; if (p.groupId) { c.push('group_id = ?'); pr.push(p.groupId); } const r = await db.get<{ cnt: number; [key: string]: unknown }>(`SELECT COUNT(*) as cnt FROM members WHERE ${c.join(' AND ')}`, pr); return { count: r?.cnt ?? 0, groupId: p.groupId || 'all' }; });
+  h.set('employee_list_department', async (p) => db.all('SELECT email, name, designation, role FROM members WHERE tenant_id = ? AND group_id = ? AND active = 1 ORDER BY name', [getTenantId(), p.groupId]));
   h.set('employee_of_month', async () => settingsService.getEmployeeOfMonth());
 
   // ADMIN REPORTS
@@ -221,7 +222,7 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
   h.set('attendance_overview', async (p) => analyticsService.getAttendanceOverview({ startDate: p.startDate as string, endDate: p.endDate as string, groupId: p.groupId as string | undefined, email: p.email as string | undefined }));
 
   // ALL PENDING
-  h.set('all_pending_approvals', async () => { const [lv, rg, ot, bd, ts] = await Promise.all([ db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM leave_requests WHERE status IN ('Pending', 'Approved by Manager')", []), db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM regularizations WHERE status = 'pending'", []), db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM overtime_records WHERE status = 'pending'", []), db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM bd_meetings WHERE status IN ('pending', 'qualified')", []), db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM timesheets WHERE status = 'submitted'", []) ]); return { pendingLeaves: lv?.cnt ?? 0, pendingRegularizations: rg?.cnt ?? 0, pendingOvertime: ot?.cnt ?? 0, pendingBdMeetings: bd?.cnt ?? 0, pendingTimesheets: ts?.cnt ?? 0, total: (lv?.cnt ?? 0) + (rg?.cnt ?? 0) + (ot?.cnt ?? 0) + (bd?.cnt ?? 0) + (ts?.cnt ?? 0) }; });
+  h.set('all_pending_approvals', async () => { const tid = getTenantId(); const [lv, rg, ot, bd, ts] = await Promise.all([ db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM leave_requests WHERE tenant_id = ? AND status IN ('Pending', 'Approved by Manager')", [tid]), db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM regularizations WHERE tenant_id = ? AND status = 'pending'", [tid]), db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM overtime_records WHERE tenant_id = ? AND status = 'pending'", [tid]), db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM bd_meetings WHERE tenant_id = ? AND status IN ('pending', 'qualified')", [tid]), db.get<{ cnt: number; [key: string]: unknown }>("SELECT COUNT(*) as cnt FROM timesheets WHERE tenant_id = ? AND status = 'submitted'", [tid]) ]); return { pendingLeaves: lv?.cnt ?? 0, pendingRegularizations: rg?.cnt ?? 0, pendingOvertime: ot?.cnt ?? 0, pendingBdMeetings: bd?.cnt ?? 0, pendingTimesheets: ts?.cnt ?? 0, total: (lv?.cnt ?? 0) + (rg?.cnt ?? 0) + (ot?.cnt ?? 0) + (bd?.cnt ?? 0) + (ts?.cnt ?? 0) }; });
 
   return h;
 }

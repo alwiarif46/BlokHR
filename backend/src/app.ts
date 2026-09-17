@@ -5,6 +5,8 @@ import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import type { Logger } from 'pino';
 import type { AppConfig } from './config';
+import type { DatabaseEngine } from './db/engine';
+import { resolveInternalSecret } from './internal-auth';
 import { runWithTenant } from './tenant/context';
 import { parseTenantHostMap, resolveTenantId } from './tenant/resolve-tenant';
 
@@ -51,16 +53,24 @@ export function asyncHandler(
   };
 }
 
+function parseBearer(header: string | undefined): string {
+  if (!header) return '';
+  const m = /^Bearer\s+(.+)$/i.exec(header.trim());
+  return m?.[1]?.trim() ?? '';
+}
+
 /**
  * Builds the Express application with the full middleware stack in enforced order.
- * No business routes yet — those are added per-module.
+ * Pass `db` so Bearer session tokens can be verified against auth_sessions.
  */
 export function createApp(
   config: AppConfig,
   logger: Logger,
   registerRoutes?: (app: Express) => void,
+  db?: DatabaseEngine,
 ): Express {
   const app = express();
+  const internalSecret = resolveInternalSecret();
 
   // ── 1. Correlation ID ──
   app.use((req: Request, _res: Response, next: NextFunction) => {
@@ -134,34 +144,78 @@ export function createApp(
   // shell.html is the single app shell (the gateway serves it the same way).
   app.use(express.static(config.publicDir, { index: 'shell.html' }));
 
-  // ── 8. Identity extraction ──
-  app.use((req: Request, _res: Response, next: NextFunction) => {
-    const email = req.headers['x-user-email'] as string | undefined;
-    const name = req.headers['x-user-name'] as string | undefined;
-    if (email) {
-      req.identity = {
-        email: email.toLowerCase().trim(),
-        name: name ? decodeURIComponent(name).trim() : email.toLowerCase().trim(),
-      };
-    } else {
-      req.identity = null;
-    }
-    next();
-  });
-
-  // ── 8b. Tenant resolution (Host map → X-Blok-Tenant → DEFAULT_TENANT_ID) ──
+  // ── 8. Tenant resolution (Host map → trusted X-Blok-Tenant → DEFAULT_TENANT_ID) ──
+  // Only trust client/gateway X-Blok-Tenant when X-Blok-Internal matches INTERNAL_SECRET.
   const hostMap = parseTenantHostMap(config.tenantHostMap);
   app.use((req: Request, _res: Response, next: NextFunction) => {
+    const gotInternal = String(req.headers['x-blok-internal'] ?? '');
+    const trustBlokTenantHeader = !!(internalSecret && gotInternal === internalSecret);
     const tenantId = resolveTenantId({
       headers: req.headers as Record<string, string | string[] | undefined>,
       hostMap,
-      trustBlokTenantHeader: true,
+      trustBlokTenantHeader,
       fallback: config.defaultTenantId,
     });
     req.tenantId = tenantId;
     // Propagate for directory/school routers that read X-Blok-Tenant
     req.headers['x-blok-tenant'] = tenantId;
     runWithTenant(tenantId, () => next());
+  });
+
+  // ── 8b. Identity — Bearer session first; spoofable headers only when allowed ──
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    void (async () => {
+      req.identity = null;
+
+      const token = parseBearer(req.headers.authorization);
+      if (token && db) {
+        try {
+          const row = await db.get<{
+            email: string;
+            name: string;
+            expires_at: string;
+            tenant_id: string | null;
+          }>('SELECT email, name, expires_at, tenant_id FROM auth_sessions WHERE token = ?', [
+            token,
+          ]);
+          if (row) {
+            const exp = Date.parse(row.expires_at);
+            if (Number.isFinite(exp) && exp >= Date.now()) {
+              const sessionTenant = (row.tenant_id || '').trim() || config.defaultTenantId;
+              if (sessionTenant !== req.tenantId) {
+                res.status(403).json({
+                  error: 'tenant_mismatch',
+                  correlationId: req.correlationId,
+                });
+                return;
+              }
+              req.identity = {
+                email: row.email.toLowerCase().trim(),
+                name: (row.name || row.email).trim(),
+              };
+              next();
+              return;
+            }
+            await db.run('DELETE FROM auth_sessions WHERE token = ?', [token]);
+          }
+        } catch (err) {
+          logger.warn({ err, correlationId: req.correlationId }, 'Session lookup failed');
+        }
+      }
+
+      if (config.allowHeaderIdentity) {
+        const email = req.headers['x-user-email'] as string | undefined;
+        const name = req.headers['x-user-name'] as string | undefined;
+        if (email) {
+          req.identity = {
+            email: email.toLowerCase().trim(),
+            name: name ? decodeURIComponent(name).trim() : email.toLowerCase().trim(),
+          };
+        }
+      }
+
+      next();
+    })().catch(next);
   });
 
   // ── 9. Health check (before auth, always accessible) ──

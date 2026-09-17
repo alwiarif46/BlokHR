@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import { getTenantId } from '../tenant/context';
+import { isTenantAdmin } from '../tenant/admin-access';
 import { AppError, asyncHandler } from '../app';
 import { SettingsRepository } from '../repositories/settings-repository';
 import { LeaveRepository } from '../repositories/leave-repository';
@@ -239,10 +240,19 @@ export function createSettingsRouter(
   router.get(
     '/user-roles',
     asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = (req.identity?.email ?? '').toLowerCase().trim();
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
       const email = req.query.email as string | undefined;
       if (!email) throw new AppError('email query parameter required', 400);
+      const target = email.toLowerCase().trim();
 
-      const roles = await service.getUserRoles(email.toLowerCase().trim());
+      const isAdmin = await isTenantAdmin(db, callerEmail);
+      if (!isAdmin && target !== callerEmail) {
+        throw new AppError('Forbidden', 403);
+      }
+
+      const roles = await service.getUserRoles(target);
       res.json(roles);
     }),
   );

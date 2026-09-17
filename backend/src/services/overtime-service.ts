@@ -4,6 +4,7 @@ import type { OvertimeRepository, OvertimeRow } from '../repositories/overtime-r
 import type { ClockRepository, MemberShiftInfo } from '../repositories/clock-repository';
 import { calculateOvertimeIndia } from '../formula';
 import type { EventBus } from '../events';
+import { getTenantId } from '../tenant/context';
 
 export interface OvertimeView {
   id: number;
@@ -42,7 +43,10 @@ export class OvertimeService {
       email: string;
       total_worked_minutes: number;
       [key: string]: unknown;
-    }>("SELECT * FROM attendance_daily WHERE date = ? AND status = 'out'", [date]);
+    }>(
+      "SELECT * FROM attendance_daily WHERE tenant_id = ? AND date = ? AND status = 'out'",
+      [getTenantId(), date],
+    );
 
     const allMembers = await this.clockRepo.getAllActiveMembersWithShifts();
     const memberMap = new Map<string, MemberShiftInfo>();
@@ -51,8 +55,8 @@ export class OvertimeService {
     const isHoliday =
       ((
         await this.db.get<{ cnt: number }>(
-          "SELECT COUNT(*) as cnt FROM holidays WHERE date = ? AND type = 'mandatory' AND active = 1",
-          [date],
+          "SELECT COUNT(*) as cnt FROM holidays WHERE tenant_id = ? AND date = ? AND type = 'mandatory' AND active = 1",
+          [getTenantId(), date],
         )
       )?.cnt ?? 0) > 0;
 
@@ -111,8 +115,8 @@ export class OvertimeService {
           da: number;
           [key: string]: unknown;
         }>(
-          'SELECT COALESCE(basic_salary, 0) as basic_salary, COALESCE(da, 0) as da FROM members WHERE email = ?',
-          [record.email],
+          'SELECT COALESCE(basic_salary, 0) as basic_salary, COALESCE(da, 0) as da FROM members WHERE tenant_id = ? AND email = ?',
+          [getTenantId(), record.email],
         );
 
         let otPay = 0;
@@ -220,8 +224,8 @@ export class OvertimeService {
       da: number;
       [key: string]: unknown;
     }>(
-      'SELECT COALESCE(basic_salary, 0) as basic_salary, COALESCE(da, 0) as da FROM members WHERE email = ?',
-      [data.email],
+      'SELECT COALESCE(basic_salary, 0) as basic_salary, COALESCE(da, 0) as da FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), data.email],
     );
     if ((salary?.basic_salary ?? 0) > 0) {
       const result = calculateOvertimeIndia({

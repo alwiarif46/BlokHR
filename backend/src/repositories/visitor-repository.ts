@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface VisitorVisitRow {
   [key: string]: unknown;
@@ -50,11 +51,13 @@ export class VisitorRepository {
     createdBy: string;
   }): Promise<VisitorVisitRow> {
     const id = uuidv4();
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO visitor_visits (id, visitor_name, visitor_company, visitor_email, visitor_phone,
+      `INSERT INTO visitor_visits (tenant_id, id, visitor_name, visitor_company, visitor_email, visitor_phone,
         host_email, purpose, expected_date, expected_time, expected_duration_minutes, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         id,
         data.visitorName,
         data.visitorCompany ?? '',
@@ -68,15 +71,19 @@ export class VisitorRepository {
         data.createdBy,
       ],
     );
-    const row = await this.db.get<VisitorVisitRow>('SELECT * FROM visitor_visits WHERE id = ?', [
-      id,
-    ]);
+    const row = await this.db.get<VisitorVisitRow>(
+      'SELECT * FROM visitor_visits WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
     if (!row) throw new Error('Failed to create visit');
     return row;
   }
 
   async getVisitById(id: string): Promise<VisitorVisitRow | null> {
-    return this.db.get<VisitorVisitRow>('SELECT * FROM visitor_visits WHERE id = ?', [id]);
+    return this.db.get<VisitorVisitRow>(
+      'SELECT * FROM visitor_visits WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   async listVisits(filters?: {
@@ -84,8 +91,8 @@ export class VisitorRepository {
     date?: string;
     status?: string;
   }): Promise<VisitorVisitRow[]> {
-    const conds: string[] = [];
-    const params: unknown[] = [];
+    const conds: string[] = ['tenant_id = ?'];
+    const params: unknown[] = [getTenantId()];
     if (filters?.hostEmail) {
       conds.push('host_email = ?');
       params.push(filters.hostEmail);
@@ -98,7 +105,7 @@ export class VisitorRepository {
       conds.push('status = ?');
       params.push(filters.status);
     }
-    const where = conds.length > 0 ? `WHERE ${conds.join(' AND ')}` : '';
+    const where = `WHERE ${conds.join(' AND ')}`;
     return this.db.all<VisitorVisitRow>(
       `SELECT * FROM visitor_visits ${where} ORDER BY expected_date DESC, expected_time DESC`,
       params,
@@ -107,29 +114,29 @@ export class VisitorRepository {
 
   async checkIn(id: string, receptionNotes?: string): Promise<void> {
     await this.db.run(
-      "UPDATE visitor_visits SET status = 'checked_in', actual_checkin = datetime('now'), reception_notes = ?, updated_at = datetime('now') WHERE id = ?",
-      [receptionNotes ?? '', id],
+      "UPDATE visitor_visits SET status = 'checked_in', actual_checkin = datetime('now'), reception_notes = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [receptionNotes ?? '', getTenantId(), id],
     );
   }
 
   async checkOut(id: string): Promise<void> {
     await this.db.run(
-      "UPDATE visitor_visits SET status = 'checked_out', actual_checkout = datetime('now'), updated_at = datetime('now') WHERE id = ?",
-      [id],
+      "UPDATE visitor_visits SET status = 'checked_out', actual_checkout = datetime('now'), updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [getTenantId(), id],
     );
   }
 
   async cancelVisit(id: string): Promise<void> {
     await this.db.run(
-      "UPDATE visitor_visits SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?",
-      [id],
+      "UPDATE visitor_visits SET status = 'cancelled', updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [getTenantId(), id],
     );
   }
 
   async markNoShow(id: string): Promise<void> {
     await this.db.run(
-      "UPDATE visitor_visits SET status = 'no_show', updated_at = datetime('now') WHERE id = ?",
-      [id],
+      "UPDATE visitor_visits SET status = 'no_show', updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [getTenantId(), id],
     );
   }
 
@@ -161,8 +168,11 @@ export class VisitorRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE visitor_visits SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE visitor_visits SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   // ── Forms ──
@@ -192,7 +202,8 @@ export class VisitorRepository {
   /** Count visitors currently checked in (for dashboard). */
   async countCheckedIn(): Promise<number> {
     const row = await this.db.get<{ cnt: number; [key: string]: unknown }>(
-      "SELECT COUNT(*) AS cnt FROM visitor_visits WHERE status = 'checked_in'",
+      "SELECT COUNT(*) AS cnt FROM visitor_visits WHERE tenant_id = ? AND status = 'checked_in'",
+      [getTenantId()],
     );
     return row?.cnt ?? 0;
   }

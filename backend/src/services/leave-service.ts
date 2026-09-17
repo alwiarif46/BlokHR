@@ -410,7 +410,7 @@ export class LeaveService {
     const currentYear = new Date().getFullYear();
 
     // Sum accrued and used across all paid leave types for the current year
-    const balances = await this.repo.getAllPtoBalances(email, currentYear);
+    const balances = await this.repo.getAllPtoBalances(member.email, currentYear);
     let totalAccrued = 0;
     let totalUsed = 0;
 

@@ -277,8 +277,8 @@ export class SettingsRepository {
    */
   async getRolesForEmail(email: string): Promise<RoleAssignmentRow[]> {
     return this.db.all<RoleAssignmentRow>(
-      'SELECT * FROM role_assignments WHERE assignee_email = ?',
-      [email],
+      'SELECT * FROM role_assignments WHERE tenant_id = ? AND assignee_email = ?',
+      [getTenantId(), email],
     );
   }
 

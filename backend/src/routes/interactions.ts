@@ -5,6 +5,7 @@ import type { AppConfig } from '../config';
 import type { DatabaseEngine } from '../db/engine';
 import { asyncHandler } from '../app';
 import type { ActionDispatcher, ParsedAction } from '../webhooks/action-dispatcher';
+import { getTenantId } from '../tenant/context';
 
 /**
  * Interaction receiver routes — processes button-click webhooks from all 8 platforms.
@@ -657,8 +658,8 @@ async function resolveDiscordEmail(
   if (!discordUserId || !db) return '';
   try {
     const row = await db.get<{ email: string }>(
-      'SELECT email FROM members WHERE discord_id = ? AND active = 1',
-      [discordUserId],
+      'SELECT email FROM members WHERE tenant_id = ? AND discord_id = ? AND active = 1',
+      [getTenantId(), discordUserId],
     );
     return row?.email ?? '';
   } catch (err) {
@@ -677,8 +678,8 @@ async function resolveTelegramEmail(
   if (!telegramUserId || !db) return '';
   try {
     const row = await db.get<{ email: string }>(
-      'SELECT email FROM members WHERE telegram_id = ? AND active = 1',
-      [String(telegramUserId)],
+      'SELECT email FROM members WHERE tenant_id = ? AND telegram_id = ? AND active = 1',
+      [getTenantId(), String(telegramUserId)],
     );
     return row?.email ?? '';
   } catch (err) {
@@ -697,8 +698,8 @@ async function resolveWhatsAppEmail(
   if (!phoneNumber || !db) return '';
   try {
     const row = await db.get<{ email: string }>(
-      'SELECT email FROM members WHERE phone = ? AND active = 1',
-      [phoneNumber],
+      'SELECT email FROM members WHERE tenant_id = ? AND phone = ? AND active = 1',
+      [getTenantId(), phoneNumber],
     );
     return row?.email ?? '';
   } catch (err) {

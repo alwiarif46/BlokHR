@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { AuditService } from '../audit/audit-service';
 import {
   AssetRepository,
@@ -158,8 +159,8 @@ export class AssetService {
     if (asset.status !== 'available')
       return { success: false, error: `Asset is not available (current status: ${asset.status})` };
     const member = await this.db.get<MemberRow>(
-      'SELECT email FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT email FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), email],
     );
     if (!member) return { success: false, error: 'Employee not found or inactive' };
 

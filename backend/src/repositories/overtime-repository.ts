@@ -1,4 +1,5 @@
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface OvertimeRow {
   [key: string]: unknown;
@@ -51,8 +52,8 @@ export class OvertimeRepository {
   }
 
   async getByEmail(email: string, startDate?: string, endDate?: string): Promise<OvertimeRow[]> {
-    const conditions = ['email = ?'];
-    const params: unknown[] = [email];
+    const conditions = ['tenant_id = ?', 'email = ?'];
+    const params: unknown[] = [getTenantId(), email];
     if (startDate) {
       conditions.push('date >= ?');
       params.push(startDate);
@@ -69,19 +70,23 @@ export class OvertimeRepository {
 
   async getByDate(date: string): Promise<OvertimeRow[]> {
     return this.db.all<OvertimeRow>(
-      'SELECT * FROM overtime_records WHERE date = ? ORDER BY email',
-      [date],
+      'SELECT * FROM overtime_records WHERE tenant_id = ? AND date = ? ORDER BY email',
+      [getTenantId(), date],
     );
   }
 
   async getPending(): Promise<OvertimeRow[]> {
     return this.db.all<OvertimeRow>(
-      "SELECT * FROM overtime_records WHERE status = 'pending' ORDER BY date DESC",
+      "SELECT * FROM overtime_records WHERE tenant_id = ? AND status = 'pending' ORDER BY date DESC",
+      [getTenantId()],
     );
   }
 
   async getById(id: number): Promise<OvertimeRow | null> {
-    return this.db.get<OvertimeRow>('SELECT * FROM overtime_records WHERE id = ?', [id]);
+    return this.db.get<OvertimeRow>(
+      'SELECT * FROM overtime_records WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   async upsert(data: {
@@ -98,12 +103,13 @@ export class OvertimeRepository {
     otPay: number;
     source: string;
   }): Promise<OvertimeRow> {
+    const tenantId = getTenantId();
     await this.db.run(
       `INSERT INTO overtime_records
-         (email, date, shift_start, shift_end, actual_worked_minutes, standard_minutes,
+         (tenant_id, email, date, shift_start, shift_end, actual_worked_minutes, standard_minutes,
           ot_minutes, ot_type, hourly_rate, multiplier, ot_pay, source)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-       ON CONFLICT(email, date, ot_type) DO UPDATE SET
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(tenant_id, email, date, ot_type) DO UPDATE SET
          actual_worked_minutes = excluded.actual_worked_minutes,
          standard_minutes = excluded.standard_minutes,
          ot_minutes = excluded.ot_minutes,
@@ -112,6 +118,7 @@ export class OvertimeRepository {
          ot_pay = excluded.ot_pay,
          updated_at = datetime('now')`,
       [
+        tenantId,
         data.email,
         data.date,
         data.shiftStart,
@@ -127,8 +134,8 @@ export class OvertimeRepository {
       ],
     );
     const row = await this.db.get<OvertimeRow>(
-      'SELECT * FROM overtime_records WHERE email = ? AND date = ? AND ot_type = ?',
-      [data.email, data.date, data.otType],
+      'SELECT * FROM overtime_records WHERE tenant_id = ? AND email = ? AND date = ? AND ot_type = ?',
+      [tenantId, data.email, data.date, data.otType],
     );
     if (!row) throw new Error('Failed to upsert overtime record');
     return row;
@@ -136,15 +143,15 @@ export class OvertimeRepository {
 
   async approve(id: number, approverEmail: string): Promise<void> {
     await this.db.run(
-      "UPDATE overtime_records SET status = 'approved', approved_by = ?, updated_at = datetime('now') WHERE id = ?",
-      [approverEmail, id],
+      "UPDATE overtime_records SET status = 'approved', approved_by = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [approverEmail, getTenantId(), id],
     );
   }
 
   async reject(id: number, approverEmail: string, reason: string): Promise<void> {
     await this.db.run(
-      "UPDATE overtime_records SET status = 'rejected', approved_by = ?, rejection_reason = ?, updated_at = datetime('now') WHERE id = ?",
-      [approverEmail, reason, id],
+      "UPDATE overtime_records SET status = 'rejected', approved_by = ?, rejection_reason = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [approverEmail, reason, getTenantId(), id],
     );
   }
 
@@ -174,8 +181,8 @@ export class OvertimeRepository {
          COALESCE(SUM(CASE WHEN status = 'approved' THEN ot_pay ELSE 0 END), 0) as approved_pay,
          COALESCE(SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END), 0) as pending_cnt
        FROM overtime_records
-       WHERE email = ? AND date >= ? AND date <= ?`,
-      [email, startDate, endDate],
+       WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ?`,
+      [getTenantId(), email, startDate, endDate],
     );
     return {
       totalOtMinutes: row?.total_ot ?? 0,
@@ -193,8 +200,8 @@ export class OvertimeRepository {
     const qStart = new Date(d.getFullYear(), quarter * 3, 1).toISOString().split('T')[0];
     const qEnd = new Date(d.getFullYear(), quarter * 3 + 3, 0).toISOString().split('T')[0];
     const row = await this.db.get<{ total: number; [key: string]: unknown }>(
-      'SELECT COALESCE(SUM(ot_minutes), 0) as total FROM overtime_records WHERE email = ? AND date >= ? AND date <= ?',
-      [email, qStart, qEnd],
+      'SELECT COALESCE(SUM(ot_minutes), 0) as total FROM overtime_records WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ?',
+      [getTenantId(), email, qStart, qEnd],
     );
     return row?.total ?? 0;
   }

@@ -141,6 +141,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     transportDbPath: ':memory:',
     defaultTenantId: 'default',
     tenantHostMap: '',
+    allowHeaderIdentity: true,
     trialSeatLimit: 25,
     razorpayKeyId: undefined,
     razorpayKeySecret: undefined,
@@ -197,7 +198,10 @@ export async function createTestApp(
     entitlements: commercial.entitlements,
   });
 
-  const app = createApp(config, testLogger, (a) => {
+  const app = createApp(
+    config,
+    testLogger,
+    (a) => {
     mountCommercialRouters(a, config, commercial);
     mountDirectoryRouter(a, directory, config, db);
     mountLearningRouter(a, learning, config, db);
@@ -306,7 +310,9 @@ export async function createTestApp(
     a.use('/api', mobileRouter);
     const multiAuthRouter = createMultiAuthRouter(db, testLogger, { config });
     a.use('/api', multiAuthRouter);
-  });
+  },
+    db,
+  );
 
   // Load feature flags into cache (must be after migrations)
   await featureFlags.load();

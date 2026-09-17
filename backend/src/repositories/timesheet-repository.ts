@@ -154,15 +154,17 @@ export class TimesheetRepository {
     totalBillableHours: number;
     totalNonBillableHours: number;
   }): Promise<TimesheetRow> {
+    const tenantId = getTenantId();
     await this.db.run(
       `INSERT INTO timesheets (
-        id, email, name, period_type, start_date, end_date,
+        tenant_id, id, email, name, period_type, start_date, end_date,
         total_worked_minutes, total_break_minutes, total_present_days,
         total_absent_days, total_leave_days, total_holiday_days,
         total_late_days, total_ot_minutes, total_ot_pay,
         total_billable_hours, total_non_billable_hours
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         data.id,
         data.email,
         data.name,
@@ -188,7 +190,10 @@ export class TimesheetRepository {
   }
 
   async getById(id: string): Promise<TimesheetRow | null> {
-    return this.db.get<TimesheetRow>('SELECT * FROM timesheets WHERE id = ?', [id]);
+    return this.db.get<TimesheetRow>('SELECT * FROM timesheets WHERE tenant_id = ? AND id = ?', [
+      getTenantId(),
+      id,
+    ]);
   }
 
   async getByEmailPeriod(
@@ -197,8 +202,8 @@ export class TimesheetRepository {
     startDate: string,
   ): Promise<TimesheetRow | null> {
     return this.db.get<TimesheetRow>(
-      'SELECT * FROM timesheets WHERE email = ? AND period_type = ? AND start_date = ?',
-      [email, periodType, startDate],
+      'SELECT * FROM timesheets WHERE tenant_id = ? AND email = ? AND period_type = ? AND start_date = ?',
+      [getTenantId(), email, periodType, startDate],
     );
   }
 
@@ -209,8 +214,8 @@ export class TimesheetRepository {
     startDate?: string;
     endDate?: string;
   }): Promise<TimesheetRow[]> {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const conditions: string[] = ['tenant_id = ?'];
+    const params: unknown[] = [getTenantId()];
     if (filters.email) {
       conditions.push('email = ?');
       params.push(filters.email);
@@ -276,13 +281,13 @@ export class TimesheetRepository {
       sets.push('rejection_reason = ?');
       vals.push(extra.rejectionReason);
     }
-    vals.push(id);
-    await this.db.run(`UPDATE timesheets SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(`UPDATE timesheets SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`, vals);
   }
 
   async deleteTimesheet(id: string): Promise<void> {
     // CASCADE deletes entries automatically
-    await this.db.run('DELETE FROM timesheets WHERE id = ?', [id]);
+    await this.db.run('DELETE FROM timesheets WHERE tenant_id = ? AND id = ?', [getTenantId(), id]);
   }
 
   /** Replace all totals on a timesheet (used during regenerate). */
@@ -309,7 +314,7 @@ export class TimesheetRepository {
         total_late_days = ?, total_ot_minutes = ?, total_ot_pay = ?,
         total_billable_hours = ?, total_non_billable_hours = ?,
         updated_at = datetime('now')
-      WHERE id = ?`,
+      WHERE tenant_id = ? AND id = ?`,
       [
         totals.totalWorkedMinutes,
         totals.totalBreakMinutes,
@@ -322,6 +327,7 @@ export class TimesheetRepository {
         totals.totalOtPay,
         totals.totalBillableHours,
         totals.totalNonBillableHours,
+        getTenantId(),
         id,
       ],
     );
@@ -511,9 +517,9 @@ export class TimesheetRepository {
     return this.db.all<AttendanceDayRow>(
       `SELECT date, status, total_worked_minutes, total_break_minutes, is_late, late_minutes
        FROM attendance_daily
-       WHERE email = ? AND date >= ? AND date <= ?
+       WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ?
        ORDER BY date`,
-      [email, startDate, endDate],
+      [getTenantId(), email, startDate, endDate],
     );
   }
 
@@ -525,10 +531,10 @@ export class TimesheetRepository {
     return this.db.all<LeaveAggRow>(
       `SELECT start_date, end_date, leave_type, kind, days_requested
        FROM leave_requests
-       WHERE person_email = ? AND status = 'Approved'
+       WHERE tenant_id = ? AND person_email = ? AND status = 'Approved'
          AND start_date <= ? AND end_date >= ?
        ORDER BY start_date`,
-      [email, endDate, startDate],
+      [getTenantId(), email, endDate, startDate],
     );
   }
 
@@ -540,9 +546,9 @@ export class TimesheetRepository {
     return this.db.all<OtAggRow>(
       `SELECT date, ot_minutes, ot_pay, ot_type
        FROM overtime_records
-       WHERE email = ? AND status = 'approved' AND date >= ? AND date <= ?
+       WHERE tenant_id = ? AND email = ? AND status = 'approved' AND date >= ? AND date <= ?
        ORDER BY date`,
-      [email, startDate, endDate],
+      [getTenantId(), email, startDate, endDate],
     );
   }
 
@@ -554,9 +560,9 @@ export class TimesheetRepository {
     return this.db.all<TimeEntryAggRow>(
       `SELECT date, hours, billable
        FROM time_entries
-       WHERE email = ? AND date >= ? AND date <= ?
+       WHERE tenant_id = ? AND email = ? AND date >= ? AND date <= ?
        ORDER BY date`,
-      [email, startDate, endDate],
+      [getTenantId(), email, startDate, endDate],
     );
   }
 
@@ -566,9 +572,9 @@ export class TimesheetRepository {
   ): Promise<HolidayAggRow[]> {
     return this.db.all<HolidayAggRow>(
       `SELECT date, name, type FROM holidays
-       WHERE type = 'mandatory' AND active = 1 AND date >= ? AND date <= ?
+       WHERE tenant_id = ? AND type = 'mandatory' AND active = 1 AND date >= ? AND date <= ?
        ORDER BY date`,
-      [startDate, endDate],
+      [getTenantId(), startDate, endDate],
     );
   }
 
@@ -580,18 +586,19 @@ export class TimesheetRepository {
   ): Promise<HolidayAggRow[]> {
     return this.db.all<HolidayAggRow>(
       `SELECT h.date, h.name, h.type FROM holidays h
-       INNER JOIN employee_holiday_selections ehs ON ehs.holiday_id = h.id
-       WHERE ehs.email = ? AND h.active = 1 AND h.date >= ? AND h.date <= ?
+       INNER JOIN employee_holiday_selections ehs
+         ON ehs.holiday_id = h.id AND ehs.tenant_id = h.tenant_id
+       WHERE h.tenant_id = ? AND ehs.email = ? AND h.active = 1 AND h.date >= ? AND h.date <= ?
        ORDER BY h.date`,
-      [email, startDate, endDate],
+      [getTenantId(), email, startDate, endDate],
     );
   }
 
   /** Resolve employee name from members table. */
   async getMemberName(email: string): Promise<string> {
     const row = await this.db.get<{ name: string; [key: string]: unknown }>(
-      'SELECT name FROM members WHERE email = ?',
-      [email],
+      'SELECT name FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), email],
     );
     return row?.name ?? '';
   }
@@ -600,16 +607,16 @@ export class TimesheetRepository {
 
   async getMember(email: string): Promise<MemberLookupRow | null> {
     return this.db.get<MemberLookupRow>(
-      'SELECT email, name, reports_to FROM members WHERE email = ?',
-      [email],
+      'SELECT email, name, reports_to FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), email],
     );
   }
 
   /** Active roster used by team generation. */
   async listActiveMemberEmails(): Promise<string[]> {
     const rows = await this.db.all<{ email: string; [key: string]: unknown }>(
-      "SELECT email FROM members WHERE COALESCE(active, 1) = 1 AND email <> '' ORDER BY email",
-      [],
+      "SELECT email FROM members WHERE tenant_id = ? AND COALESCE(active, 1) = 1 AND email <> '' ORDER BY email",
+      [getTenantId()],
     );
     return rows.map((r) => r.email);
   }
@@ -626,19 +633,19 @@ export class TimesheetRepository {
   async hasManagerAssignment(actorEmail: string, subjectEmail: string): Promise<boolean> {
     const row = await this.db.get<{ id: number }>(
       `SELECT id FROM role_assignments
-       WHERE assignee_email = ? AND role_type = 'manager'
+       WHERE tenant_id = ? AND assignee_email = ? AND role_type = 'manager'
          AND (scope_type = 'global'
            OR (scope_type = 'member' AND scope_value = ?)
            OR scope_type = 'group')`,
-      [actorEmail, subjectEmail],
+      [getTenantId(), actorEmail, subjectEmail],
     );
     return !!row;
   }
 
   async hasHrAssignment(actorEmail: string): Promise<boolean> {
     const row = await this.db.get<{ id: number }>(
-      "SELECT id FROM role_assignments WHERE assignee_email = ? AND role_type = 'hr'",
-      [actorEmail],
+      "SELECT id FROM role_assignments WHERE tenant_id = ? AND assignee_email = ? AND role_type = 'hr'",
+      [getTenantId(), actorEmail],
     );
     return !!row;
   }

@@ -933,6 +933,7 @@
           source: name.toLowerCase(),
           is_admin: true,
           role: 'admin',
+          tenantId: _resolvedTenant,
         });
         enterApp();
         toast('Signed in via ' + name, 'success');
@@ -972,7 +973,14 @@
               toast('Login failed — could not reach server', 'error');
               return;
             }
-            saveSession({ name: email.split('@')[0], email, source: 'local', is_admin: true, role: 'admin' });
+            saveSession({
+              name: email.split('@')[0],
+              email,
+              source: 'local',
+              is_admin: true,
+              role: 'admin',
+              tenantId: _resolvedTenant,
+            });
             enterApp();
             toast('Signed in (demo)', 'success');
             return;
@@ -991,6 +999,7 @@
             mustChangePassword: mustChange,
             is_admin: !!d.is_admin,
             role: d.role || 'employee',
+            tenantId: _resolvedTenant,
             vertical: d.vertical === 'school' ? 'school' : 'hr',
           });
           applyBrand(d.vertical === 'school' ? 'school' : 'hr');
@@ -1167,6 +1176,7 @@
             mustChangePassword: mustChange,
             is_admin: !!d.is_admin,
             role: d.role || 'employee',
+            tenantId: _resolvedTenant,
             vertical: d.vertical === 'school' ? 'school' : 'hr',
           });
           applyBrand(d.vertical === 'school' ? 'school' : 'hr');
@@ -1204,6 +1214,12 @@
         return false;
       }
 
+      let _resolvedTenant = 'default';
+
+      function resetModuleTenantCaches() {
+        document.dispatchEvent(new CustomEvent('blokhr:tenant:changed'));
+      }
+
       /* ── Auth: Logout — FIX #4: reset role gates on logout ── */
       async function doLogout() {
         /* F-03: final roll-call queue flush; never delete unsent marks */
@@ -1239,15 +1255,13 @@
           return;
         }
         showScreen('screenApp');
+        var tid = _resolvedTenant || 'default';
         if (s) {
           document.getElementById('hdrAvatar').textContent = ini(s.name);
-          var tid = s.tenantId || s.tenant_id || 'default';
-          setSchoolTenantId(tid);
-          setHrTenantId(tid);
-        } else {
-          setSchoolTenantId('default');
-          setHrTenantId('default');
         }
+        setSchoolTenantId(tid);
+        setHrTenantId(tid);
+        resetModuleTenantCaches();
         initRouter();
         loadPrefs();
         loadFeatureFlags();
@@ -1513,6 +1527,7 @@
           /* Bind session storage + school/HR API paths to host-resolved tenant. */
           const resolvedTenant =
             (status && (status.tenantId || status.tenant_id)) || 'default';
+          _resolvedTenant = resolvedTenant;
           setTenantId(resolvedTenant);
           setSchoolTenantId(resolvedTenant);
           setHrTenantId(resolvedTenant);
@@ -1565,6 +1580,10 @@
           showScreen('screenLogin');
         } catch (_e) {
           clearTimeout(_bootTimeout);
+          _resolvedTenant = 'default';
+          setTenantId(_resolvedTenant);
+          setSchoolTenantId(_resolvedTenant);
+          setHrTenantId(_resolvedTenant);
           applyBrand('hr');
           _authProviders = [
             { id: 'local', name: 'Email & Password', enabled: true, type: 'local' },

@@ -5,6 +5,7 @@ import { AppError, asyncHandler } from '../app';
 import { LeaveRepository } from '../repositories/leave-repository';
 import { LeaveService } from '../services/leave-service';
 import type { LeaveNotificationService } from '../services/leave-notifications';
+import { getTenantId } from '../tenant/context';
 
 /**
  * Leave routes:
@@ -24,6 +25,20 @@ export function createLeaveRouter(
   const router = Router();
   const repo = new LeaveRepository(db);
   const service = new LeaveService(repo, logger, notifier);
+
+  async function requireCaller(req: Request): Promise<string> {
+    const email = (req.identity?.email ?? '').toLowerCase().trim();
+    if (!email) throw new AppError('Authentication required', 401);
+    return email;
+  }
+
+  async function isCallerAdmin(email: string): Promise<boolean> {
+    const admin = await db.get<{ email: string }>(
+      'SELECT email FROM admins WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), email],
+    );
+    return !!admin;
+  }
 
   /** POST /api/leave-submit */
   router.post(
@@ -69,12 +84,18 @@ export function createLeaveRouter(
   router.get(
     '/leaves',
     asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = await requireCaller(req);
       const email = req.query.email as string | undefined;
       if (!email) {
         throw new AppError('email query parameter required', 400);
       }
+      const target = email.toLowerCase().trim();
+      const admin = await isCallerAdmin(callerEmail);
+      if (!admin && target !== callerEmail) {
+        throw new AppError('Forbidden', 403);
+      }
 
-      const leaves = await service.getLeaves(email.toLowerCase().trim());
+      const leaves = await service.getLeaves(target);
       res.json({ leaves });
     }),
   );
@@ -171,12 +192,18 @@ export function createLeaveRouter(
   router.get(
     '/pto-balance',
     asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = await requireCaller(req);
       const email = req.query.email as string | undefined;
       if (!email) {
         throw new AppError('email query parameter required', 400);
       }
+      const target = email.toLowerCase().trim();
+      const admin = await isCallerAdmin(callerEmail);
+      if (!admin && target !== callerEmail) {
+        throw new AppError('Forbidden', 403);
+      }
 
-      const balance = await service.getPtoBalance(email.toLowerCase().trim());
+      const balance = await service.getPtoBalance(target);
       res.json(balance);
     }),
   );
@@ -189,15 +216,20 @@ export function createLeaveRouter(
   router.get(
     '/leaves/balances',
     asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = await requireCaller(req);
       const email =
         (req.query.email as string | undefined) ||
-        req.identity?.email ||
-        (req.headers['x-user-email'] as string | undefined);
+        req.identity?.email;
       if (!email) {
         throw new AppError('email query parameter required', 400);
       }
+      const target = email.toLowerCase().trim();
+      const admin = await isCallerAdmin(callerEmail);
+      if (!admin && target !== callerEmail) {
+        throw new AppError('Forbidden', 403);
+      }
 
-      const balances = await service.getUiBalances(email.toLowerCase().trim());
+      const balances = await service.getUiBalances(target);
       res.json({ balances });
     }),
   );

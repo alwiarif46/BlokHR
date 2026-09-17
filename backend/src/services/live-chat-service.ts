@@ -68,7 +68,8 @@ export class LiveChatService {
     // For department channels, auto-add all department members
     if (type === 'department' && data.groupId) {
       const members = await this.db.all<{ email: string; [key: string]: unknown }>(
-        'SELECT email FROM members WHERE group_id = ? AND active = 1', [data.groupId],
+        'SELECT email FROM members WHERE tenant_id = ? AND group_id = ? AND active = 1',
+        [getTenantId(), data.groupId],
       );
       for (const m of members) {
         await this.repo.addMember(id, m.email, 'member');
@@ -99,7 +100,8 @@ export class LiveChatService {
    */
   async ensureDepartmentChannels(): Promise<number> {
     const groups = await this.db.all<{ id: string; name: string; [key: string]: unknown }>(
-      'SELECT id, name FROM groups', [],
+      'SELECT id, name FROM groups WHERE tenant_id = ?',
+      [getTenantId()],
     );
     let created = 0;
     for (const group of groups) {
@@ -116,7 +118,8 @@ export class LiveChatService {
         });
         // Add all members
         const members = await this.db.all<{ email: string; [key: string]: unknown }>(
-          'SELECT email FROM members WHERE group_id = ? AND active = 1', [group.id],
+          'SELECT email FROM members WHERE tenant_id = ? AND group_id = ? AND active = 1',
+          [getTenantId(), group.id],
         );
         for (const m of members) {
           await this.repo.addMember(channelId, m.email, 'member');
@@ -273,7 +276,8 @@ export class LiveChatService {
 
     // Verify recipient exists
     const recipient = await this.db.get<{ email: string; [key: string]: unknown }>(
-      'SELECT email FROM members WHERE email = ? AND active = 1', [data.recipientEmail],
+      'SELECT email FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), data.recipientEmail],
     );
     if (!recipient) return { success: false, error: 'Recipient not found or inactive' };
 
@@ -329,7 +333,7 @@ export class LiveChatService {
 
   private async getMemberName(email: string): Promise<string> {
     const r = await this.db.get<{ name: string; [key: string]: unknown }>(
-      'SELECT name FROM members WHERE email = ?', [email],
+      'SELECT name FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), email],
     );
     return r?.name ?? email;
   }

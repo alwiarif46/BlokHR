@@ -1,5 +1,6 @@
 import type { Response } from 'express';
 import type { Logger } from 'pino';
+import { getTenantId } from '../tenant/context';
 
 /** Valid SSE event types the frontend listens for. */
 export type SseEventType =
@@ -15,19 +16,14 @@ interface SseClient {
   id: string;
   res: Response;
   connectedAt: number;
+  tenantId: string;
 }
 
 /**
  * SSE Broadcaster — manages connected clients and pushes typed events.
  *
- * Usage:
- *   1. Route handler calls `addClient(res)` to register a new SSE connection.
- *   2. Any service calls `broadcast('attendance-update', { ... })` to push to all clients.
- *   3. Heartbeat keeps connections alive (every 30s).
- *   4. Clients are cleaned up on disconnect or error.
- *
- * Thread safety: Node.js is single-threaded, so the Set operations are safe.
- * Memory: clients are removed on disconnect. No unbounded growth.
+ * Clients are partitioned by tenantId. broadcast() delivers only to the
+ * matching tenant (defaults to getTenantId() from ALS). Heartbeats stay global.
  */
 export class SseBroadcaster {
   private readonly clients: Map<string, SseClient> = new Map();
@@ -70,12 +66,12 @@ export class SseBroadcaster {
   }
 
   /**
-   * Register a new SSE client connection.
-   * Sets the required headers, sends initial connection event, and wires up cleanup.
+   * Register a new SSE client connection for a specific tenant.
    */
-  addClient(res: Response): string {
+  addClient(res: Response, tenantId?: string): string {
     this.clientCounter++;
     const id = `sse_${this.clientCounter}_${Date.now()}`;
+    const tid = (tenantId || getTenantId()).trim() || 'default';
 
     // SSE headers
     res.writeHead(200, {
@@ -86,9 +82,11 @@ export class SseBroadcaster {
     });
 
     // Send initial connection event
-    res.write(`event: connected\ndata: ${JSON.stringify({ clientId: id })}\n\n`);
+    res.write(
+      `event: connected\ndata: ${JSON.stringify({ clientId: id, tenantId: tid })}\n\n`,
+    );
 
-    const client: SseClient = { id, res, connectedAt: Date.now() };
+    const client: SseClient = { id, res, connectedAt: Date.now(), tenantId: tid };
     this.clients.set(id, client);
 
     // Cleanup on client disconnect
@@ -97,29 +95,40 @@ export class SseBroadcaster {
       this.logger.debug({ clientId: id, remaining: this.clients.size }, 'SSE client disconnected');
     });
 
-    this.logger.debug({ clientId: id, totalClients: this.clients.size }, 'SSE client connected');
+    this.logger.debug(
+      { clientId: id, tenantId: tid, totalClients: this.clients.size },
+      'SSE client connected',
+    );
 
     return id;
   }
 
   /**
-   * Broadcast a typed event to all connected clients.
+   * Broadcast a typed event to clients of one tenant (default: current ALS tenant).
    * Silently drops failed writes (client already disconnected).
    */
-  broadcast(eventType: SseEventType, data?: Record<string, unknown>): void {
+  broadcast(
+    eventType: SseEventType,
+    data?: Record<string, unknown>,
+    tenantId?: string,
+  ): void {
     if (this.clients.size === 0) return;
 
+    const tid = (tenantId || getTenantId()).trim() || 'default';
     const payload = data ? JSON.stringify(data) : '{}';
     const message = `event: ${eventType}\ndata: ${payload}\n\n`;
 
     const deadClients: string[] = [];
+    let delivered = 0;
 
     for (const [id, client] of this.clients) {
+      if (client.tenantId !== tid) continue;
       try {
         const ok = client.res.write(message);
         if (!ok) {
-          // Backpressure — client can't keep up. Remove to prevent memory buildup.
           deadClients.push(id);
+        } else {
+          delivered += 1;
         }
       } catch {
         deadClients.push(id);
@@ -139,7 +148,13 @@ export class SseBroadcaster {
     }
 
     this.logger.debug(
-      { eventType, clients: this.clients.size, dropped: deadClients.length },
+      {
+        eventType,
+        tenantId: tid,
+        delivered,
+        clients: this.clients.size,
+        dropped: deadClients.length,
+      },
       'SSE broadcast',
     );
   }

@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface Regularization {
   [key: string]: unknown;
@@ -36,10 +37,12 @@ export class RegularizationRepository {
     reason: string;
   }): Promise<Regularization> {
     const id = uuidv4();
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO regularizations (id, email, name, date, correction_type, in_time, out_time, reason)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO regularizations (tenant_id, id, email, name, date, correction_type, in_time, out_time, reason)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         id,
         data.email,
         data.name,
@@ -51,8 +54,8 @@ export class RegularizationRepository {
       ],
     );
     const created = await this.db.get<Regularization>(
-      'SELECT * FROM regularizations WHERE id = ?',
-      [id],
+      'SELECT * FROM regularizations WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
     );
     if (!created) throw new Error('Failed to create regularization');
     return created;
@@ -60,14 +63,18 @@ export class RegularizationRepository {
 
   /** Get regularization by ID. */
   async getById(id: string): Promise<Regularization | null> {
-    return this.db.get<Regularization>('SELECT * FROM regularizations WHERE id = ?', [id]);
+    return this.db.get<Regularization>(
+      'SELECT * FROM regularizations WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   /** Resolve login/UPN email to the canonical members.email when unique. */
   async resolveMemberEmail(email: string): Promise<{ email: string; name: string } | null> {
+    const tenantId = getTenantId();
     const exact = await this.db.get<{ email: string; name: string }>(
-      'SELECT email, name FROM members WHERE lower(email) = lower(?) AND active = 1',
-      [email],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND lower(email) = lower(?) AND active = 1',
+      [tenantId, email],
     );
     if (exact) return exact;
 
@@ -76,8 +83,8 @@ export class RegularizationRepository {
     const local = email.slice(0, at).toLowerCase();
     const matches = await this.db.all<{ email: string; name: string }>(
       `SELECT email, name FROM members
-       WHERE active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
-      [local],
+       WHERE tenant_id = ? AND active = 1 AND lower(substr(email, 1, instr(email, '@') - 1)) = ?`,
+      [tenantId, local],
     );
     if (matches.length === 1) return matches[0];
     return null;
@@ -88,8 +95,8 @@ export class RegularizationRepository {
     const member = await this.resolveMemberEmail(email);
     const canonical = (member?.email ?? email).toLowerCase();
     return this.db.all<Regularization>(
-      'SELECT * FROM regularizations WHERE lower(email) = ? ORDER BY created_at DESC',
-      [canonical],
+      'SELECT * FROM regularizations WHERE tenant_id = ? AND lower(email) = ? ORDER BY created_at DESC',
+      [getTenantId(), canonical],
     );
   }
 
@@ -110,14 +117,18 @@ export class RegularizationRepository {
       vals.push(val);
     }
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE regularizations SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE regularizations SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   /** Count pending regularizations (for pending actions). */
   async countPending(): Promise<number> {
     const row = await this.db.get<{ cnt: number }>(
-      "SELECT COUNT(*) as cnt FROM regularizations WHERE status IN ('pending', 'manager_approved')",
+      "SELECT COUNT(*) as cnt FROM regularizations WHERE tenant_id = ? AND status IN ('pending', 'manager_approved')",
+      [getTenantId()],
     );
     return row?.cnt ?? 0;
   }
@@ -125,7 +136,8 @@ export class RegularizationRepository {
   /** Get all pending regularizations with details (for pending actions detail). */
   async getPendingDetail(): Promise<Regularization[]> {
     return this.db.all<Regularization>(
-      "SELECT * FROM regularizations WHERE status IN ('pending', 'manager_approved') ORDER BY created_at DESC",
+      "SELECT * FROM regularizations WHERE tenant_id = ? AND status IN ('pending', 'manager_approved') ORDER BY created_at DESC",
+      [getTenantId()],
     );
   }
 }

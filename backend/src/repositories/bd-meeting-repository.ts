@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface BdMeeting {
   [key: string]: unknown;
@@ -37,26 +38,43 @@ export class BdMeetingRepository {
     notes: string;
   }): Promise<BdMeeting> {
     const id = uuidv4();
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO bd_meetings (id, email, name, client, date, time, location, notes)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, data.email, data.name, data.client, data.date, data.time, data.location, data.notes],
+      `INSERT INTO bd_meetings (tenant_id, id, email, name, client, date, time, location, notes)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        tenantId,
+        id,
+        data.email,
+        data.name,
+        data.client,
+        data.date,
+        data.time,
+        data.location,
+        data.notes,
+      ],
     );
-    const created = await this.db.get<BdMeeting>('SELECT * FROM bd_meetings WHERE id = ?', [id]);
+    const created = await this.db.get<BdMeeting>(
+      'SELECT * FROM bd_meetings WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
     if (!created) throw new Error('Failed to create BD meeting');
     return created;
   }
 
   /** Get BD meeting by ID. */
   async getById(id: string): Promise<BdMeeting | null> {
-    return this.db.get<BdMeeting>('SELECT * FROM bd_meetings WHERE id = ?', [id]);
+    return this.db.get<BdMeeting>(
+      'SELECT * FROM bd_meetings WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   /** Get all BD meetings for an employee. */
   async getByEmail(email: string): Promise<BdMeeting[]> {
     return this.db.all<BdMeeting>(
-      'SELECT * FROM bd_meetings WHERE email = ? ORDER BY created_at DESC',
-      [email],
+      'SELECT * FROM bd_meetings WHERE tenant_id = ? AND email = ? ORDER BY created_at DESC',
+      [getTenantId(), email],
     );
   }
 
@@ -74,14 +92,18 @@ export class BdMeetingRepository {
       vals.push(val);
     }
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE bd_meetings SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE bd_meetings SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   /** Count pending BD meetings (for pending actions widget). */
   async countPending(): Promise<number> {
     const row = await this.db.get<{ cnt: number }>(
-      "SELECT COUNT(*) as cnt FROM bd_meetings WHERE status IN ('pending', 'qualified', 'notified')",
+      "SELECT COUNT(*) as cnt FROM bd_meetings WHERE tenant_id = ? AND status IN ('pending', 'qualified', 'notified')",
+      [getTenantId()],
     );
     return row?.cnt ?? 0;
   }
@@ -89,7 +111,8 @@ export class BdMeetingRepository {
   /** Get all pending BD meetings with details (for pending actions detail). */
   async getPendingDetail(): Promise<BdMeeting[]> {
     return this.db.all<BdMeeting>(
-      "SELECT * FROM bd_meetings WHERE status IN ('pending', 'qualified', 'notified') ORDER BY created_at DESC",
+      "SELECT * FROM bd_meetings WHERE tenant_id = ? AND status IN ('pending', 'qualified', 'notified') ORDER BY created_at DESC",
+      [getTenantId()],
     );
   }
 }

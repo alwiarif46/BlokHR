@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../../db/engine';
+import { getTenantId } from '../../tenant/context';
 import type { FaceApiClient } from './face-api-client';
 import type { ClockService, ClockActionResult } from '../clock-service';
 
@@ -57,8 +58,8 @@ export class FaceRecognitionService {
   async enrollFace(email: string, imageBuffer: Buffer): Promise<EnrollResult> {
     // Verify employee exists
     const member = await this.db.get<{ email: string; name: string; [key: string]: unknown }>(
-      'SELECT email, name FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), email],
     );
     if (!member) {
       return { success: false, error: 'Employee not found or inactive' };
@@ -75,14 +76,18 @@ export class FaceRecognitionService {
 
     // If there was a failed enrollment, remove the old row
     if (existing) {
-      await this.db.run('DELETE FROM face_enrollments WHERE email = ?', [email]);
+      await this.db.run('DELETE FROM face_enrollments WHERE tenant_id = ? AND email = ?', [
+        getTenantId(),
+        email,
+      ]);
     }
 
     // Insert pending enrollment
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO face_enrollments (email, person_group_id, status)
-       VALUES (?, ?, 'pending')`,
-      [email, groupId],
+      `INSERT INTO face_enrollments (tenant_id, email, person_group_id, status)
+       VALUES (?, ?, ?, 'pending')`,
+      [tenantId, email, groupId],
     );
 
     try {
@@ -111,8 +116,8 @@ export class FaceRecognitionService {
       await this.db.run(
         `UPDATE face_enrollments
          SET azure_person_id = ?, status = 'enrolled', enrolled_at = ?, error_message = '', updated_at = datetime('now')
-         WHERE email = ?`,
-        [personId, now, email],
+         WHERE tenant_id = ? AND email = ?`,
+        [personId, now, tenantId, email],
       );
 
       const enrollment = await this.getEnrollmentRow(email);
@@ -123,8 +128,8 @@ export class FaceRecognitionService {
       await this.db.run(
         `UPDATE face_enrollments
          SET status = 'failed', error_message = ?, updated_at = datetime('now')
-         WHERE email = ?`,
-        [errorMsg, email],
+         WHERE tenant_id = ? AND email = ?`,
+        [errorMsg, getTenantId(), email],
       );
       this.logger.error({ email, err: errorMsg }, 'Face enrollment failed');
       return { success: false, error: `Enrollment failed: ${errorMsg}` };
@@ -196,8 +201,8 @@ export class FaceRecognitionService {
 
     // Resolve person ID → employee email
     const enrollment = await this.db.get<FaceEnrollmentRow>(
-      "SELECT * FROM face_enrollments WHERE azure_person_id = ? AND status = 'enrolled'",
-      [topCandidate.personId],
+      "SELECT * FROM face_enrollments WHERE tenant_id = ? AND azure_person_id = ? AND status = 'enrolled'",
+      [getTenantId(), topCandidate.personId],
     );
     if (!enrollment) {
       return { success: false, error: 'Matched face not found in enrollment records' };
@@ -205,8 +210,8 @@ export class FaceRecognitionService {
 
     // Get employee name
     const member = await this.db.get<{ name: string; [key: string]: unknown }>(
-      'SELECT name FROM members WHERE email = ?',
-      [enrollment.email],
+      'SELECT name FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), enrollment.email],
     );
     const employeeName = member?.name ?? enrollment.email;
 
@@ -265,7 +270,10 @@ export class FaceRecognitionService {
       }
     }
 
-    await this.db.run('DELETE FROM face_enrollments WHERE email = ?', [email]);
+    await this.db.run('DELETE FROM face_enrollments WHERE tenant_id = ? AND email = ?', [
+      getTenantId(),
+      email,
+    ]);
     this.logger.info({ email }, 'Face enrollment removed');
     return { success: true };
   }
@@ -274,8 +282,8 @@ export class FaceRecognitionService {
 
   private async getEnrollmentRow(email: string): Promise<FaceEnrollmentRow | null> {
     return this.db.get<FaceEnrollmentRow>(
-      'SELECT * FROM face_enrollments WHERE email = ?',
-      [email],
+      'SELECT * FROM face_enrollments WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), email],
     );
   }
 

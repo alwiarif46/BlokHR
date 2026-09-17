@@ -1,4 +1,5 @@
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface GeoZoneRow {
   [key: string]: unknown;
@@ -193,8 +194,8 @@ export class GeoRepository {
   /** Resolve employee name from members table. */
   async getMemberName(email: string): Promise<string> {
     const row = await this.db.get<{ name: string; [key: string]: unknown }>(
-      'SELECT name FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), email],
     );
     return row?.name ?? '';
   }

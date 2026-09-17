@@ -21,16 +21,10 @@ let _session = null;
 export function setTenantId(tenantId) {
   const newKey = 'session_' + (tenantId || 'default');
   if (_storageKey !== newKey) {
-    try {
-      const old = localStorage.getItem(_storageKey);
-      if (old) {
-        localStorage.setItem(newKey, old);
-        localStorage.removeItem(_storageKey);
-      }
-    } catch (_e) {
-      /* noop */
-    }
     _storageKey = newKey;
+    // Never migrate opaque session blobs across tenant keys.
+    // Force explicit auth per tenant/host boundary.
+    _session = null;
   }
 }
 
@@ -39,7 +33,7 @@ export function setTenantId(tenantId) {
  * @param {{ name?: string, email: string, source?: string,
  *           sessionToken?: string, mustChangePassword?: boolean,
  *           vertical?: string, is_admin?: boolean, role?: string,
- *           schoolRole?: string }} user
+ *           schoolRole?: string, tenantId?: string }} user
  */
 export function saveSession(user) {
   _session = {
@@ -50,6 +44,7 @@ export function saveSession(user) {
     mustChangePassword: user.mustChangePassword === true || user.mustChangePassword === 1,
     is_admin: user.is_admin || false,
     role: user.role || 'employee',
+    tenantId: (user.tenantId || user.tenant_id || '').trim() || undefined,
     vertical: user.vertical === 'school' ? 'school' : user.vertical === 'hr' ? 'hr' : undefined,
   };
   if (user.schoolRole) _session.schoolRole = user.schoolRole;

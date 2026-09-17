@@ -4,12 +4,18 @@
  * QR is teacher-scans-card only (K-12). Hardware NFC opens blokhr-capture.
  */
 
-import { api } from '../../shared/api.js';
+import { api, getSchoolTenantId } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
 import { promptDialog } from '../../shared/modal.js';
 import { registerModule } from '../../shared/router.js';
 
-const PENDING_KEY = 'blokhr_school_pending_marks';
+function pendingKey() {
+  return 'blokhr_school_pending_marks_' + getSchoolTenantId();
+}
+
+function cacheKey(classId) {
+  return 'blokhr_school_cache_' + getSchoolTenantId() + '_' + classId;
+}
 
 let _container = null;
 let _classes = [];
@@ -21,17 +27,18 @@ let _marks = {};
 let _modalities = [];
 let _rollCall = true;
 let _pending = loadPending();
+const schoolAttendanceApi = api.school('school-attendance');
 
 function loadPending() {
   try {
-    return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
+    return JSON.parse(localStorage.getItem(pendingKey()) || '[]');
   } catch {
     return [];
   }
 }
 
 function savePending() {
-  localStorage.setItem(PENDING_KEY, JSON.stringify(_pending));
+  localStorage.setItem(pendingKey(), JSON.stringify(_pending));
 }
 
 function _esc(s) {
@@ -47,6 +54,7 @@ function idem() {
 
 export function renderSchoolRegisterPage(container) {
   _container = container;
+  _pending = loadPending();
   container.innerHTML =
     '<div class="sr-wrap">' +
       '<div class="sr-toolbar">' +
@@ -102,7 +110,7 @@ async function boot() {
 }
 
 async function refreshClasses() {
-  const res = await api.get('/api/school-attendance/classes');
+  const res = await schoolAttendanceApi.get('/classes');
   _classes = (res && !res._error && res.classes) || [];
   const sel = _container.querySelector('#srClass');
   sel.innerHTML = _classes
@@ -125,8 +133,8 @@ async function onClassChange() {
   const sel = _container.querySelector('#srClass');
   _classId = sel.value;
   const today = new Date().toISOString().slice(0, 10);
-  const bundle = await api.get(
-    '/api/school-attendance/classes/' + encodeURIComponent(_classId) + '/offline-bundle?date=' + today,
+  const bundle = await schoolAttendanceApi.get(
+    '/classes/' + encodeURIComponent(_classId) + '/offline-bundle?date=' + today,
   );
   if (bundle && !bundle._error) {
     _roster = bundle.roster || [];
@@ -154,7 +162,7 @@ async function onClassChange() {
 function cacheOffline(bundle) {
   try {
     localStorage.setItem(
-      'blokhr_school_cache_' + _classId,
+      cacheKey(_classId),
       JSON.stringify({ ...bundle, cachedAt: Date.now() }),
     );
   } catch {
@@ -164,7 +172,7 @@ function cacheOffline(bundle) {
 
 function readCache(classId, date) {
   try {
-    const raw = localStorage.getItem('blokhr_school_cache_' + classId);
+    const raw = localStorage.getItem(cacheKey(classId));
     if (!raw) return null;
     const data = JSON.parse(raw);
     if (date && data.date && data.date !== date) return data;
@@ -183,7 +191,7 @@ async function onPeriodChange() {
 async function loadMarks() {
   _marks = {};
   if (!_periodId) return;
-  const res = await api.get('/api/school-attendance/periods/' + encodeURIComponent(_periodId) + '/marks');
+  const res = await schoolAttendanceApi.get('/periods/' + encodeURIComponent(_periodId) + '/marks');
   const list = (res && !res._error && res.marks) || [];
   list.forEach((m) => {
     _marks[m.subjectRef || m.subject_ref] = m.status;
@@ -257,7 +265,7 @@ async function markStudent(subjectRef, status) {
   };
   const online = navigator.onLine;
   if (online) {
-    const res = await api.post('/api/school-attendance/marks', payload);
+    const res = await schoolAttendanceApi.post('/marks', payload);
     if (res && !res._error && res.success !== false) {
       toast('Saved', 'success');
       return;
@@ -275,7 +283,7 @@ async function syncPending() {
     return;
   }
   const batch = _pending.slice();
-  const res = await api.post('/api/school-attendance/marks/sync', { marks: batch });
+  const res = await schoolAttendanceApi.post('/marks/sync', { marks: batch });
   if (res && !res._error) {
     _pending = [];
     savePending();
@@ -302,7 +310,7 @@ async function createClass() {
     confirmLabel: 'Create class',
   });
   if (!name) return;
-  const res = await api.post('/api/school-attendance/classes', { name });
+  const res = await schoolAttendanceApi.post('/classes', { name });
   if (res && !res._error) {
     toast('Class created', 'success');
     await refreshClasses();
@@ -321,7 +329,7 @@ async function createPeriod() {
     confirmLabel: 'Create period',
   });
   if (!label) return;
-  const res = await api.post('/api/school-attendance/classes/' + encodeURIComponent(_classId) + '/periods', {
+  const res = await schoolAttendanceApi.post('/classes/' + encodeURIComponent(_classId) + '/periods', {
     label,
     period_date: new Date().toISOString().slice(0, 10),
   });

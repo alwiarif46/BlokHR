@@ -273,20 +273,21 @@ export class RegularizationService {
     employeeEmail: string,
     roleType: string,
   ): Promise<MemberNotifInfo[]> {
+    const tenantId = getTenantId();
     const member = await this.db.get<{ group_id: string }>(
-      'SELECT group_id FROM members WHERE email = ? AND active = 1',
-      [employeeEmail],
+      'SELECT group_id FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [tenantId, employeeEmail],
     );
     if (!member) return [];
 
     const roles = await this.db.all<RoleRow>(
       `SELECT DISTINCT assignee_email FROM role_assignments
-       WHERE role_type = ? AND (
+       WHERE tenant_id = ? AND role_type = ? AND (
          scope_type = 'global'
          OR (scope_type = 'group' AND scope_value = ?)
          OR (scope_type = 'member' AND scope_value = ?)
        )`,
-      [roleType, member.group_id ?? '', 'member:' + employeeEmail],
+      [tenantId, roleType, member.group_id ?? '', 'member:' + employeeEmail],
     );
 
     const admins = await this.db.all<{ email: string; [key: string]: unknown }>(
@@ -302,8 +303,8 @@ export class RegularizationService {
     const result: MemberNotifInfo[] = [];
     for (const email of allEmails) {
       const info = await this.db.get<MemberNotifInfo>(
-        'SELECT email, name, teams_user_id FROM members WHERE email = ? AND active = 1',
-        [email],
+        'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+        [tenantId, email],
       );
       if (info) result.push(info);
     }
@@ -351,14 +352,14 @@ export class RegularizationService {
   private async notifyManagerApproved(reg: Regularization, approverEmail: string): Promise<void> {
     if (!this.dispatcher) return;
     const approverInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [approverEmail],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), approverEmail],
     );
 
     // Notify employee
     const employeeInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [reg.email],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), reg.email],
     );
     if (employeeInfo) {
       await this.dispatcher.notify({
@@ -401,8 +402,8 @@ export class RegularizationService {
   private async notifyHrApproved(reg: Regularization, approverEmail: string): Promise<void> {
     if (!this.dispatcher) return;
     const approverInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [approverEmail],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), approverEmail],
     );
     const cardData = this.buildCardData(reg, {
       approverName: approverInfo?.name ?? approverEmail,
@@ -411,8 +412,8 @@ export class RegularizationService {
 
     // Notify employee
     const employeeInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [reg.email],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), reg.email],
     );
     if (employeeInfo) {
       await this.dispatcher.notify({
@@ -427,8 +428,8 @@ export class RegularizationService {
     // Notify original manager
     if (reg.manager_approver_email) {
       const mgrInfo = await this.db.get<MemberNotifInfo>(
-        'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-        [reg.manager_approver_email],
+        'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+        [getTenantId(), reg.manager_approver_email],
       );
       if (mgrInfo) {
         await this.dispatcher.notify({
@@ -457,8 +458,8 @@ export class RegularizationService {
   ): Promise<void> {
     if (!this.dispatcher) return;
     const rejectorInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [rejectorEmail],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), rejectorEmail],
     );
     const cardData = this.buildCardData(reg, {
       status: 'rejected',
@@ -468,8 +469,8 @@ export class RegularizationService {
 
     // Notify employee
     const employeeInfo = await this.db.get<MemberNotifInfo>(
-      'SELECT email, name, teams_user_id FROM members WHERE email = ?',
-      [reg.email],
+      'SELECT email, name, teams_user_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), reg.email],
     );
     if (employeeInfo) {
       await this.dispatcher.notify({

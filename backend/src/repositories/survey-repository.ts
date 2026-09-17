@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface SurveyRow {
   [key: string]: unknown;
@@ -73,10 +74,12 @@ export class SurveyRepository {
         : audience === 'peer'
           ? 3
           : 1;
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO surveys (id, title, description, questions_json, anonymous, recurrence, target_group_ids, created_by, audience, min_responses)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO surveys (tenant_id, id, title, description, questions_json, anonymous, recurrence, target_group_ids, created_by, audience, min_responses)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         id,
         data.title,
         data.description ?? '',
@@ -89,22 +92,32 @@ export class SurveyRepository {
         minResponses,
       ],
     );
-    const row = await this.db.get<SurveyRow>('SELECT * FROM surveys WHERE id = ?', [id]);
+    const row = await this.db.get<SurveyRow>(
+      'SELECT * FROM surveys WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
     if (!row) throw new Error('Failed to create survey');
     return row;
   }
 
   async getSurveyById(id: string): Promise<SurveyRow | null> {
-    return this.db.get<SurveyRow>('SELECT * FROM surveys WHERE id = ?', [id]);
+    return this.db.get<SurveyRow>('SELECT * FROM surveys WHERE tenant_id = ? AND id = ?', [
+      getTenantId(),
+      id,
+    ]);
   }
 
   async listSurveys(status?: string): Promise<SurveyRow[]> {
+    const tenantId = getTenantId();
     if (status)
       return this.db.all<SurveyRow>(
-        'SELECT * FROM surveys WHERE status = ? ORDER BY created_at DESC',
-        [status],
+        'SELECT * FROM surveys WHERE tenant_id = ? AND status = ? ORDER BY created_at DESC',
+        [tenantId, status],
       );
-    return this.db.all<SurveyRow>('SELECT * FROM surveys ORDER BY created_at DESC');
+    return this.db.all<SurveyRow>(
+      'SELECT * FROM surveys WHERE tenant_id = ? ORDER BY created_at DESC',
+      [tenantId],
+    );
   }
 
   async updateSurvey(
@@ -135,12 +148,12 @@ export class SurveyRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE surveys SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(`UPDATE surveys SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`, vals);
   }
 
   async deleteSurvey(id: string): Promise<void> {
-    await this.db.run('DELETE FROM surveys WHERE id = ?', [id]);
+    await this.db.run('DELETE FROM surveys WHERE tenant_id = ? AND id = ?', [getTenantId(), id]);
   }
 
   // ── Responses (anonymous) ──
@@ -228,9 +241,10 @@ export class SurveyRepository {
   }
 
   async getPendingSurveys(email: string): Promise<SurveyRow[]> {
+    const tenantId = getTenantId();
     const member = await this.db.get<{ group_id: string | null; [key: string]: unknown }>(
-      'SELECT group_id FROM members WHERE email = ?',
-      [email],
+      'SELECT group_id FROM members WHERE tenant_id = ? AND email = ?',
+      [tenantId, email],
     );
     const groupId = (member?.group_id ?? '').trim();
 
@@ -238,7 +252,8 @@ export class SurveyRepository {
     if (!groupId) {
       return this.db.all<SurveyRow>(
         `SELECT s.* FROM surveys s
-         WHERE s.status = 'active'
+         WHERE s.tenant_id = ?
+           AND s.status = 'active'
            AND COALESCE(s.audience, 'employee') = 'employee'
            AND TRIM(COALESCE(s.target_group_ids, '')) = ''
            AND NOT EXISTS (
@@ -246,13 +261,14 @@ export class SurveyRepository {
              WHERE sc.survey_id = s.id AND sc.email = ?
            )
          ORDER BY s.published_at DESC`,
-        [email],
+        [tenantId, email],
       );
     }
 
     return this.db.all<SurveyRow>(
       `SELECT s.* FROM surveys s
-       WHERE s.status = 'active'
+       WHERE s.tenant_id = ?
+         AND s.status = 'active'
          AND COALESCE(s.audience, 'employee') = 'employee'
          AND NOT EXISTS (
            SELECT 1 FROM survey_completions sc
@@ -264,7 +280,7 @@ export class SurveyRepository {
                 LIKE '%,' || ? || ',%'
          )
        ORDER BY s.published_at DESC`,
-      [email, groupId],
+      [tenantId, email, groupId],
     );
   }
 
@@ -288,10 +304,10 @@ export class SurveyRepository {
     return this.db.all<SurveyRow & { subject_email: string }>(
       `SELECT s.*, spa.subject_email AS subject_email
        FROM survey_peer_assignments spa
-       INNER JOIN surveys s ON s.id = spa.survey_id
+       INNER JOIN surveys s ON s.id = spa.survey_id AND s.tenant_id = ?
        WHERE spa.reviewer_email = ? AND spa.completed_at IS NULL AND s.status = 'active'
        ORDER BY s.published_at DESC`,
-      [email.toLowerCase()],
+      [getTenantId(), email.toLowerCase()],
     );
   }
 

@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 // ── Row types ──
 
@@ -89,10 +90,12 @@ export class DocumentRepository {
   }): Promise<DocumentRow> {
     const id = uuidv4();
     const groupId = uuidv4();
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO documents (id, document_group_id, title, category, version, content, file_id, ack_required, created_by)
-       VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?)`,
+      `INSERT INTO documents (tenant_id, id, document_group_id, title, category, version, content, file_id, ack_required, created_by)
+       VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
       [
+        tenantId,
         id,
         groupId,
         data.title,
@@ -123,10 +126,12 @@ export class DocumentRepository {
 
     const id = uuidv4();
     const newVersion = latest.version + 1;
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO documents (id, document_group_id, title, category, version, content, file_id, ack_required, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO documents (tenant_id, id, document_group_id, title, category, version, content, file_id, ack_required, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         id,
         data.documentGroupId,
         data.title ?? latest.title,
@@ -145,22 +150,25 @@ export class DocumentRepository {
 
   /** Get a document by ID. */
   async getDocumentById(id: string): Promise<DocumentRow | null> {
-    return this.db.get<DocumentRow>('SELECT * FROM documents WHERE id = ?', [id]);
+    return this.db.get<DocumentRow>('SELECT * FROM documents WHERE tenant_id = ? AND id = ?', [
+      getTenantId(),
+      id,
+    ]);
   }
 
   /** Get the latest version for a document group. */
   async getLatestVersion(documentGroupId: string): Promise<DocumentRow | null> {
     return this.db.get<DocumentRow>(
-      'SELECT * FROM documents WHERE document_group_id = ? ORDER BY version DESC LIMIT 1',
-      [documentGroupId],
+      'SELECT * FROM documents WHERE tenant_id = ? AND document_group_id = ? ORDER BY version DESC LIMIT 1',
+      [getTenantId(), documentGroupId],
     );
   }
 
   /** Get all versions for a document group, newest first. */
   async getVersionHistory(documentGroupId: string): Promise<DocumentRow[]> {
     return this.db.all<DocumentRow>(
-      'SELECT * FROM documents WHERE document_group_id = ? ORDER BY version DESC',
-      [documentGroupId],
+      'SELECT * FROM documents WHERE tenant_id = ? AND document_group_id = ? ORDER BY version DESC',
+      [getTenantId(), documentGroupId],
     );
   }
 
@@ -169,30 +177,32 @@ export class DocumentRepository {
    * Optionally filter by status and/or category.
    */
   async listDocuments(filters?: { status?: string; category?: string }): Promise<DocumentRow[]> {
-    const conditions: string[] = [];
-    const params: unknown[] = [];
+    const tenantId = getTenantId();
+    const conditions: string[] = ['d.tenant_id = ?'];
+    const filterParams: unknown[] = [];
 
     if (filters?.status) {
       conditions.push('d.status = ?');
-      params.push(filters.status);
+      filterParams.push(filters.status);
     }
     if (filters?.category) {
       conditions.push('d.category = ?');
-      params.push(filters.category);
+      filterParams.push(filters.category);
     }
 
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const where = `WHERE ${conditions.join(' AND ')}`;
 
     return this.db.all<DocumentRow>(
       `SELECT d.* FROM documents d
        INNER JOIN (
          SELECT document_group_id, MAX(version) AS max_version
          FROM documents
+         WHERE tenant_id = ?
          GROUP BY document_group_id
        ) latest ON d.document_group_id = latest.document_group_id AND d.version = latest.max_version
        ${where}
        ORDER BY d.updated_at DESC`,
-      params,
+      [tenantId, tenantId, ...filterParams],
     );
   }
 
@@ -212,43 +222,44 @@ export class DocumentRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE documents SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(`UPDATE documents SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`, vals);
   }
 
   /** Publish a draft document. Sets status, published_at, published_by. */
   async publishDocument(id: string, publishedBy: string): Promise<void> {
     await this.db.run(
       `UPDATE documents SET status = 'published', published_at = datetime('now'),
-       published_by = ?, updated_at = datetime('now') WHERE id = ?`,
-      [publishedBy, id],
+       published_by = ?, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?`,
+      [publishedBy, getTenantId(), id],
     );
   }
 
   /** Archive a document. */
   async archiveDocument(id: string): Promise<void> {
     await this.db.run(
-      "UPDATE documents SET status = 'archived', updated_at = datetime('now') WHERE id = ?",
-      [id],
+      "UPDATE documents SET status = 'archived', updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+      [getTenantId(), id],
     );
   }
 
   /** Delete a draft document. Only drafts can be deleted. */
   async deleteDocument(id: string): Promise<void> {
-    await this.db.run('DELETE FROM documents WHERE id = ?', [id]);
+    await this.db.run('DELETE FROM documents WHERE tenant_id = ? AND id = ?', [getTenantId(), id]);
   }
 
   // ── Acknowledgments ──
 
   /** Record an employee acknowledgment. */
   async acknowledge(documentId: string, email: string): Promise<AcknowledgmentRow> {
-    await this.db.run('INSERT INTO employee_acknowledgments (document_id, email) VALUES (?, ?)', [
-      documentId,
-      email,
-    ]);
+    const tenantId = getTenantId();
+    await this.db.run(
+      'INSERT INTO employee_acknowledgments (tenant_id, document_id, email) VALUES (?, ?, ?)',
+      [tenantId, documentId, email],
+    );
     const row = await this.db.get<AcknowledgmentRow>(
-      'SELECT * FROM employee_acknowledgments WHERE document_id = ? AND email = ?',
-      [documentId, email],
+      'SELECT * FROM employee_acknowledgments WHERE tenant_id = ? AND document_id = ? AND email = ?',
+      [tenantId, documentId, email],
     );
     if (!row) throw new Error('Failed to record acknowledgment');
     return row;
@@ -257,8 +268,8 @@ export class DocumentRepository {
   /** Check if an employee has acknowledged a document. */
   async hasAcknowledged(documentId: string, email: string): Promise<boolean> {
     const row = await this.db.get<{ id: number; [key: string]: unknown }>(
-      'SELECT id FROM employee_acknowledgments WHERE document_id = ? AND email = ?',
-      [documentId, email],
+      'SELECT id FROM employee_acknowledgments WHERE tenant_id = ? AND document_id = ? AND email = ?',
+      [getTenantId(), documentId, email],
     );
     return !!row;
   }
@@ -266,8 +277,8 @@ export class DocumentRepository {
   /** Get all acknowledgments for a document. */
   async getAcknowledgments(documentId: string): Promise<AcknowledgmentRow[]> {
     return this.db.all<AcknowledgmentRow>(
-      'SELECT * FROM employee_acknowledgments WHERE document_id = ? ORDER BY acked_at DESC',
-      [documentId],
+      'SELECT * FROM employee_acknowledgments WHERE tenant_id = ? AND document_id = ? ORDER BY acked_at DESC',
+      [getTenantId(), documentId],
     );
   }
 
@@ -280,15 +291,16 @@ export class DocumentRepository {
       `SELECT m.email, m.name, ea.acked_at
        FROM members m
        LEFT JOIN employee_acknowledgments ea
-         ON ea.email = m.email AND ea.document_id = ?
-       WHERE m.active = 1
+         ON ea.tenant_id = m.tenant_id AND ea.email = m.email AND ea.document_id = ?
+       WHERE m.tenant_id = ? AND m.active = 1
        ORDER BY ea.acked_at IS NULL DESC, m.name ASC`,
-      [documentId],
+      [documentId, getTenantId()],
     );
   }
 
   /** Get pending acknowledgments for an employee (published, ack_required, not yet acked). */
   async getPendingAcknowledgments(email: string): Promise<AckWithDocumentRow[]> {
+    const tenantId = getTenantId();
     return this.db.all<AckWithDocumentRow>(
       `SELECT ea_stub.document_id, d.title, d.category, d.version, d.file_id, d.content,
               NULL AS id, ? AS email, NULL AS acked_at
@@ -296,30 +308,33 @@ export class DocumentRepository {
        INNER JOIN (
          SELECT document_group_id, MAX(version) AS max_version
          FROM documents
+         WHERE tenant_id = ?
          GROUP BY document_group_id
        ) latest ON d.document_group_id = latest.document_group_id AND d.version = latest.max_version
        LEFT JOIN employee_acknowledgments ea_stub
-         ON ea_stub.document_id = d.id AND ea_stub.email = ?
-       WHERE d.status = 'published' AND d.ack_required = 1 AND ea_stub.id IS NULL
+         ON ea_stub.tenant_id = d.tenant_id AND ea_stub.document_id = d.id AND ea_stub.email = ?
+       WHERE d.tenant_id = ? AND d.status = 'published' AND d.ack_required = 1 AND ea_stub.id IS NULL
        ORDER BY d.published_at DESC`,
-      [email, email],
+      [email, tenantId, email, tenantId],
     );
   }
 
   /** Count pending acknowledgments for an employee. */
   async countPendingAcknowledgments(email: string): Promise<number> {
+    const tenantId = getTenantId();
     const row = await this.db.get<{ cnt: number; [key: string]: unknown }>(
       `SELECT COUNT(*) AS cnt
        FROM documents d
        INNER JOIN (
          SELECT document_group_id, MAX(version) AS max_version
          FROM documents
+         WHERE tenant_id = ?
          GROUP BY document_group_id
        ) latest ON d.document_group_id = latest.document_group_id AND d.version = latest.max_version
        LEFT JOIN employee_acknowledgments ea
-         ON ea.document_id = d.id AND ea.email = ?
-       WHERE d.status = 'published' AND d.ack_required = 1 AND ea.id IS NULL`,
-      [email],
+         ON ea.tenant_id = d.tenant_id AND ea.document_id = d.id AND ea.email = ?
+       WHERE d.tenant_id = ? AND d.status = 'published' AND d.ack_required = 1 AND ea.id IS NULL`,
+      [tenantId, email, tenantId],
     );
     return row?.cnt ?? 0;
   }
@@ -335,10 +350,12 @@ export class DocumentRepository {
     createdBy: string;
   }): Promise<DocumentTemplateRow> {
     const id = uuidv4();
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO document_templates (id, name, category, content_template, description, created_by)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO document_templates (tenant_id, id, name, category, content_template, description, created_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         id,
         data.name,
         data.category ?? 'custom',
@@ -354,18 +371,25 @@ export class DocumentRepository {
 
   /** Get a template by ID. */
   async getTemplateById(id: string): Promise<DocumentTemplateRow | null> {
-    return this.db.get<DocumentTemplateRow>('SELECT * FROM document_templates WHERE id = ?', [id]);
+    return this.db.get<DocumentTemplateRow>(
+      'SELECT * FROM document_templates WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   /** List all templates, optionally filtered by category. */
   async listTemplates(category?: string): Promise<DocumentTemplateRow[]> {
+    const tenantId = getTenantId();
     if (category) {
       return this.db.all<DocumentTemplateRow>(
-        'SELECT * FROM document_templates WHERE category = ? ORDER BY name ASC',
-        [category],
+        'SELECT * FROM document_templates WHERE tenant_id = ? AND category = ? ORDER BY name ASC',
+        [tenantId, category],
       );
     }
-    return this.db.all<DocumentTemplateRow>('SELECT * FROM document_templates ORDER BY name ASC');
+    return this.db.all<DocumentTemplateRow>(
+      'SELECT * FROM document_templates WHERE tenant_id = ? ORDER BY name ASC',
+      [tenantId],
+    );
   }
 
   /** Update a template. */
@@ -384,13 +408,19 @@ export class DocumentRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE document_templates SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE document_templates SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   /** Delete a template. CASCADE removes generated_documents. */
   async deleteTemplate(id: string): Promise<void> {
-    await this.db.run('DELETE FROM document_templates WHERE id = ?', [id]);
+    await this.db.run('DELETE FROM document_templates WHERE tenant_id = ? AND id = ?', [
+      getTenantId(),
+      id,
+    ]);
   }
 
   // ── Generated documents ──
@@ -404,10 +434,12 @@ export class DocumentRepository {
     fileId?: string | null;
   }): Promise<GeneratedDocumentRow> {
     const id = uuidv4();
+    const tenantId = getTenantId();
     await this.db.run(
-      `INSERT INTO generated_documents (id, template_id, target_email, generated_by, variables_json, file_id)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO generated_documents (tenant_id, id, template_id, target_email, generated_by, variables_json, file_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
+        tenantId,
         id,
         data.templateId,
         data.targetEmail,
@@ -417,8 +449,8 @@ export class DocumentRepository {
       ],
     );
     const row = await this.db.get<GeneratedDocumentRow>(
-      'SELECT * FROM generated_documents WHERE id = ?',
-      [id],
+      'SELECT * FROM generated_documents WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
     );
     if (!row) throw new Error('Failed to save generated document');
     return row;
@@ -431,29 +463,33 @@ export class DocumentRepository {
     return this.db.all<GeneratedDocumentRow & { template_name: string; template_category: string }>(
       `SELECT gd.*, dt.name AS template_name, dt.category AS template_category
        FROM generated_documents gd
-       INNER JOIN document_templates dt ON dt.id = gd.template_id
-       WHERE gd.target_email = ?
+       INNER JOIN document_templates dt ON dt.tenant_id = gd.tenant_id AND dt.id = gd.template_id
+       WHERE gd.tenant_id = ? AND gd.target_email = ?
        ORDER BY gd.created_at DESC`,
-      [email],
+      [getTenantId(), email],
     );
   }
 
   /** Get a generated document by ID. */
   async getGeneratedById(id: string): Promise<GeneratedDocumentRow | null> {
-    return this.db.get<GeneratedDocumentRow>('SELECT * FROM generated_documents WHERE id = ?', [
-      id,
-    ]);
+    return this.db.get<GeneratedDocumentRow>(
+      'SELECT * FROM generated_documents WHERE tenant_id = ? AND id = ?',
+      [getTenantId(), id],
+    );
   }
 
   /** List all generated documents (admin). */
   async listGenerated(): Promise<
     (GeneratedDocumentRow & { template_name: string; template_category: string })[]
   > {
+    const tenantId = getTenantId();
     return this.db.all<GeneratedDocumentRow & { template_name: string; template_category: string }>(
       `SELECT gd.*, dt.name AS template_name, dt.category AS template_category
        FROM generated_documents gd
-       INNER JOIN document_templates dt ON dt.id = gd.template_id
+       INNER JOIN document_templates dt ON dt.tenant_id = gd.tenant_id AND dt.id = gd.template_id
+       WHERE gd.tenant_id = ?
        ORDER BY gd.created_at DESC`,
+      [tenantId],
     );
   }
 }
