@@ -19,7 +19,7 @@ describe('getBrand', () => {
     expect(b.headerLogoDarkPath).toContain('blok-mono-white.png');
     expect(b.headerLogoLightPath).toContain('blok-mono-ink.png');
     expect(b.headerLogoPath).toContain('blok-mono-white.png');
-    expect(b.faviconPath).toContain('blokhr-favicon.svg');
+    expect(b.faviconPath).toContain('favicon-13.svg');
     expect(b.tagline).toBeTruthy();
     expect(b.loginHeading).toBeTruthy();
   });
@@ -32,7 +32,7 @@ describe('getBrand', () => {
     expect(b.headerLogoPath).toContain('blok-mono-white.png');
     expect(b.loginLogoPath).toContain('blok-mono-white.png');
     expect(b.loginLogoIncludesName).toBe(true);
-    expect(b.faviconPath).toContain('blokschool-favicon.svg');
+    expect(b.faviconPath).toContain('favicon-13.svg');
   });
 
   it('defaults unknown vertical to hr', () => {
@@ -91,7 +91,7 @@ describe('applyBrand', () => {
     expect(document.title).toBe('BlokSchool');
     const icon = document.querySelector("link[rel='icon']");
     expect(icon).toBeTruthy();
-    expect(icon.getAttribute('href')).toContain('blokschool-favicon.svg');
+    expect(icon.getAttribute('href')).toContain('favicon-13.svg');
     const img = document.getElementById('hdrLogoImg');
     expect(img.getAttribute('src')).toContain('blok-mono-white.png');
     expect(img.style.display).toBe('block');
@@ -114,7 +114,7 @@ describe('applyBrand', () => {
     applyBrand('hr');
     expect(document.title).toBe('BlokHR');
     expect(document.querySelector("link[rel='icon']").getAttribute('href')).toContain(
-      'blokhr-favicon.svg',
+      'favicon-13.svg',
     );
   });
 
