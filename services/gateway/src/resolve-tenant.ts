@@ -160,6 +160,17 @@ function candidateHosts(
 }
 
 /**
+ * Public Host for upstreams (apex signupPortal, branding).
+ * Prefer X-Forwarded-Host / Origin / Referer over the gateway's own Host
+ * so Vercel → Railway rewrites still see www.13blok.com.
+ */
+export function resolvePublicHost(
+  headers: Record<string, string | string[] | undefined>,
+): string {
+  return candidateHosts(headers)[0] || '';
+}
+
+/**
  * Resolve tenant id for an HTTP request.
  * Order: TENANT_HOST_MAP → subdomain rule → trusted X-Blok-Tenant → fallback.
  */

@@ -41,6 +41,7 @@ import {
   parseHostList,
   parseReservedSlugs,
   parseTenantHostMap,
+  resolvePublicHost,
   resolveTenantId,
 } from './resolve-tenant';
 import { assertTenantPathMatch } from './guards/tenant-path';
@@ -52,6 +53,8 @@ const SSE_NO_TIMEOUT = 0;
 type BlokProxyRequest = Request & {
   _blokExtraHeaders?: Record<string, string>;
   _blokHostTenant?: string;
+  /** Original browser Host (X-Forwarded-Host / Origin / Host) for upstreams. */
+  _blokPublicHost?: string;
 };
 
 export interface GatewayAppOptions {
@@ -81,6 +84,11 @@ function buildProxyHooks(
       if (hostTenant) extra['X-Blok-Tenant'] = hostTenant;
       Object.assign(extra, blokReq._blokExtraHeaders || {});
       applyProxyHeaderHygiene(proxyReq, internalSecret, extra);
+      /* Preserve browser Host for monolith apex / subdomain checks (changeOrigin
+         otherwise leaves Host as the Railway upstream and drops signupPortal). */
+      if (blokReq._blokPublicHost) {
+        proxyReq.setHeader('X-Forwarded-Host', blokReq._blokPublicHost);
+      }
       if (opts.ssePassthrough || isSseStreamPath(req)) {
         req.socket?.setTimeout(0);
         proxyReq.setTimeout(0);
@@ -130,8 +138,9 @@ export function createGatewayApp(options: GatewayAppOptions): {
   const apexHosts = parseHostList(config.tenantApexHosts);
   const reservedSlugs = parseReservedSlugs(config.tenantReservedSlugs);
   app.use((req: Request, _res: Response, next: NextFunction) => {
+    const headers = req.headers as Record<string, string | string[] | undefined>;
     const tenantId = resolveTenantId({
-      headers: req.headers as Record<string, string | string[] | undefined>,
+      headers,
       hostMap,
       trustBlokTenantHeader: false,
       fallback: config.defaultTenantId,
@@ -139,7 +148,9 @@ export function createGatewayApp(options: GatewayAppOptions): {
       reservedSlugs,
       apexHosts,
     });
-    (req as BlokProxyRequest)._blokHostTenant = tenantId;
+    const blokReq = req as BlokProxyRequest;
+    blokReq._blokHostTenant = tenantId;
+    blokReq._blokPublicHost = resolvePublicHost(headers);
     next();
   });
 
