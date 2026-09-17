@@ -107,6 +107,31 @@
 .wz-header { padding: 36px 40px 0; text-align: center; }
 .wz-logo { width: 52px; height: 52px; margin: 0 auto 16px; border-radius: 14px; background: linear-gradient(135deg, var(--wz-accent), var(--wz-accent2)); display: flex; align-items: center; justify-content: center; font-family: 'Plus Jakarta Sans', sans-serif; font-size: 22px; font-weight: 900; color: #fff; box-shadow: 0 4px 20px var(--wz-accent-glow); overflow: hidden; }
 .wz-logo img { width: 100%; height: 100%; object-fit: contain; display: none; }
+/* Mono / uploaded wordmark — no accent tile */
+.wz-logo.wz-logo--mark {
+  width: auto;
+  max-width: min(220px, 70vw);
+  height: auto;
+  min-height: 0;
+  margin: 0 auto 20px;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  color: inherit;
+}
+.wz-logo.wz-logo--mark img {
+  width: 100%;
+  height: auto;
+  max-height: 48px;
+  object-fit: contain;
+  display: block;
+}
+body.theme-clean #screenSetup .wz-logo.wz-logo--mark {
+  color: inherit;
+  background: transparent;
+}
 .wz-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 6px; background: linear-gradient(135deg, var(--wz-tx) 40%, var(--wz-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .wz-subtitle { font-size: 13px; color: var(--wz-tx3); font-weight: 400; font-family: 'Plus Jakarta Sans', sans-serif; }
 .wz-steps { display: flex; align-items: center; justify-content: center; padding: 28px 40px 8px; }
@@ -491,7 +516,9 @@ body.theme-clean #screenSetup {
   --wz-ring: rgba(61, 139, 255, 0.12);
 }
 body.theme-clean #screenSetup .wz-btn-p,
-body.theme-clean #screenSetup .wz-sn.active,
-body.theme-clean #screenSetup .wz-logo {
+body.theme-clean #screenSetup .wz-sn.active {
+  color: #00112b;
+}
+body.theme-clean #screenSetup .wz-logo:not(.wz-logo--mark) {
   color: #00112b;
 }

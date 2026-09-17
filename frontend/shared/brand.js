@@ -138,6 +138,10 @@ export function syncBrandLogos(themeOrWz, vertical) {
   if (loginLetter) loginLetter.style.display = 'none';
   const wzLetter = document.getElementById('wzLogoLetter');
   if (wzLetter) wzLetter.style.display = 'none';
+  const wzLogo = document.getElementById('wzLogo');
+  if (wzLogo) wzLogo.classList.add('wz-logo--mark');
+  const loginLogo = document.getElementById('loginLogo');
+  if (loginLogo) loginLogo.classList.add('login-logo--mark');
 }
 
 /**
