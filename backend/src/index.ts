@@ -67,8 +67,8 @@ async function main(): Promise<void> {
   const broadcaster = new SseBroadcaster(logger);
 
   // ── 7. Routes ──
-  const app = createApp(config, logger, (a) => {
-    registerAllRoutes(a, { db, config, logger, broadcaster, featureFlags, eventBus });
+  const app = await createApp(config, logger, async (a) => {
+    await registerAllRoutes(a, { db, config, logger, broadcaster, featureFlags, eventBus });
   });
   logger.info('Routes registered');
 

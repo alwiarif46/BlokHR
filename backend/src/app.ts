@@ -52,11 +52,11 @@ export function asyncHandler(
  * Builds the Express application with the full middleware stack in enforced order.
  * No business routes yet — those are added per-module.
  */
-export function createApp(
+export async function createApp(
   config: AppConfig,
   logger: Logger,
-  registerRoutes?: (app: Express) => void,
-): Express {
+  registerRoutes?: (app: Express) => Promise<void> | void,
+): Promise<Express> {
   const app = express();
 
   // ── 1. Correlation ID ──
@@ -157,7 +157,7 @@ export function createApp(
 
   // ── 10. Register routes (modules inject here) ──
   if (registerRoutes) {
-    registerRoutes(app);
+    await registerRoutes(app);
   }
 
   // ── 11. 404 handler ──

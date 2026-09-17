@@ -149,6 +149,10 @@ export class ProfileService {
           continue;
         }
       } else if (EMPLOYEE_EDITABLE_FIELDS.has(key)) {
+        if (!isAdmin && !isSelf) {
+          rejectedFields.push(key);
+          continue;
+        }
         if (isSelf && isLocked && !isAdmin) {
           rejectedFields.push(key);
           continue;
@@ -240,6 +244,16 @@ export class ProfileService {
       member = await this.db.get<MemberRow>('SELECT * FROM members WHERE email = ?', [memberId]);
     }
     if (!member) return { success: false, error: 'Member not found' };
+
+    const isSelf = callerEmail.toLowerCase() === member.email.toLowerCase();
+    const admin = await this.db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+      callerEmail,
+    ]);
+    const isAdmin = !!admin;
+
+    if (!isSelf && !isAdmin) {
+      return { success: false, error: 'You do not have permission to certify this profile' };
+    }
 
     if (member.certified_at && member.profile_unlocked !== 1) {
       return { success: false, error: 'Profile is already certified and locked' };
