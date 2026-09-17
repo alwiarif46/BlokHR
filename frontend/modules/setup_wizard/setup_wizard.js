@@ -571,17 +571,27 @@ function _bindEvents() {
       const url = this.value.trim();
       const img = document.getElementById('wzLogoImg');
       const letter = document.getElementById('wzLogoLetter');
+      const logoWrap = document.getElementById('wzLogo');
       if (url && img) {
         img.src = url;
         img.style.display = 'block';
         if (letter) letter.style.display = 'none';
+        if (logoWrap) logoWrap.classList.add('wz-logo--mark');
         img.onerror = function () {
           img.style.display = 'none';
           if (letter) letter.style.display = '';
+          if (logoWrap) logoWrap.classList.remove('wz-logo--mark');
+          const scr = document.getElementById('screenSetup');
+          const wzTheme = (scr && scr.getAttribute('data-wz-theme')) || 'dark';
+          syncBrandLogos(wzTheme);
         };
       } else {
         if (img) img.style.display = 'none';
         if (letter) letter.style.display = '';
+        if (logoWrap) logoWrap.classList.remove('wz-logo--mark');
+        const scr = document.getElementById('screenSetup');
+        const wzTheme = (scr && scr.getAttribute('data-wz-theme')) || 'dark';
+        syncBrandLogos(wzTheme);
       }
     });
   }
