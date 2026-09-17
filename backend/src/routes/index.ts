@@ -7,6 +7,7 @@ import { FeatureFlagService } from '../services/feature-flags';
 import { SseBroadcaster } from '../sse/broadcaster';
 import { createNotificationDispatcher } from '../services/notification';
 import { LeaveNotificationService } from '../services/leave-notifications';
+import { getTenantId } from '../tenant/context';
 
 // ── Phase 1 route factories ──
 import { createClockRouter } from './clock';
@@ -101,13 +102,16 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   const roster = directory
     ? {
         listActiveMembers: async () => {
-          const members = await directory.listMembers(config.defaultTenantId);
-          return members.map((m) => ({
-            email: m.email,
-            name: m.name,
-            groupId: m.groupId,
-            designation: m.designation,
-          }));
+          const tenantId = getTenantId(config.defaultTenantId);
+          const members = await directory.listMembers(tenantId);
+          return members
+            .filter((m) => m.active)
+            .map((m) => ({
+              email: m.email,
+              name: m.name,
+              groupId: m.groupId,
+              designation: m.designation,
+            }));
         },
       }
     : undefined;

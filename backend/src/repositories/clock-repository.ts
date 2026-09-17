@@ -1,4 +1,5 @@
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface AttendanceRecord {
   [key: string]: unknown;
@@ -182,8 +183,8 @@ export class ClockRepository {
               COALESCE(m.timezone, g.timezone, 'Asia/Kolkata') as timezone
        FROM members m
        LEFT JOIN groups g ON m.group_id = g.id
-       WHERE m.email = ? AND m.active = 1`,
-      [email],
+       WHERE m.tenant_id = ? AND m.email = ? AND m.active = 1`,
+      [getTenantId(), email],
     );
   }
 
@@ -241,7 +242,8 @@ export class ClockRepository {
               COALESCE(m.timezone, g.timezone, 'Asia/Kolkata') as timezone
        FROM members m
        LEFT JOIN groups g ON m.group_id = g.id
-       WHERE m.active = 1`,
+       WHERE m.tenant_id = ? AND m.active = 1`,
+      [getTenantId()],
     );
   }
 }

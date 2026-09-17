@@ -28,6 +28,7 @@ import { createStorageRouter } from '../../src/routes/storage';
 import { createAuditRouter } from '../../src/routes/audit';
 import { createWebhookReceiverRouter } from '../../src/routes/webhook-receivers';
 import { createFeatureFlagsRouter } from '../../src/routes/feature-flags';
+import { getTenantId } from '../../src/tenant/context';
 import { createOrgChartRouter } from '../../src/routes/org-chart';
 import { createDocumentRouter } from '../../src/routes/documents';
 import { createWorkflowRouter } from '../../src/routes/workflows';
@@ -207,13 +208,16 @@ export async function createTestApp(
 
     const roster = {
       listActiveMembers: async () => {
-        const members = await directory.service.listMembers(config.defaultTenantId);
-        return members.map((m) => ({
-          email: m.email,
-          name: m.name,
-          groupId: m.groupId,
-          designation: m.designation,
-        }));
+        const tenantId = getTenantId(config.defaultTenantId);
+        const members = await directory.service.listMembers(tenantId);
+        return members
+          .filter((m) => m.active)
+          .map((m) => ({
+            email: m.email,
+            name: m.name,
+            groupId: m.groupId,
+            designation: m.designation,
+          }));
       },
     };
     const clockRouter = createClockRouter(db, testLogger, roster);

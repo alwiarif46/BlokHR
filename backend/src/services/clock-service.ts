@@ -403,11 +403,14 @@ export class ClockService {
       }
     }
 
-    // Include clock rows for people not in roster (legacy / deactivated)
-    for (const r of records) {
-      const email = r.email.toLowerCase();
-      if (seen.has(email)) continue;
-      people.push(await enrich(r));
+    // When a roster port is wired, it is the tenant source of truth — never surface
+    // other tenants' attendance_daily rows. Legacy fallback only without directory.
+    if (!this.roster) {
+      for (const r of records) {
+        const email = r.email.toLowerCase();
+        if (seen.has(email)) continue;
+        people.push(await enrich(r));
+      }
     }
 
     return { people, dayChangeTime };

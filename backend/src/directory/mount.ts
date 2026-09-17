@@ -183,8 +183,8 @@ export async function createDirectoryBundle(
 
   await ensureDefaultGroup(deps.monolithDb);
 
-  // One-time backfill from legacy monolith members when directory is empty
-  const legacy = await deps.monolithDb.all<{
+  // Align directory roster with monolith tenant_id (fixes pre-isolation mixups).
+  const monolithMembers = await deps.monolithDb.all<{
     tenant_id: string;
     id: string;
     email: string;
@@ -200,34 +200,66 @@ export async function createDirectoryBundle(
   }>(
     `SELECT tenant_id, id, email, name, role, group_id, designation, phone, timezone,
             individual_shift_start, individual_shift_end, active
-     FROM members WHERE tenant_id = ?`,
-    [config.defaultTenantId],
+     FROM members`,
   );
 
-  const imported = await service.backfillFromLegacy(
-    legacy.map((row) => ({
-      id: row.id,
-      email: row.email,
-      name: row.name,
-      role: row.role,
-      groupId: row.group_id,
-      designation: row.designation,
-      phone: row.phone,
-      timezone: row.timezone,
-      individualShiftStart: row.individual_shift_start,
-      individualShiftEnd: row.individual_shift_end,
-      active: row.active === 1,
-    })),
-    config.defaultTenantId,
-  );
-
-  // Ensure projected shifts/groups for backfilled actives (clock-ready)
-  if (imported > 0) {
-    const actives = await service.listMembers(config.defaultTenantId);
-    for (const m of actives) {
-      await projection.upsertMember(m);
+  let realigned = 0;
+  for (const row of monolithMembers) {
+    const email = row.email.toLowerCase().trim();
+    if (!email) continue;
+    const tid = (row.tenant_id || 'default').trim().toLowerCase() || 'default';
+    const existing = await db.get<{ tenant_id: string; id: string }>(
+      'SELECT tenant_id, id FROM members WHERE lower(email) = ?',
+      [email],
+    );
+    if (existing && existing.tenant_id !== tid) {
+      await db.run(
+        `UPDATE members SET tenant_id = ?, updated_at = datetime('now') WHERE id = ?`,
+        [tid, existing.id],
+      );
+      realigned += 1;
     }
-    logger.info({ imported }, 'Directory backfilled from monolith members');
+  }
+  if (realigned > 0) {
+    logger.info({ realigned }, 'Directory member tenant_id realigned from monolith');
+  }
+
+  const byTenant = new Map<string, typeof monolithMembers>();
+  for (const row of monolithMembers) {
+    const tid = (row.tenant_id || 'default').trim().toLowerCase() || 'default';
+    const list = byTenant.get(tid) ?? [];
+    list.push(row);
+    byTenant.set(tid, list);
+  }
+
+  let importedTotal = 0;
+  for (const [tid, rows] of byTenant) {
+    const imported = await service.backfillFromLegacy(
+      rows.map((row) => ({
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        role: row.role,
+        groupId: row.group_id,
+        designation: row.designation,
+        phone: row.phone,
+        timezone: row.timezone,
+        individualShiftStart: row.individual_shift_start,
+        individualShiftEnd: row.individual_shift_end,
+        active: row.active === 1,
+      })),
+      tid,
+    );
+    if (imported > 0) {
+      importedTotal += imported;
+      const actives = await service.listMembers(tid);
+      for (const m of actives) {
+        await projection.upsertMember(m);
+      }
+    }
+  }
+  if (importedTotal > 0) {
+    logger.info({ imported: importedTotal }, 'Directory backfilled from monolith members');
   }
 
   logger.info({ directoryDbPath }, 'Directory service ready');

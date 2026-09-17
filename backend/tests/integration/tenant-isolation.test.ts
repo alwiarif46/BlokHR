@@ -80,6 +80,30 @@ describe('Tenant isolation (setup + members)', () => {
     expect(emailsB).not.toContain('admin@alpha.test');
   });
 
+  it('does not leak attendance team roster across Host tenants', async () => {
+    await completeSetup('tenant-a.test', 'Alpha Co', 'admin@alpha.test');
+    await completeSetup('tenant-b.test', 'Beta Co', 'admin@beta.test');
+
+    const today = new Date().toISOString().slice(0, 10);
+    const boardA = await request(app)
+      .get(`/api/attendance?date=${today}`)
+      .set('Host', 'tenant-a.test');
+    const boardB = await request(app)
+      .get(`/api/attendance?date=${today}`)
+      .set('Host', 'tenant-b.test');
+
+    expect(boardA.status).toBe(200);
+    expect(boardB.status).toBe(200);
+
+    const emailsA = (boardA.body.people || []).map((p: { email: string }) => p.email);
+    const emailsB = (boardB.body.people || []).map((p: { email: string }) => p.email);
+
+    expect(emailsA).toContain('admin@alpha.test');
+    expect(emailsA).not.toContain('admin@beta.test');
+    expect(emailsB).toContain('admin@beta.test');
+    expect(emailsB).not.toContain('admin@alpha.test');
+  });
+
   it('local DEFAULT_TENANT_ID still boots wizard once', async () => {
     const res = await request(app).get('/api/setup/status');
     expect(res.status).toBe(200);
