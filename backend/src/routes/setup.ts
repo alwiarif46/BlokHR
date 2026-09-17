@@ -34,8 +34,10 @@ export function createSetupRouter(
   });
 
   function requestHost(req: Request): string {
-    const forwarded = String(req.headers['x-forwarded-host'] ?? '').split(',')[0];
-    return normalizeHost(forwarded || String(req.headers.host ?? ''));
+    return (
+      resolvePublicHost(req.headers as Record<string, string | string[] | undefined>) ||
+      normalizeHost(String(req.headers.host ?? ''))
+    );
   }
 
   function assertNotApex(req: Request): void {
