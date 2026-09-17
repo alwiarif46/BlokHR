@@ -56,6 +56,7 @@ export interface MemberForLeave {
   name: string;
   member_type_id: string;
   joining_date: string;
+  reports_to: string;
 }
 
 /**
@@ -158,9 +159,14 @@ export class LeaveRepository {
   /** Get member info needed for leave calculations. */
   async getMemberForLeave(email: string): Promise<MemberForLeave | null> {
     return this.db.get<MemberForLeave>(
-      'SELECT email, name, member_type_id, joining_date FROM members WHERE email = ? AND active = 1',
+      'SELECT email, name, member_type_id, joining_date, reports_to FROM members WHERE email = ? AND active = 1',
       [email],
     );
+  }
+
+  async isAdmin(email: string): Promise<boolean> {
+    const admin = await this.db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [email]);
+    return !!admin;
   }
 
   /** Get PTO balance for an employee, leave type, and year. */

@@ -211,7 +211,7 @@ export function lvRender() {
    ══════════════════════════════════════════════════════════════ */
 
 export async function lvApprove(id) {
-  const result = await api.post('/api/leaves/' + id + '/approve', {});
+  const result = await api.post('/api/leave-approve', { leaveId: id });
   if (result && !result._error) {
     toast('Leave approved', 'success');
     lvLoadData();
@@ -232,7 +232,7 @@ export async function lvReject(id) {
   const reason = prompt('Rejection reason:');
   if (reason === null) return;
 
-  const result = await api.post('/api/leaves/' + id + '/reject', { reason: reason });
+  const result = await api.post('/api/leave-reject', { leaveId: id, reason: reason });
   if (result && !result._error) {
     toast('Leave rejected', 'success');
     lvLoadData();
@@ -248,7 +248,7 @@ export async function lvReject(id) {
 export async function lvCancel(id) {
   if (!confirm('Cancel this leave application?')) return;
 
-  const result = await api.post('/api/leaves/' + id + '/cancel', {});
+  const result = await api.post('/api/leave-delete', { leaveId: id });
   if (result && !result._error) {
     toast('Leave cancelled', 'success');
     lvLoadData();
@@ -278,14 +278,20 @@ export function lvShowForm(lv) {
   box.innerHTML =
     '<div class="lv-modal-title">' + (isEdit ? 'Edit' : 'Apply for') + ' Leave</div>' +
     '<div class="lv-field"><label>Leave Type *</label><select id="lvType"><option value="">\u2014</option>' + typeOpts + '</select></div>' +
-    '<div style="display:flex;gap:8px">' +
-      '<div class="lv-field" style="flex:1"><label>Start Date *</label><input type="date" id="lvStart" value="' + _esc((lv && lv.startDate) || '') + '"></div>' +
-      '<div class="lv-field" style="flex:1"><label>End Date *</label><input type="date" id="lvEnd" value="' + _esc((lv && lv.endDate) || '') + '"></div>' +
+    '<div class="lv-field-row">' +
+      '<div class="lv-field"><label>From Date *</label><input type="date" id="lvStart" value="' + (lv ? _esc(lv.startDate) : '') + '"></div>' +
+      '<div class="lv-field"><label>To Date *</label><input type="date" id="lvEnd" value="' + (lv ? _esc(lv.endDate) : '') + '"></div>' +
     '</div>' +
-    '<div class="lv-field"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="lvHalf"' + (lv && lv.halfDay ? ' checked' : '') + ' style="width:auto"> Half Day</label></div>' +
-    '<div class="lv-field"><label>Reason *</label><textarea id="lvReason" style="min-height:50px">' + _esc((lv && lv.reason) || '') + '</textarea></div>' +
-    '<div class="lv-days-calc" id="lvDaysCalc"></div>' +
-    '<div class="lv-form-actions"><button class="lv-btn ghost" data-lv-action="close-modal">Cancel</button><button class="lv-btn" id="lvSaveBtn">' + (isEdit ? 'Update' : 'Submit') + '</button></div>';
+    '<div class="lv-field" style="flex-direction:row;align-items:center;gap:12px">' +
+      '<input type="checkbox" id="lvHalf" ' + (lv && lv.halfDay ? 'checked' : '') + '>' +
+      '<label for="lvHalf" style="margin:0;cursor:pointer">Half Day</label>' +
+      '<div id="lvDaysCalc" style="margin-left:auto;color:var(--text-light);font-size:13px"></div>' +
+    '</div>' +
+    '<div class="lv-field"><label>Reason *</label><textarea id="lvReason" rows="3" placeholder="Why do you need this leave?">' + (lv ? _esc(lv.reason) : '') + '</textarea></div>' +
+    '<div class="lv-modal-actions">' +
+      '<button type="button" class="secondary" data-lv-action="close-modal">Cancel</button>' +
+      '<button type="button" class="primary" id="lvSaveBtn">Submit</button>' +
+    '</div>';
 
   const modal = _container.querySelector('#lvModal');
   if (modal) modal.classList.add('open');
@@ -334,19 +340,15 @@ async function _saveLeave(lv, isEdit) {
   if (days < 0.5) days = 0.5;
 
   const session = getSession() || {};
-  const body = {
-    type: type, startDate: start, endDate: end, days: days,
-    halfDay: halfDay, reason: reason, status: 'pending',
-    email: session.email || '', name: session.name || 'User',
-    appliedOn: new Date().toISOString().split('T')[0],
-  };
+  const kind = halfDay ? 'FirstHalf' : 'FullDay';
 
-  const method = isEdit ? 'PUT' : 'POST';
-  const path = isEdit ? '/api/leaves/' + lv.id : '/api/leaves';
-
-  const result = isEdit
-    ? await api.put(path, body)
-    : await api.post(path, body);
+  const result = await api.post('/api/leave-submit', {
+    leaveType: type,
+    startDate: start,
+    endDate: end,
+    reason: reason,
+    kind: kind
+  });
 
   if (result && !result._error) {
     toast('Leave ' + (isEdit ? 'updated' : 'submitted'), 'success');
@@ -356,6 +358,13 @@ async function _saveLeave(lv, isEdit) {
   }
 
   /* Mock fallback */
+  const body = {
+    type: type, startDate: start, endDate: end, days: days,
+    halfDay: halfDay, reason: reason, status: 'pending',
+    email: session.email || '', name: session.name || 'User',
+    appliedOn: new Date().toISOString().split('T')[0],
+  };
+
   if (isEdit) {
     const idx = _lvList.findIndex(function (x) { return x.id === lv.id; });
     if (idx >= 0) Object.assign(_lvList[idx], body);

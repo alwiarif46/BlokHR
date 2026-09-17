@@ -29,9 +29,8 @@ export function createLeaveRouter(
   router.post(
     '/leave-submit',
     asyncHandler(async (req: Request, res: Response) => {
-      const { personName, personEmail, leaveType, kind, startDate, endDate, reason } = req.body as {
+      const { personName, leaveType, kind, startDate, endDate, reason } = req.body as {
         personName?: string;
-        personEmail?: string;
         leaveType?: string;
         kind?: string;
         startDate?: string;
@@ -39,12 +38,18 @@ export function createLeaveRouter(
         reason?: string;
       };
 
-      if (!personEmail || !leaveType || !startDate || !endDate) {
-        throw new AppError('personEmail, leaveType, startDate, and endDate are required', 400);
+      const personEmail = req.identity?.email;
+
+      if (!personEmail) {
+        throw new AppError('Authentication required', 401);
+      }
+
+      if (!leaveType || !startDate || !endDate) {
+        throw new AppError('leaveType, startDate, and endDate are required', 400);
       }
 
       const result = await service.submit({
-        personName: personName ?? personEmail,
+        personName: personName ?? req.identity?.name ?? personEmail,
         personEmail: personEmail.toLowerCase().trim(),
         leaveType,
         kind: kind ?? 'FullDay',
@@ -70,7 +75,20 @@ export function createLeaveRouter(
         throw new AppError('email query parameter required', 400);
       }
 
-      const leaves = await service.getLeaves(email.toLowerCase().trim());
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      const targetEmail = email.toLowerCase().trim();
+
+      if (callerEmail.toLowerCase() !== targetEmail) {
+        const isAdmin = await repo.isAdmin(callerEmail);
+        const member = await repo.getMemberForLeave(targetEmail);
+        if (!isAdmin && member?.reports_to?.toLowerCase() !== callerEmail.toLowerCase()) {
+          throw new AppError('Unauthorized to view these leaves', 403);
+        }
+      }
+
+      const leaves = await service.getLeaves(targetEmail);
       res.json({ leaves });
     }),
   );
@@ -79,17 +97,13 @@ export function createLeaveRouter(
   router.post(
     '/leave-approve',
     asyncHandler(async (req: Request, res: Response) => {
-      const { leaveId, approverEmail } = req.body as {
-        leaveId?: string;
-        approverEmail?: string;
-      };
-
+      const { leaveId } = req.body as { leaveId?: string };
       if (!leaveId) throw new AppError('leaveId is required', 400);
 
-      const result = await service.managerApprove(
-        leaveId,
-        approverEmail ?? req.identity?.email ?? '',
-      );
+      const approverEmail = req.identity?.email;
+      if (!approverEmail) throw new AppError('Authentication required', 401);
+
+      const result = await service.managerApprove(leaveId, approverEmail);
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to approve leave', 400);
@@ -102,14 +116,13 @@ export function createLeaveRouter(
   router.post(
     '/leave-hr-approve',
     asyncHandler(async (req: Request, res: Response) => {
-      const { leaveId, approverEmail } = req.body as {
-        leaveId?: string;
-        approverEmail?: string;
-      };
-
+      const { leaveId } = req.body as { leaveId?: string };
       if (!leaveId) throw new AppError('leaveId is required', 400);
 
-      const result = await service.hrApprove(leaveId, approverEmail ?? req.identity?.email ?? '');
+      const approverEmail = req.identity?.email;
+      if (!approverEmail) throw new AppError('Authentication required', 401);
+
+      const result = await service.hrApprove(leaveId, approverEmail);
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to HR-approve leave', 400);
@@ -122,19 +135,13 @@ export function createLeaveRouter(
   router.post(
     '/leave-reject',
     asyncHandler(async (req: Request, res: Response) => {
-      const { leaveId, approverEmail, reason } = req.body as {
-        leaveId?: string;
-        approverEmail?: string;
-        reason?: string;
-      };
-
+      const { leaveId, reason } = req.body as { leaveId?: string; reason?: string };
       if (!leaveId) throw new AppError('leaveId is required', 400);
 
-      const result = await service.reject(
-        leaveId,
-        approverEmail ?? req.identity?.email ?? '',
-        reason ?? '',
-      );
+      const approverEmail = req.identity?.email;
+      if (!approverEmail) throw new AppError('Authentication required', 401);
+
+      const result = await service.reject(leaveId, approverEmail, reason ?? '');
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to reject leave', 400);
@@ -147,14 +154,29 @@ export function createLeaveRouter(
   router.post(
     '/leave-delete',
     asyncHandler(async (req: Request, res: Response) => {
-      const { leaveId, cancelledBy } = req.body as {
+      const { leaveId, asAdmin } = req.body as {
         leaveId?: string;
-        cancelledBy?: string;
+        asAdmin?: boolean;
       };
 
       if (!leaveId) throw new AppError('leaveId is required', 400);
 
-      const result = await service.deleteOrCancel(leaveId, cancelledBy);
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      let cancelledBy: string | undefined = callerEmail;
+
+      if (asAdmin) {
+        const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
+          callerEmail,
+        ]);
+        if (!admin) {
+          throw new AppError('Only admins can hard-delete leaves', 403);
+        }
+        cancelledBy = undefined; // Trigger hard-delete in service
+      }
+
+      const result = await service.deleteOrCancel(leaveId, cancelledBy, callerEmail);
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to delete leave', 400);
@@ -172,7 +194,20 @@ export function createLeaveRouter(
         throw new AppError('email query parameter required', 400);
       }
 
-      const balance = await service.getPtoBalance(email.toLowerCase().trim());
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      const targetEmail = email.toLowerCase().trim();
+
+      if (callerEmail.toLowerCase() !== targetEmail) {
+        const isAdmin = await repo.isAdmin(callerEmail);
+        const member = await repo.getMemberForLeave(targetEmail);
+        if (!isAdmin && member?.reports_to?.toLowerCase() !== callerEmail.toLowerCase()) {
+          throw new AppError('Unauthorized to view this PTO balance', 403);
+        }
+      }
+
+      const balance = await service.getPtoBalance(targetEmail);
       res.json(balance);
     }),
   );

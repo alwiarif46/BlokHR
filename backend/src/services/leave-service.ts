@@ -171,6 +171,13 @@ export class LeaveService {
   ): Promise<{ success: boolean; error?: string }> {
     const leave = await this.repo.getLeaveById(leaveId);
     if (!leave) return { success: false, error: 'Leave not found' };
+
+    const member = await this.repo.getMemberForLeave(leave.person_email);
+    const isAdmin = await this.repo.isAdmin(approverEmail);
+    if (!isAdmin && member?.reports_to?.toLowerCase() !== approverEmail.toLowerCase()) {
+      return { success: false, error: 'Unauthorized to approve this leave' };
+    }
+
     if (leave.status !== 'Pending') {
       return {
         success: false,
@@ -203,6 +210,12 @@ export class LeaveService {
   ): Promise<{ success: boolean; error?: string }> {
     const leave = await this.repo.getLeaveById(leaveId);
     if (!leave) return { success: false, error: 'Leave not found' };
+
+    const isAdmin = await this.repo.isAdmin(approverEmail);
+    if (!isAdmin) {
+      return { success: false, error: 'Only HR/Admin can approve leaves at this stage' };
+    }
+
     if (leave.status !== 'Approved by Manager') {
       return { success: false, error: `Cannot HR-approve a leave with status "${leave.status}"` };
     }
@@ -244,6 +257,13 @@ export class LeaveService {
   ): Promise<{ success: boolean; error?: string }> {
     const leave = await this.repo.getLeaveById(leaveId);
     if (!leave) return { success: false, error: 'Leave not found' };
+
+    const member = await this.repo.getMemberForLeave(leave.person_email);
+    const isAdmin = await this.repo.isAdmin(approverEmail);
+    if (!isAdmin && member?.reports_to?.toLowerCase() !== approverEmail.toLowerCase()) {
+      return { success: false, error: 'Unauthorized to reject this leave' };
+    }
+
     if (
       leave.status === 'Approved' ||
       leave.status === 'Rejected' ||
@@ -275,11 +295,15 @@ export class LeaveService {
   async deleteOrCancel(
     leaveId: string,
     cancelledBy?: string,
+    callerEmail?: string,
   ): Promise<{ success: boolean; error?: string }> {
     const leave = await this.repo.getLeaveById(leaveId);
     if (!leave) return { success: false, error: 'Leave not found' };
 
     if (cancelledBy) {
+      if (callerEmail && callerEmail.toLowerCase() !== leave.person_email.toLowerCase()) {
+        return { success: false, error: 'You can only cancel your own leave' };
+      }
       // Employee cancelling their own — mark as Cancelled
       await this.repo.updateLeaveStatus(leaveId, {
         status: 'Cancelled',
