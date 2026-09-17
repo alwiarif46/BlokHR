@@ -39,6 +39,7 @@ import { resolveHrCompatRewrite } from './guards/hr-compat';
 import { createFeatureFlagCache, type FeatureFlagCache } from './guards/feature-flags';
 import {
   isApexHost,
+  normalizeHost,
   parseHostList,
   parseReservedSlugs,
   parseTenantHostMap,
@@ -500,9 +501,18 @@ export function createGatewayApp(options: GatewayAppOptions): {
    */
   app.get('/api/setup/status', async (req: Request, res: Response) => {
     const blokReq = req as BlokProxyRequest;
-    const publicHost = blokReq._blokPublicHost || resolvePublicHost(
-      req.headers as Record<string, string | string[] | undefined>,
+    const headers = req.headers as Record<string, string | string[] | undefined>;
+    const clientHost = normalizeHost(
+      String(
+        (Array.isArray(headers['x-blok-client-host'])
+          ? headers['x-blok-client-host'][0]
+          : headers['x-blok-client-host']) ?? '',
+      ),
     );
+    const publicHost =
+      blokReq._blokPublicHost ||
+      resolvePublicHost(headers) ||
+      clientHost;
     const signupPortal = apexHosts.size > 0 && isApexHost(publicHost, apexHosts);
     const subdomainBaseOut = (config.tenantSubdomainBase || '').trim() || null;
     const tenantId = blokReq._blokHostTenant || config.defaultTenantId;
@@ -524,15 +534,6 @@ export function createGatewayApp(options: GatewayAppOptions): {
         ...body,
         signupPortal,
         subdomainBase: subdomainBaseOut,
-        /* temporary deploy diagnostic — remove after apex smoke passes */
-        _apexDebug: {
-          publicHost,
-          apexHosts: [...apexHosts],
-          hostHdr: req.headers.host || null,
-          xfHost: req.headers['x-forwarded-host'] || null,
-          origin: req.headers.origin || null,
-          referer: req.headers.referer || null,
-        },
       });
     } catch (err) {
       logger.warn({ err }, 'setup/status upstream failed');

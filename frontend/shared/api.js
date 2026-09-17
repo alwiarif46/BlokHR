@@ -154,6 +154,11 @@ export async function api(path, opts) {
     headers['Authorization'] = 'Bearer ' + session.sessionToken;
   }
 
+  /* Browser Host for apex signupPortal behind Vercel→Railway Host rewrites. */
+  if (typeof location !== 'undefined' && location.host && !headers['X-Blok-Client-Host']) {
+    headers['X-Blok-Client-Host'] = location.host;
+  }
+
   const fetchOpts = Object.assign({}, opts || {}, { headers: headers });
 
   /* Auto-stringify object bodies */
