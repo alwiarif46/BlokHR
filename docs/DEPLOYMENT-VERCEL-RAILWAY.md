@@ -23,6 +23,7 @@ GitHub source of truth for this product line: `https://github.com/alwiarif46/Blo
 | Project | `blokhr` |
 | Production | **https://blokhr.vercel.app** |
 | Root | `frontend/` (static) |
+| Git | Connected to `alwiarif46/BlokHR` (push on `school-platform-wip` builds previews; production branch defaults to `main` — promote or change in Vercel settings) |
 | API proxy | `vercel.json` rewrites `/api/*`, `/svc/*`, `/healthz` → Railway gateway |
 
 ### Live Railway project (Ubaid — bootstrapped)
@@ -34,6 +35,7 @@ GitHub source of truth for this product line: `https://github.com/alwiarif46/Blo
 | Environment | `production` |
 | Public gateway | **https://gateway-production-5a5f.up.railway.app** |
 | Services up | `gateway` (public), `backend` (private + `/data` volume) |
+| Git | Both services connected to `alwiarif46/BlokHR` @ `school-platform-wip` |
 | Health | `GET /healthz` → gateway; `GET /api/health` → monolith via gateway |
 | `SERVER_BASE_URL` | `https://blokhr.vercel.app` (email / reset links) |
 
