@@ -5,6 +5,8 @@ import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import { isTenantVertical, type TenantVertical } from './vertical-defaults';
 import type { SettingsService } from './settings-service';
+import { getTenantId } from '../tenant/context';
+import { getBrandingForTenant } from '../tenant/branding-access';
 
 // ── Row types ──
 
@@ -153,6 +155,10 @@ export class MultiAuthService {
     return raw || 'http://localhost:8080';
   }
 
+  private tid(): string {
+    return getTenantId('default');
+  }
+
   /**
    * Deliver an auth email. When SMTP is missing: log the URL in development/test;
    * warn in production without leaking to the client.
@@ -188,8 +194,8 @@ export class MultiAuthService {
     const token = uuidv4();
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
     await this.db.run(
-      `INSERT INTO auth_sessions (token, email, name, expires_at) VALUES (?, ?, ?, ?)`,
-      [token, email.toLowerCase().trim(), name, expiresAt],
+      `INSERT INTO auth_sessions (token, email, name, expires_at, tenant_id) VALUES (?, ?, ?, ?, ?)`,
+      [token, email.toLowerCase().trim(), name, expiresAt, this.tid()],
     );
     return token;
   }
@@ -206,7 +212,8 @@ export class MultiAuthService {
       email: string;
       name: string;
       expires_at: string;
-    }>('SELECT email, name, expires_at FROM auth_sessions WHERE token = ?', [raw]);
+      tenant_id: string | null;
+    }>('SELECT email, name, expires_at, tenant_id FROM auth_sessions WHERE token = ?', [raw]);
 
     if (!row) return { active: false };
     const exp = Date.parse(row.expires_at);
@@ -217,10 +224,7 @@ export class MultiAuthService {
 
     const email = row.email.toLowerCase().trim();
     const roles = await this.settingsService.getUserRoles(email);
-    const branding = await this.db.get<{ tenant_id: string }>(
-      'SELECT tenant_id FROM branding WHERE id = 1',
-    );
-    const tenantId = (branding?.tenant_id || '').trim() || 'default';
+    const tenantId = ((row as { tenant_id?: string | null }).tenant_id || '').trim() || this.tid();
 
     return {
       active: true,
@@ -238,7 +242,8 @@ export class MultiAuthService {
   /** Session vertical from settings_json; absent → hr (legacy tenants). */
   private async resolveVertical(): Promise<TenantVertical> {
     const row = await this.db.get<{ settings_json: string }>(
-      "SELECT settings_json FROM tenant_settings WHERE id = 'default'",
+      'SELECT settings_json FROM tenant_settings WHERE id = ?',
+      [this.tid()],
     );
     if (!row?.settings_json) return 'hr';
     try {
@@ -259,14 +264,7 @@ export class MultiAuthService {
 
   /** Get all configured auth providers for the login screen. */
   async getEnabledProviders(): Promise<AuthProviderInfo[]> {
-    const branding = await this.db.get<BrandingAuthRow>(
-      `SELECT auth_local_enabled, auth_magic_link_enabled,
-              msal_client_id, msal_tenant_id, google_oauth_client_id,
-              oidc_enabled, oidc_display_name, oidc_issuer_url, oidc_client_id,
-              saml_enabled, saml_display_name, saml_entry_point,
-              ldap_enabled, ldap_display_name, ldap_url
-       FROM branding WHERE id = 1`,
-    );
+    const branding = await getBrandingForTenant<BrandingAuthRow>(this.db, this.tid());
     if (!branding) return [];
 
     const providers: AuthProviderInfo[] = [];
@@ -325,8 +323,8 @@ export class MultiAuthService {
     mustChangePassword: boolean = false,
   ): Promise<{ success: boolean; error?: string }> {
     const existing = await this.db.get<AuthCredentialRow>(
-      'SELECT email FROM auth_credentials WHERE email = ?',
-      [email],
+      'SELECT email FROM auth_credentials WHERE tenant_id = ? AND email = ?',
+      [this.tid(), email],
     );
     if (existing) {
       return { success: false, error: 'Credentials already exist for this email' };
@@ -334,8 +332,8 @@ export class MultiAuthService {
 
     const hash = await bcrypt.hash(password, BCRYPT_ROUNDS);
     await this.db.run(
-      'INSERT INTO auth_credentials (email, password_hash, must_change_password) VALUES (?, ?, ?)',
-      [email, hash, mustChangePassword ? 1 : 0],
+      'INSERT INTO auth_credentials (tenant_id, email, password_hash, must_change_password) VALUES (?, ?, ?, ?)',
+      [this.tid(), email, hash, mustChangePassword ? 1 : 0],
     );
 
     this.logger.info({ email }, 'Local credentials created');
@@ -345,8 +343,8 @@ export class MultiAuthService {
   /** Authenticate with email and password. */
   async authenticateLocal(email: string, password: string): Promise<AuthResult> {
     const cred = await this.db.get<AuthCredentialRow>(
-      'SELECT * FROM auth_credentials WHERE email = ?',
-      [email],
+      'SELECT * FROM auth_credentials WHERE tenant_id = ? AND email = ?',
+      [this.tid(), email],
     );
     if (!cred) {
       return { success: false, error: 'Invalid email or password' };
@@ -364,8 +362,8 @@ export class MultiAuthService {
       }
       // Lockout expired — reset
       await this.db.run(
-        "UPDATE auth_credentials SET failed_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE email = ?",
-        [email],
+        "UPDATE auth_credentials SET failed_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE tenant_id = ? AND email = ?",
+        [this.tid(), email],
       );
     }
 
@@ -375,8 +373,8 @@ export class MultiAuthService {
       if (attempts >= MAX_FAILED_ATTEMPTS) {
         const lockUntil = new Date(Date.now() + LOCKOUT_MINUTES * 60000).toISOString();
         await this.db.run(
-          "UPDATE auth_credentials SET failed_attempts = ?, locked_until = ?, updated_at = datetime('now') WHERE email = ?",
-          [attempts, lockUntil, email],
+          "UPDATE auth_credentials SET failed_attempts = ?, locked_until = ?, updated_at = datetime('now') WHERE tenant_id = ? AND email = ?",
+          [attempts, lockUntil, this.tid(), email],
         );
         return {
           success: false,
@@ -384,21 +382,21 @@ export class MultiAuthService {
         };
       }
       await this.db.run(
-        "UPDATE auth_credentials SET failed_attempts = ?, updated_at = datetime('now') WHERE email = ?",
-        [attempts, email],
+        "UPDATE auth_credentials SET failed_attempts = ?, updated_at = datetime('now') WHERE tenant_id = ? AND email = ?",
+        [attempts, this.tid(), email],
       );
       return { success: false, error: 'Invalid email or password' };
     }
 
     // Success — reset failed attempts, update last login
     await this.db.run(
-      "UPDATE auth_credentials SET failed_attempts = 0, locked_until = NULL, last_login = datetime('now'), updated_at = datetime('now') WHERE email = ?",
-      [email],
+      "UPDATE auth_credentials SET failed_attempts = 0, locked_until = NULL, last_login = datetime('now'), updated_at = datetime('now') WHERE tenant_id = ? AND email = ?",
+      [this.tid(), email],
     );
 
     const member = await this.db.get<MemberRow>(
-      'SELECT name FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [this.tid(), email],
     );
 
     return this.withVertical({
@@ -417,8 +415,8 @@ export class MultiAuthService {
     newPassword: string,
   ): Promise<{ success: boolean; error?: string }> {
     const cred = await this.db.get<AuthCredentialRow>(
-      'SELECT * FROM auth_credentials WHERE email = ?',
-      [email],
+      'SELECT * FROM auth_credentials WHERE tenant_id = ? AND email = ?',
+      [this.tid(), email],
     );
     if (!cred) return { success: false, error: 'Credentials not found' };
 
@@ -431,8 +429,8 @@ export class MultiAuthService {
 
     const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     await this.db.run(
-      "UPDATE auth_credentials SET password_hash = ?, must_change_password = 0, updated_at = datetime('now') WHERE email = ?",
-      [hash, email],
+      "UPDATE auth_credentials SET password_hash = ?, must_change_password = 0, updated_at = datetime('now') WHERE tenant_id = ? AND email = ?",
+      [hash, this.tid(), email],
     );
     this.logger.info({ email }, 'Password changed');
     return { success: true };
@@ -446,19 +444,19 @@ export class MultiAuthService {
   ): Promise<{ success: boolean; error?: string }> {
     const hash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
     const existing = await this.db.get<AuthCredentialRow>(
-      'SELECT email FROM auth_credentials WHERE email = ?',
-      [email],
+      'SELECT email FROM auth_credentials WHERE tenant_id = ? AND email = ?',
+      [this.tid(), email],
     );
 
     if (existing) {
       await this.db.run(
-        "UPDATE auth_credentials SET password_hash = ?, must_change_password = ?, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE email = ?",
-        [hash, mustChangeOnLogin ? 1 : 0, email],
+        "UPDATE auth_credentials SET password_hash = ?, must_change_password = ?, failed_attempts = 0, locked_until = NULL, updated_at = datetime('now') WHERE tenant_id = ? AND email = ?",
+        [hash, mustChangeOnLogin ? 1 : 0, this.tid(), email],
       );
     } else {
       await this.db.run(
-        'INSERT INTO auth_credentials (email, password_hash, must_change_password) VALUES (?, ?, ?)',
-        [email, hash, mustChangeOnLogin ? 1 : 0],
+        'INSERT INTO auth_credentials (tenant_id, email, password_hash, must_change_password) VALUES (?, ?, ?, ?)',
+        [this.tid(), email, hash, mustChangeOnLogin ? 1 : 0],
       );
     }
 
@@ -478,20 +476,18 @@ export class MultiAuthService {
   }> {
     const normalized = email.toLowerCase().trim();
 
-    const branding = await this.db.get<{ auth_local_enabled: number }>(
-      'SELECT auth_local_enabled FROM branding WHERE id = 1',
-    );
+    const branding = await getBrandingForTenant<{ auth_local_enabled: number }>(this.db, this.tid());
     if (!branding?.auth_local_enabled) {
       return { success: true };
     }
 
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name FROM members WHERE email = ? AND active = 1',
-      [normalized],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [this.tid(), normalized],
     );
     const cred = await this.db.get<AuthCredentialRow>(
-      'SELECT email FROM auth_credentials WHERE email = ?',
-      [normalized],
+      'SELECT email FROM auth_credentials WHERE tenant_id = ? AND email = ?',
+      [this.tid(), normalized],
     );
     if (!member || !cred) {
       return { success: true };
@@ -553,8 +549,8 @@ export class MultiAuthService {
       `UPDATE auth_credentials
        SET password_hash = ?, must_change_password = 0, failed_attempts = 0,
            locked_until = NULL, updated_at = datetime('now')
-       WHERE email = ?`,
-      [hash, row.email],
+       WHERE tenant_id = ? AND email = ?`,
+      [hash, this.tid(), row.email],
     );
     await this.db.run('UPDATE password_reset_tokens SET used = 1 WHERE id = ?', [row.id]);
     await this.db.run(
@@ -584,8 +580,8 @@ export class MultiAuthService {
   }> {
     // Verify member exists
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [this.tid(), email],
     );
     if (!member) {
       // Don't reveal whether email exists — always return success
@@ -630,8 +626,8 @@ export class MultiAuthService {
     await this.db.run('UPDATE magic_link_tokens SET used = 1 WHERE id = ?', [row.id]);
 
     const member = await this.db.get<MemberRow>(
-      'SELECT name FROM members WHERE email = ? AND active = 1',
-      [row.email],
+      'SELECT name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [this.tid(), row.email],
     );
 
     this.logger.info({ email: row.email }, 'Magic link verified');
@@ -717,9 +713,7 @@ export class MultiAuthService {
     error?: string;
     authUrl?: string;
   }> {
-    const branding = await this.db.get<BrandingAuthRow>(
-      'SELECT oidc_issuer_url, oidc_client_id, oidc_scopes, oidc_redirect_uri FROM branding WHERE id = 1',
-    );
+    const branding = await getBrandingForTenant<BrandingAuthRow>(this.db, this.tid());
     if (!branding?.oidc_issuer_url || !branding?.oidc_client_id) {
       return { success: false, error: 'OIDC not configured' };
     }
@@ -783,9 +777,7 @@ export class MultiAuthService {
     error?: string;
     loginUrl?: string;
   }> {
-    const branding = await this.db.get<BrandingAuthRow>(
-      'SELECT saml_entry_point, saml_issuer, saml_callback_url FROM branding WHERE id = 1',
-    );
+    const branding = await getBrandingForTenant<BrandingAuthRow>(this.db, this.tid());
     if (!branding?.saml_entry_point) {
       return { success: false, error: 'SAML not configured' };
     }
@@ -837,9 +829,7 @@ export class MultiAuthService {
    *   5. Extract email and name from ldap_email_attribute / ldap_name_attribute
    */
   async authenticateLdap(email: string, password: string): Promise<AuthResult> {
-    const branding = await this.db.get<BrandingAuthRow>(
-      'SELECT ldap_enabled, ldap_url, ldap_bind_dn, ldap_search_base, ldap_search_filter, ldap_email_attribute, ldap_name_attribute FROM branding WHERE id = 1',
-    );
+    const branding = await getBrandingForTenant<BrandingAuthRow>(this.db, this.tid());
 
     if (!branding?.ldap_enabled || !branding?.ldap_url) {
       return { success: false, error: 'LDAP not configured' };
@@ -849,8 +839,8 @@ export class MultiAuthService {
     // For now: verify the member exists in our DB and password matches local credentials
     // This allows LDAP to be "configured" without a real LDAP server during development
     const member = await this.db.get<MemberRow>(
-      'SELECT email, name FROM members WHERE email = ? AND active = 1',
-      [email],
+      'SELECT email, name FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [this.tid(), email],
     );
     if (!member) {
       return { success: false, error: 'Invalid credentials' };
@@ -858,8 +848,8 @@ export class MultiAuthService {
 
     // Check if local credentials exist as fallback
     const cred = await this.db.get<AuthCredentialRow>(
-      'SELECT password_hash FROM auth_credentials WHERE email = ?',
-      [email],
+      'SELECT password_hash FROM auth_credentials WHERE tenant_id = ? AND email = ?',
+      [this.tid(), email],
     );
     if (cred) {
       const valid = await bcrypt.compare(password, cred.password_hash);
@@ -880,14 +870,14 @@ export class MultiAuthService {
   /** Create default admin credentials during setup. */
   async seedDefaultAdmin(adminEmail: string, defaultPassword: string = 'admin'): Promise<void> {
     const existing = await this.db.get<AuthCredentialRow>(
-      'SELECT email FROM auth_credentials WHERE email = ?',
-      [adminEmail],
+      'SELECT email FROM auth_credentials WHERE tenant_id = ? AND email = ?',
+      [this.tid(), adminEmail],
     );
     if (!existing) {
       const hash = await bcrypt.hash(defaultPassword, BCRYPT_ROUNDS);
       await this.db.run(
-        'INSERT INTO auth_credentials (email, password_hash, must_change_password) VALUES (?, ?, 1)',
-        [adminEmail, hash],
+        'INSERT INTO auth_credentials (tenant_id, email, password_hash, must_change_password) VALUES (?, ?, ?, 1)',
+        [this.tid(), adminEmail, hash],
       );
       this.logger.info(
         { email: adminEmail },

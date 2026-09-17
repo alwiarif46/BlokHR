@@ -1,4 +1,5 @@
 import type { SchoolIdentityDb } from '../db';
+import { currentIdentityDb } from '../db-context';
 
 export interface GuardianCredential {
   guardianId: string;
@@ -71,7 +72,11 @@ function mapSession(row: SessionRow): GuardianSession {
 }
 
 export class GuardianAuthRepository {
-  constructor(private readonly db: SchoolIdentityDb) {}
+  constructor(private readonly fallbackDb: SchoolIdentityDb) {}
+
+  private get db(): SchoolIdentityDb {
+    return currentIdentityDb(this.fallbackDb);
+  }
 
   async getCredential(
     tenantId: string,
@@ -85,10 +90,13 @@ export class GuardianAuthRepository {
     return row ? mapCred(row) : null;
   }
 
-  async listCredentialsByPhone(phone: string): Promise<GuardianCredential[]> {
+  async listCredentialsByPhone(
+    phone: string,
+    tenantId: string,
+  ): Promise<GuardianCredential[]> {
     const rows = await this.db.all<CredRow>(
-      `SELECT * FROM guardian_credentials WHERE phone = ?`,
-      [phone],
+      `SELECT * FROM guardian_credentials WHERE phone = ? AND tenant_id = ?`,
+      [phone, tenantId],
     );
     return rows.map(mapCred);
   }
@@ -262,6 +270,7 @@ export class GuardianAuthRepository {
     purpose: string;
     otpHash: string;
     nowIso: string;
+    tenantId: string;
   }): Promise<{
     tenantId: string;
     guardianId: string;
@@ -274,17 +283,17 @@ export class GuardianAuthRepository {
       expires_at: string;
     }>(
       `SELECT id, tenant_id, guardian_id, expires_at FROM guardian_otp_challenges
-       WHERE phone = ? AND purpose = ? AND otp_hash = ? AND consumed = 0
+       WHERE phone = ? AND purpose = ? AND otp_hash = ? AND tenant_id = ? AND consumed = 0
        ORDER BY created_at DESC LIMIT 1`,
-      [input.phone, input.purpose, input.otpHash],
+      [input.phone, input.purpose, input.otpHash, input.tenantId],
     );
     if (!row) return null;
     if (new Date(row.expires_at).getTime() < new Date(input.nowIso).getTime()) {
       return null;
     }
     await this.db.run(
-      `UPDATE guardian_otp_challenges SET consumed = 1 WHERE id = ?`,
-      [row.id],
+      `UPDATE guardian_otp_challenges SET consumed = 1 WHERE id = ? AND tenant_id = ?`,
+      [row.id, input.tenantId],
     );
     return {
       id: row.id,

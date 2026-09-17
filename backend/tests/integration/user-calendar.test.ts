@@ -32,7 +32,7 @@ describe('Personal calendar meetings', () => {
       groupId: 'engineering',
       groupName: 'Engineering',
     });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
 
     await db.run(
       `UPDATE tenant_settings SET settings_json = ? WHERE id = 'default'`,

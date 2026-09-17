@@ -3,6 +3,10 @@ import type { DirectoryService } from '../directory-service';
 import { resolveInternalSecret } from '../internal-auth';
 import { guardRoutes } from '../role-guard';
 import { DIRECTORY_ROUTE_POLICIES } from '../route-policies';
+import {
+  buildRosterTemplateWorkbook,
+  importMembersFromWorkbook,
+} from '../services/member-import';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -27,8 +31,24 @@ export function createDirectoryRouter(
   options: DirectoryRouterOptions = {},
 ): Router {
   const router = Router();
-  const tenantId = options.tenantId ?? 'default';
-  const internalSecret = options.internalSecret ?? resolveInternalSecret();
+    const internalSecret = options.internalSecret ?? resolveInternalSecret();
+
+  function resolveRequestTenant(req: Request): string | null {
+    const raw = String(req.headers['x-blok-tenant'] ?? '')
+      .trim()
+      .toLowerCase();
+    if (raw && /^[a-z0-9_-]{1,64}$/.test(raw)) return raw;
+    return null;
+  }
+
+  function requireTenant(req: Request, res: Response): string | null {
+    const tenantId = resolveRequestTenant(req);
+    if (!tenantId) {
+      res.status(400).json({ error: 'tenant_required' });
+      return null;
+    }
+    return tenantId;
+  }
 
   // Health is unauthenticated ops probe — registered before deny-by-default guard.
   router.get('/health', (_req, res) => {
@@ -44,6 +64,8 @@ export function createDirectoryRouter(
   router.get(
     '/members/lookup',
     asyncHandler(async (req, res) => {
+      const tenantId = requireTenant(req, res);
+      if (!tenantId) return;
       const email = String(req.query.email ?? '')
         .toLowerCase()
         .trim();
@@ -69,6 +91,8 @@ export function createDirectoryRouter(
   router.get(
     '/members',
     asyncHandler(async (req, res) => {
+      const tenantId = requireTenant(req, res);
+      if (!tenantId) return;
       const includeInactive =
         req.query.includeInactive === '1' || req.query.includeInactive === 'true';
       const members = await service.listMembers(tenantId, { includeInactive });
@@ -77,8 +101,42 @@ export function createDirectoryRouter(
   );
 
   router.get(
+    '/members/import-template',
+    asyncHandler(async (_req, res) => {
+      const buf = buildRosterTemplateWorkbook();
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+      res.setHeader(
+        'Content-Disposition',
+        'attachment; filename="blokschool-roster-template.xlsx"',
+      );
+      res.send(buf);
+    }),
+  );
+
+  router.post(
+    '/members/import',
+    asyncHandler(async (req, res) => {
+      const tenantId = requireTenant(req, res);
+      if (!tenantId) return;
+      const body = req.body as Record<string, unknown>;
+      const contentBase64 = String(body.contentBase64 ?? '');
+      const result = await importMembersFromWorkbook(service, tenantId, contentBase64);
+      if ('error' in result) {
+        res.status(result.status).json({ success: false, error: result.error });
+        return;
+      }
+      res.json(result);
+    }),
+  );
+
+  router.get(
     '/members/:id',
     asyncHandler(async (req, res) => {
+      const tenantId = requireTenant(req, res);
+      if (!tenantId) return;
       const member = await service.getMember(req.params.id, tenantId);
       if (!member) {
         res.status(404).json({ error: 'Member not found' });
@@ -91,6 +149,8 @@ export function createDirectoryRouter(
   router.post(
     '/members',
     asyncHandler(async (req, res) => {
+      const tenantId = requireTenant(req, res);
+      if (!tenantId) return;
       const body = req.body as Record<string, unknown>;
       const result = await service.createMember({
         tenantId,
@@ -131,6 +191,8 @@ export function createDirectoryRouter(
   router.patch(
     '/members/:id',
     asyncHandler(async (req, res) => {
+      const tenantId = requireTenant(req, res);
+      if (!tenantId) return;
       const body = req.body as Record<string, unknown>;
       const result = await service.updateMember(
         req.params.id,
@@ -173,6 +235,8 @@ export function createDirectoryRouter(
   router.delete(
     '/members/:id',
     asyncHandler(async (req, res) => {
+      const tenantId = requireTenant(req, res);
+      if (!tenantId) return;
       const result = await service.deactivateMember(req.params.id, tenantId);
       if (!result.success) {
         res.status(result.status ?? 400).json({ error: result.error });

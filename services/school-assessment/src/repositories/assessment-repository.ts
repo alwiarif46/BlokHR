@@ -1,4 +1,5 @@
 import type { SchoolAssessmentDb } from '../db';
+import { currentAssessmentDb } from '../db-context';
 import type {
   AssessmentInput,
   BoardFormat,
@@ -84,7 +85,11 @@ function mapExam(row: ExamRow): Exam {
 }
 
 export class AssessmentRepository {
-  constructor(private readonly db: SchoolAssessmentDb) {}
+  constructor(private readonly fallbackDb: SchoolAssessmentDb) {}
+
+  private get db(): SchoolAssessmentDb {
+    return currentAssessmentDb(this.fallbackDb);
+  }
 
   async getExamTerm(tenantId: string, id: string): Promise<ExamTerm | null> {
     const row = await this.db.get<ExamTermRow>(

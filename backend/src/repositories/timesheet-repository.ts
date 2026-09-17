@@ -1,4 +1,5 @@
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 
 export interface TimesheetRow {
   [key: string]: unknown;
@@ -615,8 +616,8 @@ export class TimesheetRepository {
 
   async isAdmin(email: string): Promise<boolean> {
     if (!email) return false;
-    const row = await this.db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-      email,
+    const row = await this.db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+      getTenantId(), email,
     ]);
     return !!row;
   }

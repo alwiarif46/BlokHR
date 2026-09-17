@@ -40,6 +40,10 @@ export interface GatewayConfig {
   directoryUrl: string;
   /** Absolute upstream base URLs keyed by service name. */
   serviceUrls: Record<ServiceName, string>;
+  /** JSON map hostname → tenant id (TENANT_HOST_MAP). */
+  tenantHostMap: string;
+  /** Fallback when Host is unmapped (DEFAULT_TENANT_ID). */
+  defaultTenantId: string;
 }
 
 function assertHttpUrl(label: string, value: string): string {
@@ -116,6 +120,8 @@ export function loadGatewayConfig(
     identityUrl,
     directoryUrl,
     serviceUrls,
+    tenantHostMap: env.TENANT_HOST_MAP ?? '',
+    defaultTenantId: (env.DEFAULT_TENANT_ID ?? 'default').trim() || 'default',
   };
 }
 

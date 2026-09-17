@@ -1,4 +1,5 @@
-import type { SchoolEngagementSqlite } from '../db';
+import type { SchoolEngagementDb } from '../db';
+import { currentEngagementDb } from '../db-context';
 import type { DiaryAck, DiaryEntry, DiaryKind } from '../types';
 
 interface DiaryEntryRow {
@@ -63,7 +64,11 @@ function mapAck(row: DiaryAckRow): DiaryAck {
 }
 
 export class DiaryRepository {
-  constructor(private readonly db: SchoolEngagementSqlite) {}
+  constructor(private readonly fallbackDb: SchoolEngagementDb) {}
+
+  private get db(): SchoolEngagementDb {
+    return currentEngagementDb(this.fallbackDb);
+  }
 
   async insertEntry(e: {
     id: string;

@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type {
   LiveChatRepository,
   ChannelRow,
@@ -165,7 +166,7 @@ export class LiveChatService {
     // Company channel: only admins can post announcements
     if (channel.type === 'company' && data.messageType === 'announcement') {
       const isAdmin = await this.db.get(
-        'SELECT 1 FROM admins WHERE email = ?', [data.senderEmail],
+        'SELECT 1 FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), data.senderEmail],
       );
       if (!isAdmin) return { success: false, error: 'Only admins can post announcements' };
     }
@@ -233,7 +234,7 @@ export class LiveChatService {
     const msg = await this.repo.getMessageById(messageId);
     if (!msg) return { success: false, error: 'Message not found' };
     // Allow sender or admin to delete
-    const isAdmin = await this.db.get('SELECT 1 FROM admins WHERE email = ?', [requesterEmail]);
+    const isAdmin = await this.db.get('SELECT 1 FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), requesterEmail]);
     if (msg.sender_email !== requesterEmail && !isAdmin) {
       return { success: false, error: 'You can only delete your own messages' };
     }

@@ -186,8 +186,8 @@ export function renderSchoolStudentsPage(container) {
     '</select>' +
     '<input class="ss-search" id="ssSectionFilter" placeholder="Section" style="min-width:90px">' +
     '<div class="ss-spacer"></div>' +
-    '<button type="button" class="ss-btn ghost" id="ssImportGoBtn" title="Open School Settings → Data Import">Import…</button>' +
-    '<button type="button" class="ss-btn" id="ssNewBtn">+ Student</button>' +
+    '<button type="button" class="ss-btn ghost" id="ssImportGoBtn" title="Open School Settings → Roster">Import…</button>' +
+    '<button type="button" class="ss-btn ghost" id="ssNewBtn" title="Open School Settings → Roster">+ Student</button>' +
     '</div>' +
     '<div class="ss-stats" id="ssStats"></div>' +
     '<div class="ss-list" id="ssList"></div>' +
@@ -248,13 +248,28 @@ function _bindEvents(container) {
   }
 
   const newBtn = container.querySelector('#ssNewBtn');
-  if (newBtn) newBtn.addEventListener('click', function () {
-    ssOpenStudentForm(null);
-  });
+  if (newBtn) {
+    newBtn.addEventListener('click', function () {
+      try {
+        sessionStorage.setItem('scs_open_tab', 'roster');
+        sessionStorage.setItem('scs_open_entity', 'students');
+        sessionStorage.setItem('scs_open_mode', 'manual');
+      } catch (_) {
+        /* ignore */
+      }
+      navigateToModule('school_settings');
+    });
+  }
 
   const importGo = container.querySelector('#ssImportGoBtn');
   if (importGo) {
     importGo.addEventListener('click', function () {
+      try {
+        sessionStorage.setItem('scs_open_tab', 'roster');
+        sessionStorage.setItem('scs_open_mode', 'excel');
+      } catch (_) {
+        /* ignore */
+      }
       navigateToModule('school_settings');
     });
   }
@@ -732,7 +747,7 @@ function _renderDetailModal() {
       _esc(getSchoolTenantId()) +
       '</div>' +
       '<div class="ss-form-actions" style="justify-content:flex-start;margin-top:0">' +
-      '<button type="button" class="ss-btn ghost" id="ssEditBtn">Edit</button>' +
+      '<button type="button" class="ss-btn ghost" id="ssEditBtn">Edit in Roster</button>' +
       '<button type="button" class="ss-btn ghost" id="ssEnrolBtn">Enrol</button>' +
       '<button type="button" class="ss-btn ghost" id="ssCloseDetail">Close</button>' +
       '</div>' +
@@ -765,7 +780,15 @@ function _renderDetailModal() {
   const box = _container.querySelector('#ssModalBox');
   box.querySelector('#ssCloseDetail').addEventListener('click', ssCloseModal);
   box.querySelector('#ssEditBtn').addEventListener('click', function () {
-    ssOpenStudentForm(s);
+    try {
+      sessionStorage.setItem('scs_open_tab', 'roster');
+      sessionStorage.setItem('scs_open_entity', 'students');
+      sessionStorage.setItem('scs_open_mode', 'manual');
+    } catch (_) {
+      /* ignore */
+    }
+    ssCloseModal();
+    navigateToModule('school_settings');
   });
   box.querySelector('#ssEnrolBtn').addEventListener('click', function () {
     ssOpenEnrolForm(s);

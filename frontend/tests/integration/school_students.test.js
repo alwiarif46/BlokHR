@@ -256,16 +256,12 @@ describe('school_students (F-02)', () => {
     ).toBeNull();
   });
 
-  it('create form surfaces validation via toast', async () => {
+  it('+ Student pointer navigates to Roster hub', () => {
     document.getElementById('ssNewBtn').click();
-    await vi.waitFor(() => {
-      expect(document.getElementById('ssSave')).toBeTruthy();
-    });
-    document.getElementById('ssSave').click();
-    expect(toastFn).toHaveBeenCalled();
-    const msg = String(toastFn.mock.calls[toastFn.mock.calls.length - 1][0]);
-    expect(msg.length).toBeGreaterThan(0);
-    expect(schoolPost).not.toHaveBeenCalled();
+    expect(sessionStorage.getItem('scs_open_tab')).toBe('roster');
+    expect(sessionStorage.getItem('scs_open_entity')).toBe('students');
+    expect(sessionStorage.getItem('scs_open_mode')).toBe('manual');
+    expect(navigateToModule).toHaveBeenCalledWith('school_settings');
   });
 
   it('guardian max-4 message and client guard', async () => {
@@ -349,13 +345,15 @@ describe('school_students (F-02)', () => {
     expect(document.body.textContent).toMatch(/No students match/);
   });
 
-  it('shows Import… pointer that navigates to School Settings', () => {
+  it('shows Import… pointer that navigates to School Settings Roster', () => {
     expect(document.getElementById('ssImportGoBtn')).toBeTruthy();
     expect(document.getElementById('ssTemplateBtn')).toBeNull();
     expect(document.getElementById('ssImportBtn')).toBeNull();
     expect(document.getElementById('ssImportFile')).toBeNull();
 
     document.getElementById('ssImportGoBtn').click();
+    expect(sessionStorage.getItem('scs_open_tab')).toBe('roster');
+    expect(sessionStorage.getItem('scs_open_mode')).toBe('excel');
     expect(navigateToModule).toHaveBeenCalledWith('school_settings');
   });
 });

@@ -30,6 +30,13 @@ import { escapeCsv, buildCsv } from './exports/csv';
 import { UDISE_COLUMNS } from './exports/udise-columns';
 import { groupPreflightErrors, studentToUdiseRow } from './services/export-service';
 import { DsrRepository } from './repositories/dsr-repository';
+import { complianceDbAls } from './db-context';
+import {
+  createComplianceTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolComplianceAppOptions {
   dbPath: string;
@@ -51,14 +58,25 @@ export async function createSchoolComplianceApp(
   apaar: ApaarService;
   dsr: DsrService;
   db: SchoolComplianceSqlite;
+  pool?: TenantSqlitePool<SchoolComplianceSqlite>;
+  close?: () => Promise<void>;
 }> {
-  const db = await SchoolComplianceSqlite.create(options.dbPath);
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolComplianceMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
 
-  const repo = new ComplianceRepository(db);
-  const dsrRepo = new DsrRepository(db);
+  const fallbackDb = await SchoolComplianceSqlite.create(options.dbPath);
+  await runSchoolComplianceMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createComplianceTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
+
+  const repo = new ComplianceRepository(fallbackDb);
+  const dsrRepo = new DsrRepository(fallbackDb);
   const clock = options.clock ?? (() => new Date());
   const service = new ComplianceService(repo, clock);
   const events =
@@ -82,6 +100,31 @@ export async function createSchoolComplianceApp(
     res.json({ ok: true });
   });
 
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/compliance',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        complianceDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/compliance', bindTenantDb);
+  }
+
   app.use(
     '/api/compliance',
     createComplianceRouter(service, exports, apaar, dsr, { internalSecret }),
@@ -92,7 +135,19 @@ export async function createSchoolComplianceApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, exports, apaar, dsr, db };
+  return {
+    app,
+    service,
+    exports,
+    apaar,
+    dsr,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -137,3 +192,9 @@ export type {
 export { asRole, guardRoutes } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';
 export { COMPLIANCE_ROUTE_POLICIES } from './route-policies';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createComplianceTenantPool,
+} from './tenant-db';

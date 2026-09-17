@@ -351,7 +351,7 @@ describe('Configurable Leave Rules', () => {
     });
 
     it('credits pto_balances for active members from policies', async () => {
-      await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+      await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
       await db.run(
         `INSERT OR IGNORE INTO groups (id, name, shift_start, shift_end, timezone)
          VALUES ('g1', 'Engineering', '09:00', '18:00', 'Asia/Kolkata')`,

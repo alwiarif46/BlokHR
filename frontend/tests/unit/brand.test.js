@@ -42,18 +42,20 @@ describe('getBrand', () => {
 });
 
 describe('resolveBrandLogoPath', () => {
-  it('uses ink mark for clean / light surfaces', () => {
-    expect(isLightBrandSurface('clean')).toBe(true);
+  it('uses ink mark for light login/header surfaces', () => {
+    expect(isLightBrandSurface('neural')).toBe(true);
+    expect(isLightBrandSurface('holodeck')).toBe(true);
     expect(isLightBrandSurface('light')).toBe(true);
-    expect(resolveBrandLogoPath('clean')).toBe(MONO_LOGO_LIGHT);
+    expect(resolveBrandLogoPath('neural')).toBe(MONO_LOGO_LIGHT);
+    expect(resolveBrandLogoPath('holodeck')).toBe(MONO_LOGO_LIGHT);
     expect(resolveBrandLogoPath('light')).toBe(MONO_LOGO_LIGHT);
   });
 
   it('uses white mark for dark themes', () => {
     expect(isLightBrandSurface('chromium')).toBe(false);
+    expect(isLightBrandSurface('clean')).toBe(false);
     expect(resolveBrandLogoPath('chromium')).toBe(MONO_LOGO_DARK);
-    expect(resolveBrandLogoPath('neural')).toBe(MONO_LOGO_DARK);
-    expect(resolveBrandLogoPath('holodeck')).toBe(MONO_LOGO_DARK);
+    expect(resolveBrandLogoPath('clean')).toBe(MONO_LOGO_DARK);
     expect(resolveBrandLogoPath('dark')).toBe(MONO_LOGO_DARK);
   });
 });
@@ -102,11 +104,22 @@ describe('applyBrand', () => {
     expect(document.getElementById('loginTitle').hidden).toBe(true);
   });
 
-  it('applies ink mono when theme is clean', () => {
+  it('applies ink mono when theme is neural (light login card)', () => {
+    document.body.className = 'theme-neural';
+    applyBrand('hr', 'neural');
+    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
+      'blok-mono-ink.png',
+    );
+    expect(document.getElementById('loginLogoImg').getAttribute('src')).toContain(
+      'blok-mono-ink.png',
+    );
+  });
+
+  it('applies white mono when theme is clean (dark login card)', () => {
     document.body.className = 'theme-clean';
     applyBrand('hr', 'clean');
     expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
-      'blok-mono-ink.png',
+      'blok-mono-white.png',
     );
   });
 

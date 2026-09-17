@@ -1,10 +1,11 @@
 /**
  * modules/school_settings/school_settings.css
- * School Settings: Data Import | Academic Sessions | State Pack | Consent |
+ * School Settings: Roster Hub | Academic Sessions | State Pack | Consent |
  * Syllabus Packs | Attendance Policy | Eligibility | Nudge.
  * Colours: CSS custom properties only (4 themes). Prefix scs- (ss-* vocabulary).
  *
  * Boundaries:
+ * - Roster owns Excel + manual students/teachers/periods/classes.
  * - Attendance policy / eligibility / nudge live here; Registers + Unexplained
  *   stay in school_attendance_admin.
  * - HR tenant settings → settings module.
@@ -95,6 +96,81 @@
 
 .scs-spacer {
   flex: 1;
+}
+
+.scs-mode-toggle {
+  display: inline-flex;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+
+.scs-mode-btn {
+  padding: 7px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--tx3);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.scs-mode-btn.active {
+  background: var(--accent);
+  color: #000;
+}
+
+.theme-clean .scs-mode-btn.active {
+  color: var(--ink-on-accent, #00112b);
+}
+
+.scs-entity-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.scs-entity-tab {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  color: var(--tx3);
+  cursor: pointer;
+  font-family: inherit;
+  text-transform: capitalize;
+}
+
+.scs-entity-tab.active {
+  border-color: var(--accent);
+  color: var(--tx);
+  background: var(--bg2, var(--bg1));
+}
+
+.scs-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg0, var(--bg));
+  color: var(--tx);
+  font: inherit;
+  font-size: 12px;
+}
+
+.scs-input.tiny {
+  width: 72px;
+}
+
+.scs-err {
+  color: var(--danger, #c44);
+  font-size: 12px;
+  margin-bottom: 10px;
 }
 
 .scs-btn {

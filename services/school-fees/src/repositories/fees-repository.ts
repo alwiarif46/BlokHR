@@ -1,4 +1,5 @@
 import type { SchoolFeesDb } from '../db';
+import { currentFeesDb } from '../db-context';
 import type {
   Concession,
   ConcessionKind,
@@ -98,7 +99,11 @@ function mapConcession(row: ConcessionRow): Concession {
 }
 
 export class FeesRepository {
-  constructor(private readonly db: SchoolFeesDb) {}
+  constructor(private readonly fallbackDb: SchoolFeesDb) {}
+
+  private get db(): SchoolFeesDb {
+    return currentFeesDb(this.fallbackDb);
+  }
 
   async insertHead(h: FeeHead): Promise<FeeHead> {
     await this.db.run(

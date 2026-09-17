@@ -178,7 +178,7 @@ describe('Settings & Roles Module', () => {
     });
 
     it('returns admin + global roles for an admin', async () => {
-      await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+      await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
 
       const res = await request(app)
         .get('/api/user-roles?email=admin@shaavir.com')

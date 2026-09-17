@@ -7,6 +7,8 @@ import { DirectoryRepository } from './repositories/directory-repository';
 import { DirectoryService } from './directory-service';
 import { createDirectoryRouter, type DirectoryRouterOptions } from './routes/directory';
 import type { AuthPort, EventPort, MemberProjectionPort, SeatChecker } from './types';
+import { directoryDbAls } from './db-context';
+import { DirectoryTenantPool, isTenantDbSplitEnabled } from './tenant-db';
 
 export interface DirectoryAppOptions {
   dbPath: string;
@@ -22,14 +24,30 @@ export interface DirectoryAppOptions {
 
 export async function createDirectoryApp(
   options: DirectoryAppOptions,
-): Promise<{ app: Express; service: DirectoryService; db: DirectorySqlite }> {
-  const db = await DirectorySqlite.create(options.dbPath);
+): Promise<{
+  app: Express;
+  service: DirectoryService;
+  db: DirectorySqlite;
+  pool?: DirectoryTenantPool;
+  close?: () => Promise<void>;
+}> {
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runDirectoryMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
+
+  const fallbackDb = await DirectorySqlite.create(options.dbPath);
+  await runDirectoryMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? new DirectoryTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+        create: (p) => DirectorySqlite.create(p),
+      })
+    : undefined;
 
   const service = new DirectoryService({
-    repo: new DirectoryRepository(db),
+    repo: new DirectoryRepository(fallbackDb),
     seatChecker: options.seatChecker,
     auth: options.auth,
     projection: options.projection,
@@ -40,6 +58,25 @@ export async function createDirectoryApp(
   const app = express();
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
+
+  if (pool) {
+    app.use('/api/directory', async (req, res, next) => {
+      const raw = String(req.headers['x-blok-tenant'] ?? '')
+        .trim()
+        .toLowerCase();
+      if (!raw || !/^[a-z0-9_-]{1,64}$/.test(raw)) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(raw);
+        directoryDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    });
+  }
+
   app.use(
     '/api/directory',
     createDirectoryRouter(service, {
@@ -53,7 +90,16 @@ export async function createDirectoryApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, db };
+  return {
+    app,
+    service,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -69,3 +115,9 @@ export { DIRECTORY_DEFAULTS, DIRECTORY_MEMBER_ROLES } from './directory-service'
 export { asRole, guardRoutes } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';
 export { DIRECTORY_ROUTE_POLICIES } from './route-policies';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  DirectoryTenantPool,
+} from './tenant-db';

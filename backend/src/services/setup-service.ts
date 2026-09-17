@@ -6,6 +6,8 @@ import { DIRECTORY_DEFAULTS } from '@blokhr/directory';
 import bcrypt from 'bcryptjs';
 import { TenantSettingsService } from './tenant-settings-service';
 import { isTenantVertical, type TenantVertical } from './vertical-defaults';
+import { getTenantId } from '../tenant/context';
+import { ensureBrandingRow, getBrandingForTenant } from '../tenant/branding-access';
 
 interface BrandingRow {
   [key: string]: unknown;
@@ -27,18 +29,14 @@ interface BrandingRow {
   license_valid: number;
 }
 
-const SETUP_STEP2_KV_KEY = 'setup_step2_complete';
+function setupStep2Key(tenantId: string): string {
+  return 'setup_step2_complete:' + tenantId;
+}
 
 export type DeploymentMode = 'cloud' | 'self_hosted';
 
 /**
- * Setup Wizard service — 3-screen first-run configuration.
- *
- * Screen 1: Company & Branding
- * Screen 2: Auth (local / magic link / optional SSO)
- * Screen 3: Admin & plan
- *   - cloud: start 1-month trial (no license key)
- *   - self_hosted: activate signed license token
+ * Setup Wizard service — 3-screen first-run configuration (per tenant).
  */
 export class SetupService {
   private readonly tenantSettings: TenantSettingsService;
@@ -59,15 +57,21 @@ export class SetupService {
       options.tenantSettings ?? new TenantSettingsService(db, logger);
   }
 
-  /** Check setup status and determine which step the user is on. */
+  private tid(): string {
+    return getTenantId(this.options.tenantId);
+  }
+
   async getStatus(): Promise<{
     setupComplete: boolean;
     currentStep: number;
     deploymentMode: DeploymentMode;
     vertical: TenantVertical | null;
+    tenantId: string;
     branding: Record<string, unknown>;
   }> {
-    const row = await this.db.get<BrandingRow>('SELECT * FROM branding WHERE id = 1');
+    const tenantId = this.tid();
+    await ensureBrandingRow(this.db, tenantId);
+    const row = await getBrandingForTenant<BrandingRow>(this.db, tenantId);
     const vertical = await this.tenantSettings.getVertical();
     if (!row) {
       return {
@@ -75,6 +79,7 @@ export class SetupService {
         currentStep: 1,
         deploymentMode: this.options.deploymentMode,
         vertical,
+        tenantId,
         branding: {},
       };
     }
@@ -82,7 +87,7 @@ export class SetupService {
     const setupComplete = row.setup_complete === 1;
     const step2Done = await this.db.get<{ value_json: string }>(
       'SELECT value_json FROM kv_store WHERE key = ?',
-      [SETUP_STEP2_KV_KEY],
+      [setupStep2Key(tenantId)],
     );
     let currentStep = 1;
     if (row.company_name) currentStep = 2;
@@ -97,7 +102,7 @@ export class SetupService {
 
     let entitlement: Record<string, unknown> | null = null;
     if (this.options.entitlements) {
-      const ent = await this.options.entitlements.get(this.options.tenantId);
+      const ent = await this.options.entitlements.get(tenantId);
       if (ent) entitlement = ent as unknown as Record<string, unknown>;
     }
 
@@ -106,6 +111,7 @@ export class SetupService {
       currentStep,
       deploymentMode: this.options.deploymentMode,
       vertical,
+      tenantId,
       branding: {
         companyName: row.company_name,
         tagline: row.tagline,
@@ -128,7 +134,6 @@ export class SetupService {
     };
   }
 
-  /** Step 1: Save company & branding info. */
   async saveStep1(data: {
     companyName: string;
     tagline?: string;
@@ -143,6 +148,8 @@ export class SetupService {
       return { success: false, error: 'Company name is required' };
     }
 
+    const tenantId = this.tid();
+    await ensureBrandingRow(this.db, tenantId);
     await this.db.run(
       `UPDATE branding SET
          company_name = ?,
@@ -154,7 +161,7 @@ export class SetupService {
          email_from_name = ?,
          email_from_address = ?,
          updated_at = datetime('now')
-       WHERE id = 1`,
+       WHERE tenant_id = ?`,
       [
         data.companyName,
         data.tagline ?? '',
@@ -164,14 +171,17 @@ export class SetupService {
         data.cardFooterText ?? data.companyName,
         data.emailFromName ?? data.companyName,
         data.emailFromAddress ?? '',
+        tenantId,
       ],
     );
 
-    this.logger.info({ companyName: data.companyName }, 'Setup step 1 saved: Company & Branding');
+    this.logger.info(
+      { companyName: data.companyName, tenantId },
+      'Setup step 1 saved: Company & Branding',
+    );
     return { success: true };
   }
 
-  /** Step 2: Save auth provider configuration (local, magic link, and/or SSO). */
   async saveStep2(data: {
     authLocalEnabled?: boolean;
     authMagicLinkEnabled?: boolean;
@@ -193,6 +203,8 @@ export class SetupService {
 
     const authLocalEnabled = data.authLocalEnabled === false ? 0 : 1;
     const authMagicLinkEnabled = magicOn ? 1 : 0;
+    const tenantId = this.tid();
+    await ensureBrandingRow(this.db, tenantId);
 
     await this.db.run(
       `UPDATE branding SET
@@ -202,24 +214,26 @@ export class SetupService {
          msal_tenant_id = ?,
          google_oauth_client_id = ?,
          updated_at = datetime('now')
-       WHERE id = 1`,
+       WHERE tenant_id = ?`,
       [
         authLocalEnabled,
         authMagicLinkEnabled,
         data.msalClientId ?? '',
         data.msalTenantId ?? '',
         data.googleOAuthClientId ?? '',
+        tenantId,
       ],
     );
 
     await this.db.run(
       `INSERT OR REPLACE INTO kv_store (key, value_json, updated_at)
        VALUES (?, 'true', datetime('now'))`,
-      [SETUP_STEP2_KV_KEY],
+      [setupStep2Key(tenantId)],
     );
 
     this.logger.info(
       {
+        tenantId,
         authLocalEnabled: authLocalEnabled === 1,
         authMagicLinkEnabled: magicOn,
         hasMsal,
@@ -230,10 +244,6 @@ export class SetupService {
     return { success: true };
   }
 
-  /**
-   * Step 3: Create first admin and activate plan.
-   * Cloud → start trial. Self-hosted → activate signed license.
-   */
   async saveStep3(data: {
     adminEmail: string;
     licenseToken?: string;
@@ -248,6 +258,7 @@ export class SetupService {
       return { success: false, error: 'Admin email is required' };
     }
 
+    const tenantId = this.tid();
     const vertical: TenantVertical =
       data.vertical !== undefined ? data.vertical : 'hr';
     if (!isTenantVertical(vertical)) {
@@ -276,11 +287,7 @@ export class SetupService {
       if (!token) {
         return { success: false, error: 'Signed license token is required for self-hosted setup' };
       }
-      // Self-hosted: vertical already persisted above; license path unchanged.
-      const activated = await this.options.entitlements.activateSignedLicense(
-        this.options.tenantId,
-        token,
-      );
+      const activated = await this.options.entitlements.activateSignedLicense(tenantId, token);
       if (!activated.success) {
         return { success: false, error: activated.error ?? 'Invalid license' };
       }
@@ -289,7 +296,7 @@ export class SetupService {
       licenseKeyStored = token;
     } else {
       entitlement = await this.options.entitlements.startCloudTrial(
-        this.options.tenantId,
+        tenantId,
         this.options.trialSeatLimit,
         vertical,
       );
@@ -297,17 +304,19 @@ export class SetupService {
       licenseKeyStored = 'cloud-trial';
     }
 
+    await ensureBrandingRow(this.db, tenantId);
     await this.db.run(
       `UPDATE branding SET
          license_key = ?,
          license_valid = ?,
          setup_complete = 1,
          updated_at = datetime('now')
-       WHERE id = 1`,
-      [licenseKeyStored, licenseValid],
+       WHERE tenant_id = ?`,
+      [licenseKeyStored, licenseValid, tenantId],
     );
 
-    await this.db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', [
+    await this.db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', [
+      tenantId,
       data.adminEmail.toLowerCase().trim(),
     ]);
 
@@ -315,7 +324,8 @@ export class SetupService {
     const adminName = adminEmail.split('@')[0].replace(/[._-]/g, ' ');
 
     const tzRow = await this.db.get<{ primary_timezone: string }>(
-      'SELECT primary_timezone FROM tenant_settings LIMIT 1',
+      'SELECT primary_timezone FROM tenant_settings WHERE id = ?',
+      [tenantId],
     );
     const tz = tzRow?.primary_timezone || 'Asia/Kolkata';
 
@@ -331,10 +341,10 @@ export class SetupService {
     );
 
     if (this.options.directory) {
-      const existing = await this.options.directory.getMember(adminEmail, this.options.tenantId);
+      const existing = await this.options.directory.getMember(adminEmail, tenantId);
       if (!existing) {
         const created = await this.options.directory.createMember({
-          tenantId: this.options.tenantId,
+          tenantId,
           email: adminEmail,
           name: adminName,
           role: 'admin',
@@ -346,7 +356,7 @@ export class SetupService {
         if (!created.success) {
           this.logger.warn({ err: created.error }, 'Directory admin seed failed; falling back');
         } else {
-          this.logger.info({ adminEmail }, 'Admin seeded via directory service');
+          this.logger.info({ adminEmail, tenantId }, 'Admin seeded via directory service');
         }
       } else {
         await this.options.directory.updateMember(
@@ -358,18 +368,19 @@ export class SetupService {
             individualShiftEnd: DIRECTORY_DEFAULTS.DEFAULT_SHIFT_END,
             active: true,
           },
-          this.options.tenantId,
+          tenantId,
         );
-        this.logger.info({ adminEmail }, 'Existing directory admin updated with default shift');
+        this.logger.info({ adminEmail, tenantId }, 'Existing directory admin updated');
       }
     } else {
       try {
         await this.db.run(
           `INSERT OR IGNORE INTO members (
-            id, email, name, role, active, timezone, group_id,
+            tenant_id, id, email, name, role, active, timezone, group_id,
             individual_shift_start, individual_shift_end
-          ) VALUES (?, ?, ?, 'admin', 1, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, 'admin', 1, ?, ?, ?, ?)`,
           [
+            tenantId,
             adminEmail,
             adminEmail,
             adminName,
@@ -387,12 +398,12 @@ export class SetupService {
       try {
         const hash = await bcrypt.hash('admin', 10);
         await this.db.run(
-          `INSERT OR IGNORE INTO auth_credentials (email, password_hash, must_change_password)
-           VALUES (?, ?, 1)`,
-          [adminEmail, hash],
+          `INSERT OR IGNORE INTO auth_credentials (tenant_id, email, password_hash, must_change_password)
+           VALUES (?, ?, ?, 1)`,
+          [tenantId, adminEmail, hash],
         );
         this.logger.info(
-          { adminEmail: data.adminEmail },
+          { adminEmail, tenantId },
           'Default admin credentials seeded (password: admin, must change on login)',
         );
       } catch (err) {
@@ -406,6 +417,7 @@ export class SetupService {
     this.logger.info(
       {
         adminEmail: data.adminEmail,
+        tenantId,
         deploymentMode: this.options.deploymentMode,
         licenseValid: licenseValid === 1,
       },

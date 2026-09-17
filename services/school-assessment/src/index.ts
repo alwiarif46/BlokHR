@@ -17,6 +17,13 @@ import {
   type TimetableClient,
 } from './clients/timetable-client';
 import { resolveInternalSecret } from './internal-auth';
+import { assessmentDbAls } from './db-context';
+import {
+  createAssessmentTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolAssessmentAppOptions {
   dbPath: string;
@@ -31,13 +38,28 @@ export interface SchoolAssessmentAppOptions {
 
 export async function createSchoolAssessmentApp(
   options: SchoolAssessmentAppOptions,
-): Promise<{ app: Express; service: AssessmentService; db: SchoolAssessmentSqlite }> {
-  const db = await SchoolAssessmentSqlite.create(options.dbPath);
+): Promise<{
+  app: Express;
+  service: AssessmentService;
+  db: SchoolAssessmentSqlite;
+  pool?: TenantSqlitePool<SchoolAssessmentSqlite>;
+  close?: () => Promise<void>;
+}> {
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolAssessmentMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
 
-  const repo = new AssessmentRepository(db);
+  const fallbackDb = await SchoolAssessmentSqlite.create(options.dbPath);
+  await runSchoolAssessmentMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createAssessmentTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
+
+  const repo = new AssessmentRepository(fallbackDb);
   const events = options.eventPublisher ?? new LogEventPublisher(options.logger);
   const academics =
     options.academicsClient ??
@@ -56,6 +78,31 @@ export async function createSchoolAssessmentApp(
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
   });
+
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/assessment',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        assessmentDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/assessment', bindTenantDb);
+  }
 
   app.use(
     '/api/assessment',
@@ -76,7 +123,16 @@ export async function createSchoolAssessmentApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, db };
+  return {
+    app,
+    service,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -105,3 +161,9 @@ export type { AcademicsClient, InferAssessmentDeliveryInput } from './clients/ac
 export { asRole, guardRoutes } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';
 export { ASSESSMENT_ROUTE_POLICIES } from './route-policies';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createAssessmentTenantPool,
+} from './tenant-db';

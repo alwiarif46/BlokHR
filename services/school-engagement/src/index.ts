@@ -25,6 +25,13 @@ import {
   createHttpIdentityClient,
   type IdentityClient,
 } from './clients/identity-client';
+import { engagementDbAls } from './db-context';
+import {
+  createEngagementTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolEngagementAppOptions {
   dbPath: string;
@@ -47,14 +54,25 @@ export async function createSchoolEngagementApp(
   threads: ThreadService;
   diary: DiaryService;
   db: SchoolEngagementSqlite;
+  pool?: TenantSqlitePool<SchoolEngagementSqlite>;
+  close?: () => Promise<void>;
 }> {
-  const db = await SchoolEngagementSqlite.create(options.dbPath);
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolEngagementMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
 
-  const repo = new EngagementRepository(db);
-  const diaryRepo = new DiaryRepository(db);
+  const fallbackDb = await SchoolEngagementSqlite.create(options.dbPath);
+  await runSchoolEngagementMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createEngagementTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
+
+  const repo = new EngagementRepository(fallbackDb);
+  const diaryRepo = new DiaryRepository(fallbackDb);
   const service = new EngagementService(repo);
   const notify = options.notifySink ?? new HttpNotifySink(options.logger);
   const clock = options.clock ?? (() => new Date());
@@ -94,6 +112,31 @@ export async function createSchoolEngagementApp(
     res.json({ ok: true });
   });
 
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/engagement',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        engagementDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/engagement', bindTenantDb);
+  }
+
   app.use(
     '/api/engagement',
     createEngagementRouter(service, messages, threads, diary, { internalSecret }),
@@ -104,7 +147,19 @@ export async function createSchoolEngagementApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, messages, threads, diary, db };
+  return {
+    app,
+    service,
+    messages,
+    threads,
+    diary,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -138,3 +193,9 @@ export {
 } from './clients/identity-client';
 export * from './types';
 export * from './events';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createEngagementTenantPool,
+} from './tenant-db';

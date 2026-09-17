@@ -136,7 +136,8 @@ describe('Directory service', () => {
 
       const res = await request(app)
         .get('/api/directory/members/lookup?email=Teacher@Acme.com')
-        .set('X-Blok-Internal', INTERNAL);
+        .set('X-Blok-Internal', INTERNAL)
+        .set('X-Blok-Tenant', 't1');
       expect(res.status).toBe(200);
       expect(res.body.member).toMatchObject({
         id: 'teacher@acme.com',
@@ -161,7 +162,8 @@ describe('Directory service', () => {
 
       const res = await request(app)
         .get('/api/directory/members/lookup?email=gone@acme.com')
-        .set('X-Blok-Internal', INTERNAL);
+        .set('X-Blok-Internal', INTERNAL)
+        .set('X-Blok-Tenant', 't1');
       expect(res.status).toBe(200);
       expect(res.body.member).toBeNull();
     });

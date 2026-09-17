@@ -17,6 +17,13 @@ import {
   daysBetween,
 } from './services/payment-service';
 import { createFeesRouter } from './routes/fees';
+import { feesDbAls } from './db-context';
+import {
+  createFeesTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolFeesAppOptions {
   dbPath: string;
@@ -34,13 +41,24 @@ export async function createSchoolFeesApp(
   invoices: InvoiceService;
   payments: PaymentService;
   db: SchoolFeesSqlite;
+  pool?: TenantSqlitePool<SchoolFeesSqlite>;
+  close?: () => Promise<void>;
 }> {
-  const db = await SchoolFeesSqlite.create(options.dbPath);
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolFeesMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
 
-  const repo = new FeesRepository(db);
+  const fallbackDb = await SchoolFeesSqlite.create(options.dbPath);
+  await runSchoolFeesMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createFeesTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
+
+  const repo = new FeesRepository(fallbackDb);
   const service = new FeesService(repo);
   const events =
     options.events ??
@@ -59,6 +77,31 @@ export async function createSchoolFeesApp(
     res.json({ ok: true });
   });
 
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/fees',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        feesDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/fees', bindTenantDb);
+  }
+
   app.use('/api/fees', createFeesRouter(service, invoices, payments));
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -66,7 +109,18 @@ export async function createSchoolFeesApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, invoices, payments, db };
+  return {
+    app,
+    service,
+    invoices,
+    payments,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -89,3 +143,9 @@ export type { EventPublisher, DomainEvent } from './events';
 export { asRole, guardRoutes } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';
 export { FEES_ROUTE_POLICIES } from './route-policies';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createFeesTenantPool,
+} from './tenant-db';

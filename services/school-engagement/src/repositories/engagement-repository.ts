@@ -1,4 +1,5 @@
 import type { SchoolEngagementDb } from '../db';
+import { currentEngagementDb } from '../db-context';
 import type {
   ChannelKind,
   DigestFrequency,
@@ -68,7 +69,11 @@ function mapSettings(row: SettingsRow): EngagementSettings {
 }
 
 export class EngagementRepository {
-  constructor(private readonly db: SchoolEngagementDb) {}
+  constructor(private readonly fallbackDb: SchoolEngagementDb) {}
+
+  private get db(): SchoolEngagementDb {
+    return currentEngagementDb(this.fallbackDb);
+  }
 
   async listChannels(tenantId: string, guardianRef: string): Promise<GuardianChannel[]> {
     const rows = await this.db.all<ChannelRow>(

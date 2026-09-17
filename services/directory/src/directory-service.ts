@@ -198,7 +198,7 @@ export class DirectoryService {
       if (updated.active) {
         await this.deps.projection.upsertMember(updated);
       } else {
-        await this.deps.projection.deactivateMember(updated.id);
+        await this.deps.projection.deactivateMember(updated.id, tenantId);
       }
     }
 

@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import type { SchoolSurveysDb } from '../db';
+import { currentSurveysDb } from '../db-context';
 import type { Survey, SurveyResponse } from '../types';
 
 interface SurveyRow {
@@ -61,7 +62,11 @@ function mapResponse(row: ResponseRow): SurveyResponse {
 }
 
 export class SurveysRepository {
-  constructor(private readonly db: SchoolSurveysDb) {}
+  constructor(private readonly fallbackDb: SchoolSurveysDb) {}
+
+  private get db(): SchoolSurveysDb {
+    return currentSurveysDb(this.fallbackDb);
+  }
 
   async createSurvey(data: {
     tenantId: string;

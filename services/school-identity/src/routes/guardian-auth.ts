@@ -101,6 +101,10 @@ export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
           body.new_password != null || body.newPassword != null
             ? String(body.new_password ?? body.newPassword)
             : undefined,
+        tenantId:
+          body.tenant_id != null || body.tenantId != null
+            ? String(body.tenant_id ?? body.tenantId)
+            : String(req.headers['x-blok-tenant'] ?? ''),
       });
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });

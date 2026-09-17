@@ -1,4 +1,12 @@
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
+import { getBrandingForTenant } from '../tenant/branding-access';
+import {
+  deleteTenantAdmin,
+  insertTenantAdmin,
+  isTenantAdmin,
+  listTenantAdmins,
+} from '../tenant/admin-access';
 
 // ── Row types ──
 
@@ -119,12 +127,11 @@ export class SettingsRepository {
   }
 
   async getMembers(): Promise<MemberRow[]> {
-    return this.db.all<MemberRow>('SELECT * FROM members ORDER BY name');
+    return this.db.all<MemberRow>('SELECT * FROM members WHERE tenant_id = ? ORDER BY name', [getTenantId()]);
   }
 
   async getAdmins(): Promise<string[]> {
-    const rows = await this.db.all<AdminRow>('SELECT email FROM admins');
-    return rows.map((r) => r.email);
+    return listTenantAdmins(this.db);
   }
 
   async getRoleAssignments(): Promise<RoleAssignmentRow[]> {
@@ -140,7 +147,8 @@ export class SettingsRepository {
   }
 
   async getBranding(): Promise<BrandingRow | null> {
-    return this.db.get<BrandingRow>('SELECT * FROM branding WHERE id = 1');
+    const row = await getBrandingForTenant<BrandingRow>(this.db);
+    return row ?? null;
   }
 
   async getDesignations(): Promise<DesignationRow[]> {
@@ -154,11 +162,11 @@ export class SettingsRepository {
   // ── Member CRUD ──
 
   async getMemberById(id: string): Promise<MemberRow | null> {
-    return this.db.get<MemberRow>('SELECT * FROM members WHERE id = ?', [id]);
+    return this.db.get<MemberRow>('SELECT * FROM members WHERE tenant_id = ? AND id = ?', [getTenantId(), id]);
   }
 
   async getMemberByEmail(email: string): Promise<MemberRow | null> {
-    return this.db.get<MemberRow>('SELECT * FROM members WHERE email = ?', [email]);
+    return this.db.get<MemberRow>('SELECT * FROM members WHERE tenant_id = ? AND email = ?', [getTenantId(), email]);
   }
 
   /** Create a new member. Returns the created row. */
@@ -179,11 +187,12 @@ export class SettingsRepository {
   }): Promise<MemberRow> {
     await this.db.run(
       `INSERT INTO members (
-        id, email, name, group_id, member_type_id, role, designation,
+        tenant_id, id, email, name, group_id, member_type_id, role, designation,
         phone, joining_date, location, timezone,
         individual_shift_start, individual_shift_end, active
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
+        getTenantId(),
         data.id,
         data.email,
         data.name,
@@ -253,8 +262,11 @@ export class SettingsRepository {
     }
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
-    vals.push(id);
-    await this.db.run(`UPDATE members SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(getTenantId(), id);
+    await this.db.run(
+      `UPDATE members SET ${sets.join(', ')} WHERE tenant_id = ? AND id = ?`,
+      vals,
+    );
   }
 
   // ── Role resolution ──
@@ -270,10 +282,22 @@ export class SettingsRepository {
     );
   }
 
-  /** Check if an email is in the admins table. */
+  /** Check if an email is in the admins table for the current tenant. */
   async isAdmin(email: string): Promise<boolean> {
-    const row = await this.db.get<AdminRow>('SELECT email FROM admins WHERE email = ?', [email]);
-    return !!row;
+    return isTenantAdmin(this.db, email);
+  }
+
+  async addAdmin(email: string): Promise<void> {
+    await insertTenantAdmin(this.db, email);
+  }
+
+  async removeAdmin(email: string): Promise<void> {
+    await deleteTenantAdmin(this.db, email);
+  }
+
+  /** Current request tenant (AsyncLocalStorage). */
+  currentTenantId(): string {
+    return getTenantId('default');
   }
 
   // ── System settings ──

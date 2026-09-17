@@ -622,8 +622,8 @@ export class AcademicsService {
         error: { error: 'relation must be equivalent, partial, or prerequisite', status: 400 },
       };
     }
-    const from = await this.repo.getOutcome(fromOutcomeId);
-    const to = await this.repo.getOutcome(toOutcomeId);
+    const from = await this.repo.getOutcome(fromOutcomeId, tenantId);
+    const to = await this.repo.getOutcome(toOutcomeId, tenantId);
     if (!from || !to) {
       return { error: { error: 'outcome not found', status: 404 } };
     }
@@ -1023,7 +1023,7 @@ export class AcademicsService {
         error: { error: 'depth must be introduced, reinforced, or mastered', status: 400 },
       };
     }
-    const outcome = await this.repo.getOutcome(outcomeId);
+    const outcome = await this.repo.getOutcome(outcomeId, tenantId);
     if (!outcome || !(outcome.tenantId == null || outcome.tenantId === tenantId)) {
       return { error: { error: 'outcome not found', status: 404 } };
     }
@@ -1948,7 +1948,7 @@ export class AcademicsService {
       const tags = await this.repo.listUnitOutcomes(tenantId, unit.id);
       const codes = new Set<string>();
       for (const tag of tags) {
-        const outcome = await this.repo.getOutcome(tag.outcomeId);
+        const outcome = await this.repo.getOutcome(tag.outcomeId, tenantId);
         if (outcome) codes.add(outcome.code);
       }
       outUnits.push({
@@ -2080,7 +2080,7 @@ export class AcademicsService {
   ): Promise<{ ids: string[] } | { error: ServiceError }> {
     const unique = [...new Set(outcomeIds.map((id) => String(id).trim()).filter(Boolean))];
     for (const id of unique) {
-      const o = await this.repo.getOutcome(id);
+      const o = await this.repo.getOutcome(id, tenantId);
       if (!o || !(o.tenantId == null || o.tenantId === tenantId)) {
         return { error: { error: 'outcome not found', status: 404 } };
       }

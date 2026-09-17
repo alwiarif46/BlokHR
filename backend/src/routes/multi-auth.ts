@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { AppConfig } from '../config';
 import { AppError, asyncHandler } from '../app';
 import {
@@ -44,8 +45,8 @@ export interface MultiAuthRouterOptions {
 async function requireAdmin(req: Request, db: DatabaseEngine): Promise<string> {
   const email = req.identity?.email;
   if (!email) throw new AppError('Authentication required', 401);
-  const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-    email,
+  const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+    getTenantId(), email,
   ]);
   if (!admin) throw new AppError('Admin access required', 403);
   return email;

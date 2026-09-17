@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import { AppError, asyncHandler } from '../app';
 import { AuditService } from '../audit/audit-service';
 import { SurveyService, type SurveyQuestion } from '../services/survey-service';
@@ -18,7 +19,7 @@ export function createSurveyRouter(db: DatabaseEngine, logger: Logger): Router {
 
   async function requireAdmin(req: Request): Promise<string> {
     const email = await requireAuth(req);
-    const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [email]);
+    const isAdmin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), email]);
     if (!isAdmin) throw new AppError('Admin access required', 403);
     return email;
   }

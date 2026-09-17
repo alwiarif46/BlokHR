@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { Request, Response, NextFunction } from 'express';
 
 // ── Row type ──
@@ -223,7 +224,7 @@ export class FeatureFlagService {
           res.status(403).json({ error: 'Admin access required' });
           return;
         }
-        const admin = await db.get('SELECT email FROM admins WHERE email = ?', [email]);
+        const admin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), email]);
         if (!admin) {
           res.status(403).json({ error: 'Admin access required' });
           return;

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { AppConfig } from '../config';
 import { AppError, asyncHandler } from '../app';
 import { MeetingRepository } from '../repositories/meeting-repository';
@@ -42,7 +43,7 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
 
   async function requireAdmin(req: Request): Promise<string> {
     const email = await requireAuth(req);
-    const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [email]);
+    const isAdmin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), email]);
     if (!isAdmin) throw new AppError('Admin access required', 403);
     return email;
   }

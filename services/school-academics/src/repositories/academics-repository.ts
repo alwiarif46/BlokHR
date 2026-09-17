@@ -1,4 +1,5 @@
 import type { SchoolAcademicsDb } from '../db';
+import { currentAcademicsDb } from '../db-context';
 import type {
   Course,
   CourseBoard,
@@ -74,7 +75,11 @@ function mapCrosswalk(row: CrosswalkRow): OutcomeCrosswalk {
 }
 
 export class AcademicsRepository {
-  constructor(private readonly db: SchoolAcademicsDb) {}
+  constructor(private readonly fallbackDb: SchoolAcademicsDb) {}
+
+  private get db(): SchoolAcademicsDb {
+    return currentAcademicsDb(this.fallbackDb);
+  }
 
   async listOutcomes(
     tenantId: string,
@@ -108,10 +113,24 @@ export class AcademicsRepository {
     return rows.map(mapOutcome);
   }
 
-  async getOutcome(id: string): Promise<LearningOutcome | null> {
+  async getOutcome(id: string, tenantId?: string | null): Promise<LearningOutcome | null> {
+    if (tenantId === undefined) {
+      const row = await this.db.get<OutcomeRow>(
+        'SELECT * FROM learning_outcomes WHERE id = ?',
+        [id],
+      );
+      return row ? mapOutcome(row) : null;
+    }
+    if (tenantId === null) {
+      const row = await this.db.get<OutcomeRow>(
+        'SELECT * FROM learning_outcomes WHERE id = ? AND tenant_id IS NULL',
+        [id],
+      );
+      return row ? mapOutcome(row) : null;
+    }
     const row = await this.db.get<OutcomeRow>(
-      'SELECT * FROM learning_outcomes WHERE id = ?',
-      [id],
+      'SELECT * FROM learning_outcomes WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)',
+      [id, tenantId],
     );
     return row ? mapOutcome(row) : null;
   }

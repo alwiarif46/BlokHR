@@ -1,6 +1,7 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import { TenantSettingsRepository, SettingsJson, TenantSettingsRow } from '../repositories/tenant-settings-repository';
+import { getTenantId } from '../tenant/context';
 import {
   HR_DATA_RETENTION_DEFAULTS,
   HR_TERMINOLOGY_DEFAULTS,
@@ -69,15 +70,19 @@ export class TenantSettingsService {
     this.repo = new TenantSettingsRepository(db);
   }
 
+  private tid(): string {
+    return getTenantId('default');
+  }
+
   async load(): Promise<void> {
     await this.ensureTerminologySeeded();
-    this.cachedSettingsJson = await this.repo.getSettingsJson();
-    this.logger.info('Tenant settings loaded');
+    this.cachedSettingsJson = await this.repo.getSettingsJson(this.tid());
+    this.logger.info({ tenantId: this.tid() }, 'Tenant settings loaded');
   }
 
   async getFullBundle(masked = true): Promise<TenantSettingsBundle> {
     await this.ensureTerminologySeeded();
-    const row = await this.repo.get();
+    const row = await this.repo.get(this.tid());
     let settingsJson: SettingsJson;
     try {
       settingsJson = JSON.parse(row.settings_json) as SettingsJson;
@@ -110,7 +115,7 @@ export class TenantSettingsService {
     },
   ): Promise<void> {
     if (partial.settingsJson && 'terminology' in partial.settingsJson) {
-      const existing = await this.repo.getSettingsJson();
+      const existing = await this.repo.getSettingsJson(this.tid());
       const base =
         existing.terminology && typeof existing.terminology === 'object'
           ? (existing.terminology as Record<string, unknown>)
@@ -134,12 +139,12 @@ export class TenantSettingsService {
     }
 
     if (partial.columns) {
-      await this.repo.update('default', partial.columns);
+      await this.repo.update(this.tid(), partial.columns);
     }
     if (partial.settingsJson) {
-      await this.repo.mergeSettingsJson('default', partial.settingsJson);
+      await this.repo.mergeSettingsJson(this.tid(), partial.settingsJson);
     }
-    this.cachedSettingsJson = await this.repo.getSettingsJson();
+    this.cachedSettingsJson = await this.repo.getSettingsJson(this.tid());
   }
 
   async getResolved(key: string, email?: string): Promise<unknown> {
@@ -173,7 +178,7 @@ export class TenantSettingsService {
 
   /** Read tenant vertical from settings_json; null until set at setup. */
   async getVertical(): Promise<TenantVertical | null> {
-    const json = await this.repo.getSettingsJson();
+    const json = await this.repo.getSettingsJson(this.tid());
     const raw = json.vertical;
     return isTenantVertical(raw) ? raw : null;
   }
@@ -185,7 +190,7 @@ export class TenantSettingsService {
   async setVerticalWriteOnce(
     vertical: TenantVertical,
   ): Promise<{ ok: true } | { ok: false; error: 'vertical_immutable' }> {
-    const json = await this.repo.getSettingsJson();
+    const json = await this.repo.getSettingsJson(this.tid());
     const existing = json.vertical;
     if (isTenantVertical(existing)) {
       if (existing === vertical) return { ok: true };
@@ -229,8 +234,8 @@ export class TenantSettingsService {
       patch.terminology = { ...HR_TERMINOLOGY_DEFAULTS };
     }
 
-    await this.repo.mergeSettingsJson('default', patch);
-    this.cachedSettingsJson = await this.repo.getSettingsJson();
+    await this.repo.mergeSettingsJson(this.tid(), patch);
+    this.cachedSettingsJson = await this.repo.getSettingsJson(this.tid());
     return { ok: true };
   }
 
@@ -239,13 +244,13 @@ export class TenantSettingsService {
    * Terminology is tenant-level only — three-tier (member → group → tenant) does not apply.
    */
   private async ensureTerminologySeeded(): Promise<void> {
-    const json = await this.repo.getSettingsJson();
+    const json = await this.repo.getSettingsJson(this.tid());
     const existing = json.terminology;
     if (existing && typeof existing === 'object' && !Array.isArray(existing)) {
       const keys = Object.keys(existing as object);
       if (keys.length > 0) return;
     }
-    await this.repo.mergeSettingsJson('default', {
+    await this.repo.mergeSettingsJson(this.tid(), {
       terminology: { ...HR_TERMINOLOGY_DEFAULTS },
     });
   }

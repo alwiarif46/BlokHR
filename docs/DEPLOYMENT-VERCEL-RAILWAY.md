@@ -39,6 +39,19 @@ GitHub source of truth for this product line: `https://github.com/alwiarif46/Blo
 | Health | `GET /healthz` → gateway; `GET /api/health` → monolith via gateway |
 | `SERVER_BASE_URL` | `https://blokhr.vercel.app` (email / reset links) |
 
+### Multi-tenant Host map (required for shared gateway)
+
+BlokHR resolves tenant from **request Host** (not client-chosen IDs). Set the same JSON on **gateway** and **backend**:
+
+| Env | Example | Purpose |
+|-----|---------|---------|
+| `TENANT_HOST_MAP` | `{"blokhr.vercel.app":"default","si.blokhr.app":"si"}` | Hostname → `tenant_id` |
+| `DEFAULT_TENANT_ID` | `default` | Fallback when Host is unmapped (local/dev) |
+
+**Ops rule:** do **not** point two organizations at the same Railway backend until each has its own Host entry (or a dedicated empty backend). Migration `055_tenant_isolation` moves a completed singleton setup to tenant `si` and leaves `default` with `setup_complete=0` so `blokhr.vercel.app` can run the wizard again.
+
+One Vercel project can serve many tenants via custom domains; each Host maps to isolated branding/setup/members.
+
 School microservices are **not** deployed yet — gateway lists them in `/healthz` config but upstreams still point at localhost defaults until those Railway services are added.
 
 Docker build context: monorepo root. Paths:
@@ -132,6 +145,38 @@ SVC_SCHOOL_IDENTITY_URL=http://school-identity.railway.internal:3011
 (Exact private hostnames follow Railway’s private networking naming for that project.)
 
 Persistent volumes (or managed Postgres later) are required for SQLite/DB files; ephemeral disks lose data on redeploy.
+
+### Per-tenant SQLite layout (Phase 2)
+
+When `TENANT_DB_SPLIT=1`, school and directory services open **one file per tenant** on the shared Railway volume instead of a single shared SQLite file:
+
+```text
+/data/tenants/{tenantId}/directory.db
+/data/tenants/{tenantId}/school-identity.db
+/data/tenants/{tenantId}/school-attendance.db
+/data/tenants/{tenantId}/school-fees.db
+…
+```
+
+| Env | Example | Purpose |
+|-----|---------|---------|
+| `TENANT_DATA_ROOT` | `/data/tenants` | Root for per-tenant DB files (local default `./data/tenants`) |
+| `TENANT_DB_SPLIT` | `1` | Enable per-tenant files; omit/false keeps legacy single-file path |
+
+**Cutover** (once per legacy DB, with volume mounted):
+
+```bash
+node scripts/split-tenant-dbs.mjs \
+  --legacy /data/school-identity.db \
+  --service-file school-identity.db \
+  --root /data/tenants
+```
+
+Repeat for `directory.db`, `school-attendance.db`, and other school `*.db` files. Legacy files stay as read-only backup for one release. Backup/restore a single school by copying `tenants/{tenantId}/`.
+
+Gateway path checks (Phase 1) still apply: Host-resolved tenant must match `:tenantId` in `/svc/...` paths (`tenant_mismatch` → 403).
+
+Arif Vercel / Ubaid Railway ownership is **unchanged**.
 
 ---
 

@@ -1,4 +1,5 @@
 import type { SchoolIdentityDb } from '../db';
+import { currentIdentityDb } from '../db-context';
 import type {
   AcademicSession,
   ConsentKind,
@@ -132,7 +133,11 @@ function mapEnrolment(row: EnrolmentRow): Enrolment {
 }
 
 export class IdentityRepository {
-  constructor(private readonly db: SchoolIdentityDb) {}
+  constructor(private readonly fallbackDb: SchoolIdentityDb) {}
+
+  private get db(): SchoolIdentityDb {
+    return currentIdentityDb(this.fallbackDb);
+  }
 
   async listSessions(tenantId: string): Promise<AcademicSession[]> {
     const rows = await this.db.all<SessionRow>(

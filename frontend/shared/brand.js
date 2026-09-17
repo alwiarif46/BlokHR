@@ -5,8 +5,8 @@
  * Login and other surfaces read getBrand() when they need copy.
  *
  * Product chrome uses theme-aware [blok] mono marks:
- *  - dark themes (chromium / neural / holodeck) → white
- *  - light theme (clean) / wizard light → ink
+ *  - light surfaces (neural / holodeck login+header, wizard light) → ink
+ *  - dark surfaces (chromium / clean, wizard dark) → white
  */
 
 const ASSET_BASE = 'assets/brand/';
@@ -80,12 +80,13 @@ export function getBrand(vertical) {
 
 /**
  * Whether a shell theme (or wizard light/dark) should use the ink (light-bg) mark.
+ * Neural/Holodeck use white login cards + headers; Clean/Chromium are dark.
  * @param {string|null|undefined} themeOrWz — theme name, or 'light' | 'dark' for wizard
  * @returns {boolean}
  */
 export function isLightBrandSurface(themeOrWz) {
   const t = String(themeOrWz || '').toLowerCase();
-  return t === 'clean' || t === 'light';
+  return t === 'neural' || t === 'holodeck' || t === 'light';
 }
 
 /**

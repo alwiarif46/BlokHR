@@ -1,4 +1,5 @@
 import type { SchoolComplianceDb } from '../db';
+import { currentComplianceDb } from '../db-context';
 import type {
   ComplianceAuthority,
   ComplianceItem,
@@ -61,7 +62,11 @@ function mapStatus(row: StatusRow): TenantComplianceStatus {
 }
 
 export class ComplianceRepository {
-  constructor(private readonly db: SchoolComplianceDb) {}
+  constructor(private readonly fallbackDb: SchoolComplianceDb) {}
+
+  private get db(): SchoolComplianceDb {
+    return currentComplianceDb(this.fallbackDb);
+  }
 
   async listItemsForTenant(tenantId: string): Promise<ComplianceItem[]> {
     const rows = await this.db.all<ItemRow>(

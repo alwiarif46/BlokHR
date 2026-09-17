@@ -28,7 +28,7 @@ describe('Feature Flags Module', () => {
       groupShiftStart: '09:00',
       groupShiftEnd: '18:00',
     });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', [ADMIN]);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', ADMIN]);
   });
 
   afterEach(async () => {

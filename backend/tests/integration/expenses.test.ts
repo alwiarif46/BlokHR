@@ -16,7 +16,7 @@ describe('Expenses Module', () => {
     await seedMember(db, { email: 'mgr@shaavir.com', name: 'Manager' });
     await seedMember(db, { email: 'admin@shaavir.com', name: 'Admin' });
     await seedMember(db, { email: 'bob@shaavir.com', name: 'Bob' });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
     await db.run('UPDATE members SET reports_to = ? WHERE email = ?', [
       'mgr@shaavir.com',
       'alice@shaavir.com',

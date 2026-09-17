@@ -13,6 +13,13 @@ import { LibraryService } from './services/library-service';
 import { CirculationService } from './services/circulation-service';
 import { FineService } from './services/fine-service';
 import { createLibraryRouter } from './routes/library';
+import { libraryDbAls } from './db-context';
+import {
+  createLibraryTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolLibraryAppOptions {
   dbPath: string;
@@ -30,13 +37,24 @@ export async function createSchoolLibraryApp(
   circulation: CirculationService;
   fines: FineService;
   db: SchoolLibrarySqlite;
+  pool?: TenantSqlitePool<SchoolLibrarySqlite>;
+  close?: () => Promise<void>;
 }> {
-  const db = await SchoolLibrarySqlite.create(options.dbPath);
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolLibraryMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
 
-  const repo = new LibraryRepository(db);
+  const fallbackDb = await SchoolLibrarySqlite.create(options.dbPath);
+  await runSchoolLibraryMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createLibraryTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
+
+  const repo = new LibraryRepository(fallbackDb);
   const service = new LibraryService(repo);
   const events =
     options.events ??
@@ -55,6 +73,31 @@ export async function createSchoolLibraryApp(
     res.json({ ok: true });
   });
 
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/library',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        libraryDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/library', bindTenantDb);
+  }
+
   app.use('/api/library', createLibraryRouter(service, circulation, fines));
 
   app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
@@ -62,7 +105,18 @@ export async function createSchoolLibraryApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, circulation, fines, db };
+  return {
+    app,
+    service,
+    circulation,
+    fines,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -90,3 +144,9 @@ export type { EventPublisher, DomainEvent } from './events';
 export { asRole, guardRoutes } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';
 export { LIBRARY_ROUTE_POLICIES } from './route-policies';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createLibraryTenantPool,
+} from './tenant-db';

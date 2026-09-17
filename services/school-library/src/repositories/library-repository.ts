@@ -1,4 +1,5 @@
 import type { SchoolLibraryDb } from '../db';
+import { currentLibraryDb } from '../db-context';
 import type {
   CopyCondition,
   CopyCounts,
@@ -208,7 +209,11 @@ function mapFine(row: FineRow): Fine {
 }
 
 export class LibraryRepository {
-  constructor(private readonly db: SchoolLibraryDb) {}
+  constructor(private readonly fallbackDb: SchoolLibraryDb) {}
+
+  private get db(): SchoolLibraryDb {
+    return currentLibraryDb(this.fallbackDb);
+  }
 
   async insertTitle(row: {
     id: string;

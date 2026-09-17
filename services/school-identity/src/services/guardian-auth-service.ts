@@ -96,25 +96,13 @@ export class GuardianAuthService {
     if (!phone || !password) {
       return { error: { error: 'phone and password are required', status: 400 } };
     }
+    if (!tenantHint) {
+      return { error: { error: 'tenant_required', status: 400 } };
+    }
 
-    let matches = await this.authRepo.listCredentialsByPhone(phone);
+    const matches = await this.authRepo.listCredentialsByPhone(phone, tenantHint);
     if (matches.length === 0) {
       return { error: { error: 'invalid credentials', status: 401 } };
-    }
-    if (matches.length > 1 && !tenantHint) {
-      return {
-        error: { error: 'ambiguous_phone', status: 409 },
-        tenants: matches.map((m) => ({
-          tenantId: m.tenantId,
-          guardianId: m.guardianId,
-        })),
-      };
-    }
-    if (tenantHint) {
-      matches = matches.filter((m) => m.tenantId === tenantHint);
-      if (matches.length === 0) {
-        return { error: { error: 'invalid credentials', status: 401 } };
-      }
     }
 
     const cred = matches[0]!;
@@ -195,20 +183,13 @@ export class GuardianAuthService {
   }): Promise<{ ok?: true; expiresAt?: string; debugOtp?: string; error?: ServiceError }> {
     const phone = (input.phone || '').trim();
     if (!phone) return { error: { error: 'phone is required', status: 400 } };
+    const tenantId = (input.tenantId || '').trim();
+    if (!tenantId) return { error: { error: 'tenant_required', status: 400 } };
 
-    let matches = await this.authRepo.listCredentialsByPhone(phone);
+    const matches = await this.authRepo.listCredentialsByPhone(phone, tenantId);
     if (matches.length === 0) {
       // Look up guardian by phone via identity if no credential yet (claim/set-password flow)
       return { error: { error: 'guardian not found', status: 404 } };
-    }
-    if (input.tenantId) {
-      matches = matches.filter((m) => m.tenantId === input.tenantId);
-    }
-    if (matches.length === 0) {
-      return { error: { error: 'guardian not found', status: 404 } };
-    }
-    if (matches.length > 1) {
-      return { error: { error: 'ambiguous_phone', status: 409 } };
     }
     const cred = matches[0]!;
     const otp = generateOtpCode();
@@ -249,6 +230,7 @@ export class GuardianAuthService {
     otp: string;
     purpose: 'login' | 'reset' | 'claim' | 'verify_phone';
     newPassword?: string;
+    tenantId?: string;
   }): Promise<{
     token?: string;
     tenantId?: string;
@@ -259,8 +241,12 @@ export class GuardianAuthService {
   }> {
     const phone = (input.phone || '').trim();
     const otp = (input.otp || '').trim();
+    const tenantId = (input.tenantId || '').trim();
     if (!phone || !otp) {
       return { error: { error: 'phone and otp are required', status: 400 } };
+    }
+    if (!tenantId) {
+      return { error: { error: 'tenant_required', status: 400 } };
     }
     const nowIso = this.clock().toISOString();
     const challenge = await this.authRepo.consumeOtpChallenge({
@@ -268,6 +254,7 @@ export class GuardianAuthService {
       purpose: input.purpose,
       otpHash: hashOtp(otp),
       nowIso,
+      tenantId,
     });
     if (!challenge) {
       return { error: { error: 'invalid or expired otp', status: 401 } };

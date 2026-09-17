@@ -18,7 +18,7 @@ describe('Employee Profile Module', () => {
       groupId: 'engineering',
       groupName: 'Engineering',
     });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
     await seedMember(db, {
       email: 'admin@shaavir.com',
       name: 'Admin User',

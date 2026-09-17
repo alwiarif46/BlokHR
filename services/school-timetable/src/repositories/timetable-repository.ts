@@ -1,4 +1,5 @@
 import type { SchoolTimetableDb } from '../db';
+import { currentTimetableDb } from '../db-context';
 import type {
   Allocation,
   CoverAssignment,
@@ -118,7 +119,11 @@ function periodsToJson(periods: PeriodDef[]): string {
 }
 
 export class TimetableRepository {
-  constructor(private readonly db: SchoolTimetableDb) {}
+  constructor(private readonly fallbackDb: SchoolTimetableDb) {}
+
+  private get db(): SchoolTimetableDb {
+    return currentTimetableDb(this.fallbackDb);
+  }
 
   async listTerms(tenantId: string): Promise<Term[]> {
     const rows = await this.db.all<TermRow>(

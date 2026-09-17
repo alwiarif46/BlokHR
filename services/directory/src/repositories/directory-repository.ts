@@ -1,5 +1,6 @@
 import type { DirectoryDb } from '../db';
 import type { DirectoryMember } from '../types';
+import { currentDirectoryDb } from '../db-context';
 
 interface MemberRow {
   [key: string]: unknown;
@@ -39,7 +40,11 @@ function mapRow(row: MemberRow): DirectoryMember {
 }
 
 export class DirectoryRepository {
-  constructor(private readonly db: DirectoryDb) {}
+  constructor(private readonly fallbackDb: DirectoryDb) {}
+
+  private get db(): DirectoryDb {
+    return currentDirectoryDb(this.fallbackDb);
+  }
 
   async countActive(tenantId: string): Promise<number> {
     const row = await this.db.get<{ c: number }>(

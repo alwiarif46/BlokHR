@@ -1,7 +1,7 @@
 /**
  * modules/school_settings/school_settings.js
  *
- * School Settings (admin + school_vertical): Data Import | Academic Sessions |
+ * School Settings (admin + school_vertical): Roster Hub | Academic Sessions |
  * State Pack | Consent Overview | Syllabus Packs | Attendance Policy |
  * Eligibility | Nudge.
  *
@@ -9,6 +9,7 @@
  *          → scsRender() → actions → scsCloseModal()
  *
  * Boundaries:
+ * - Roster (Excel + manual students/teachers/periods/classes) lives here.
  * - Attendance policy / eligibility / nudge live here (ops Registers + Unexplained
  *   stay in school_attendance_admin).
  * - HR tenant settings → settings module (unchanged).
@@ -19,9 +20,19 @@ import { toast } from '../../shared/toast.js';
 import { confirmDialog } from '../../shared/modal.js';
 import { getSession } from '../../shared/session.js';
 import { navigateToModule, registerModule } from '../../shared/router.js';
+import {
+  rosterReset,
+  rosterLoadLists,
+  rosterRender,
+  rosterGetStats,
+  rosterSetSessions,
+  rosterResetState,
+  scsDownloadTemplate as rosterDownloadTemplate,
+  scsImportFile as rosterImportFile,
+} from './roster_hub.js';
 
 const TABS = [
-  'import',
+  'roster',
   'sessions',
   'state_pack',
   'consent',
@@ -82,6 +93,9 @@ let _selectedPackDetail = null;
 let _consentSummary = {};
 let _studentsTotal = 0;
 let _importResult = null;
+let _rosterTeachers = 0;
+let _rosterSchemes = 0;
+let _rosterSections = 0;
 let _syllabusPacks = [];
 let _syllabusInstalled = [];
 let _syllabusDetail = null;
@@ -124,7 +138,8 @@ function _esc(s) {
 }
 
 function _tabLabel(t) {
-  if (t === 'import') return 'Data Import';
+  if (t === 'roster') return 'Roster';
+  if (t === 'import') return 'Roster';
   if (t === 'sessions') return 'Academic Sessions';
   if (t === 'state_pack') return 'State Pack';
   if (t === 'consent') return 'Consent Overview';
@@ -132,6 +147,11 @@ function _tabLabel(t) {
   if (t === 'attendance_policy') return 'Attendance Policy';
   if (t === 'eligibility') return 'Eligibility';
   if (t === 'nudge') return 'Nudge';
+  return t;
+}
+
+function _normalizeTab(t) {
+  if (t === 'import') return 'roster';
   return t;
 }
 
@@ -168,7 +188,7 @@ export function validateSettingsFields(fields) {
  */
 export function renderSchoolSettingsPage(container) {
   _container = container;
-  _tab = 'import';
+  _tab = 'roster';
   _sessions = [];
   _statePacks = [];
   _tenantPack = { packCode: null, pack: null };
@@ -177,6 +197,9 @@ export function renderSchoolSettingsPage(container) {
   _consentSummary = {};
   _studentsTotal = 0;
   _importResult = null;
+  _rosterTeachers = 0;
+  _rosterSchemes = 0;
+  _rosterSections = 0;
   _syllabusPacks = [];
   _syllabusInstalled = [];
   _syllabusDetail = null;
@@ -198,13 +221,27 @@ export function renderSchoolSettingsPage(container) {
 
   try {
     const openTab = sessionStorage.getItem('scs_open_tab');
-    if (openTab && TABS.indexOf(openTab) >= 0) {
+    const normalized = openTab ? _normalizeTab(openTab) : null;
+    if (normalized && TABS.indexOf(normalized) >= 0) {
       sessionStorage.removeItem('scs_open_tab');
-      _tab = openTab;
+      _tab = normalized;
     }
   } catch (_) {
     /* ignore */
   }
+
+  rosterReset({
+    root: container,
+    sessions: _sessions,
+    onChanged: function () {
+      const stats = rosterGetStats();
+      _studentsTotal = stats.studentsTotal || _studentsTotal;
+      _rosterTeachers = stats.teachers || 0;
+      _rosterSchemes = stats.daySchemes || 0;
+      _rosterSections = stats.sections || 0;
+      scsRenderStats();
+    },
+  });
 
   container.innerHTML =
     '<div class="scs-wrap" id="scsWrap">' +
@@ -245,10 +282,11 @@ export function renderSchoolSettingsPage(container) {
  * @param {string} tab
  */
 export function scsSwitchTab(tab) {
-  if (TABS.indexOf(tab) < 0) return;
-  _tab = tab;
+  const normalized = _normalizeTab(tab);
+  if (TABS.indexOf(normalized) < 0) return;
+  _tab = normalized;
   _container.querySelectorAll('.scs-tab').forEach(function (btn) {
-    btn.classList.toggle('active', btn.dataset.tab === tab);
+    btn.classList.toggle('active', btn.dataset.tab === normalized);
   });
   scsLoadData();
 }
@@ -327,6 +365,16 @@ export async function scsLoadData() {
     await scsLoadPackDetail(_selectedPackCode);
   }
 
+  if (_tab === 'roster') {
+    rosterSetSessions(_sessions);
+    await rosterLoadLists();
+    const stats = rosterGetStats();
+    if (stats.studentsTotal) _studentsTotal = stats.studentsTotal;
+    _rosterTeachers = stats.teachers || 0;
+    _rosterSchemes = stats.daySchemes || 0;
+    _rosterSections = stats.sections || 0;
+  }
+
   if (_tab === 'attendance_policy') {
     await _loadAttSettings();
   } else if (_tab === 'nudge') {
@@ -403,6 +451,12 @@ export function scsRenderStats() {
     '<span class="scs-pill">Students <strong id="scsStatStudents">' +
     _esc(String(_studentsTotal)) +
     '</strong></span>' +
+    '<span class="scs-pill">Teachers <strong id="scsStatTeachers">' +
+    _esc(String(_rosterTeachers)) +
+    '</strong></span>' +
+    '<span class="scs-pill">Classes <strong id="scsStatClasses">' +
+    _esc(String(_rosterSections)) +
+    '</strong></span>' +
     '<span class="scs-pill">DPDP granted <strong id="scsStatDpdp">' +
     _esc(String(pct)) +
     '%</strong></span>';
@@ -412,7 +466,7 @@ export function scsRender() {
   const content = _container && _container.querySelector('#scsContent');
   if (!content) return;
 
-  if (_tab === 'import') _renderImport(content);
+  if (_tab === 'roster') rosterRender(content);
   else if (_tab === 'sessions') _renderSessions(content);
   else if (_tab === 'state_pack') _renderStatePack(content);
   else if (_tab === 'consent') _renderConsent(content);
@@ -424,146 +478,6 @@ export function scsRender() {
     const _exhaustive = _tab;
     void _exhaustive;
   }
-}
-
-function _renderImport(content) {
-  content.innerHTML =
-    '<div class="scs-panel-note">' +
-    'Upload one Excel or CSV roster. Students and enrolments go to identity; optional Periods and Classes sheets update timetable.' +
-    '</div>' +
-    '<div class="scs-toolbar">' +
-    '<button type="button" class="scs-btn ghost" id="scsTemplateBtn">Download template</button>' +
-    '<div class="scs-spacer"></div>' +
-    '<button type="button" class="scs-btn ghost" id="scsPickBtn">Choose file</button>' +
-    '<input type="file" id="scsImportFile" accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv" hidden>' +
-    '</div>' +
-    '<div class="scs-drop" id="scsDrop" tabindex="0">' +
-    '<strong>Drop Excel / CSV here</strong>' +
-    'or click to browse · .xlsx · .xls · .csv' +
-    '</div>' +
-    '<div id="scsImportResult"></div>';
-
-  content.querySelector('#scsTemplateBtn').addEventListener('click', function () {
-    scsDownloadTemplate();
-  });
-
-  const fileInput = content.querySelector('#scsImportFile');
-  const pick = content.querySelector('#scsPickBtn');
-  const drop = content.querySelector('#scsDrop');
-
-  function openPicker() {
-    fileInput.click();
-  }
-
-  pick.addEventListener('click', openPicker);
-  drop.addEventListener('click', openPicker);
-  drop.addEventListener('keydown', function (e) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      openPicker();
-    }
-  });
-
-  fileInput.addEventListener('change', function () {
-    const file = fileInput.files && fileInput.files[0];
-    fileInput.value = '';
-    if (file) scsImportFile(file);
-  });
-
-  drop.addEventListener('dragover', function (e) {
-    e.preventDefault();
-    drop.classList.add('drag');
-  });
-  drop.addEventListener('dragleave', function () {
-    drop.classList.remove('drag');
-  });
-  drop.addEventListener('drop', function (e) {
-    e.preventDefault();
-    drop.classList.remove('drag');
-    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) scsImportFile(file);
-  });
-
-  _renderImportResultPanel(content.querySelector('#scsImportResult'));
-}
-
-function _renderImportResultPanel(el) {
-  if (!el) return;
-  if (!_importResult) {
-    el.innerHTML = '';
-    return;
-  }
-
-  const r = _importResult;
-  const counts = [];
-  counts.push(
-    '<span class="scs-pill">Students created <strong id="scsImpCreated">' +
-      _esc(String(r.created || 0)) +
-      '</strong></span>',
-  );
-  counts.push(
-    '<span class="scs-pill">Enrolled <strong id="scsImpEnrolled">' +
-      _esc(String(r.enrolled || 0)) +
-      '</strong></span>',
-  );
-  counts.push(
-    '<span class="scs-pill">Skipped <strong id="scsImpSkipped">' +
-      _esc(String(r.skipped || 0)) +
-      '</strong></span>',
-  );
-  counts.push(
-    '<span class="scs-pill">Day schemes <strong id="scsImpSchemes">' +
-      _esc(String(r.daySchemesCreated || 0)) +
-      '</strong></span>',
-  );
-  counts.push(
-    '<span class="scs-pill">Classes created <strong id="scsImpClasses">' +
-      _esc(String(r.sectionsCreated || 0)) +
-      '</strong></span>',
-  );
-  counts.push(
-    '<span class="scs-pill">Classes skipped <strong id="scsImpClassSkip">' +
-      _esc(String(r.sectionsSkipped || 0)) +
-      '</strong></span>',
-  );
-
-  const errors = r.errors || [];
-  let errHtml = '';
-  if (errors.length) {
-    errHtml =
-      '<table class="scs-table" id="scsImportErrors"><thead><tr>' +
-      '<th>Row</th><th>Field</th><th>Message</th>' +
-      '</tr></thead><tbody>' +
-      errors
-        .map(function (err) {
-          return (
-            '<tr>' +
-            '<td>' +
-            _esc(String(err.row != null ? err.row : '')) +
-            '</td>' +
-            '<td>' +
-            _esc(String(err.field || err.sheet || '—')) +
-            '</td>' +
-            '<td>' +
-            _esc(err.message || '') +
-            '</td>' +
-            '</tr>'
-          );
-        })
-        .join('') +
-      '</tbody></table>';
-  } else {
-    errHtml = '<div class="scs-empty">No row-level errors</div>';
-  }
-
-  el.innerHTML =
-    '<div class="scs-result">' +
-    '<div class="scs-result-title">Last import</div>' +
-    '<div class="scs-result-counts">' +
-    counts.join('') +
-    '</div>' +
-    errHtml +
-    '</div>';
 }
 
 function _renderSessions(content) {
@@ -1528,58 +1442,17 @@ export async function scsCreateSession() {
 }
 
 /**
- * Download a starter CSV template (Students sheet columns).
- * Excel users can add Periods and Classes sheets using the same headers.
+ * Roster template + import (delegated to roster_hub).
  */
-export function scsDownloadTemplate() {
-  const headers = [
-    'Admission Number',
-    'First Name',
-    'Last Name',
-    'DOB',
-    'Gender',
-    'Admission Date',
-    'Status',
-    'Category',
-    'Mother Name',
-    'Father Name',
-    'Guardian Contact',
-    'Class',
-    'Section',
-    'Roll Number',
-    'House',
-  ];
-  const sample = [
-    'ADM-001',
-    'Asha',
-    'Rao',
-    '2015-06-15',
-    'female',
-    '2025-04-01',
-    'active',
-    'GEN',
-    'Meera',
-    'Ravi',
-    '9876543210',
-    '5',
-    'A',
-    '12',
-    'Blue',
-  ];
-  const csv = headers.join(',') + '\n' + sample.map(_csvEscape).join(',') + '\n';
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'blokschool-roster-template.csv';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-  toast(
-    'Template downloaded. Excel tip: add sheets named Periods and Classes to also import timetable.',
-    'success',
-  );
+export async function scsDownloadTemplate() {
+  return rosterDownloadTemplate();
+}
+
+/**
+ * @param {File} file
+ */
+export async function scsImportFile(file) {
+  return rosterImportFile(file);
 }
 
 function _csvEscape(v) {
@@ -1601,108 +1474,6 @@ function _readFileAsBase64(file) {
     };
     reader.readAsDataURL(file);
   });
-}
-
-/**
- * Import roster from Excel/CSV: students (+enrolments) via school-identity,
- * then periods/classes via school-timetable when present.
- * @param {File} file
- */
-export async function scsImportFile(file) {
-  if (!file) return;
-  const name = (file.name || '').toLowerCase();
-  if (!/\.(xlsx|xls|csv)$/.test(name)) {
-    toast('Use an .xlsx, .xls, or .csv file', 'error');
-    return;
-  }
-
-  try {
-    const contentBase64 = await _readFileAsBase64(file);
-    const payload = { filename: file.name, contentBase64: contentBase64 };
-
-    const idRes = await _identity().post('/students/import', payload);
-    if (!idRes || idRes._error || !idRes.success) {
-      toast((idRes && (idRes.message || idRes.error)) || 'Student import failed', 'error');
-      return;
-    }
-
-    const parts = [];
-    if (idRes.created) parts.push(idRes.created + ' students');
-    if (idRes.enrolled) parts.push(idRes.enrolled + ' enrolled');
-    if (idRes.skipped) parts.push(idRes.skipped + ' skipped');
-    if (idRes.errors && idRes.errors.length) {
-      parts.push(idRes.errors.length + ' student errors');
-    }
-
-    const errors = [];
-    (idRes.errors || []).forEach(function (e) {
-      errors.push({
-        row: e.row,
-        field: e.field || 'Students',
-        message: e.message,
-      });
-    });
-
-    let daySchemesCreated = 0;
-    let sectionsCreated = 0;
-    let sectionsSkipped = 0;
-    let ttParts = [];
-
-    if (idRes.sessionId) {
-      const tt = api.school('school-timetable');
-      const ttRes = await tt.post('/import', {
-        filename: file.name,
-        contentBase64: contentBase64,
-        academic_session_id: idRes.sessionId,
-      });
-      if (ttRes && !ttRes._error && ttRes.success) {
-        daySchemesCreated = ttRes.daySchemesCreated || 0;
-        sectionsCreated = ttRes.sectionsCreated || 0;
-        sectionsSkipped = ttRes.sectionsSkipped || 0;
-        if (ttRes.daySchemesCreated) {
-          ttParts.push(ttRes.daySchemesCreated + ' day schemes');
-        }
-        if (ttRes.sectionsCreated) ttParts.push(ttRes.sectionsCreated + ' classes');
-        if (ttRes.sectionsSkipped) ttParts.push(ttRes.sectionsSkipped + ' classes skipped');
-        if (ttRes.errors && ttRes.errors.length) {
-          ttParts.push(ttRes.errors.length + ' timetable errors');
-        }
-        (ttRes.errors || []).forEach(function (e) {
-          errors.push({
-            row: e.row,
-            field: e.field || e.sheet || 'Timetable',
-            message: e.message,
-          });
-        });
-      } else if (ttRes && ttRes._error) {
-        ttParts.push('timetable import unavailable');
-      }
-    }
-
-    _importResult = {
-      created: idRes.created || 0,
-      enrolled: idRes.enrolled || 0,
-      skipped: idRes.skipped || 0,
-      daySchemesCreated: daySchemesCreated,
-      sectionsCreated: sectionsCreated,
-      sectionsSkipped: sectionsSkipped,
-      errors: errors,
-    };
-
-    const msg =
-      'Import: ' +
-      (parts.length ? parts.join(', ') : 'no student changes') +
-      (ttParts.length ? ' · ' + ttParts.join(', ') : '');
-    toast(msg, 'success');
-
-    if (_tab === 'import') {
-      const panel = _container && _container.querySelector('#scsImportResult');
-      _renderImportResultPanel(panel);
-    }
-    await scsLoadData();
-  } catch (err) {
-    toast((err && err.message) || 'Import failed', 'error');
-  }
 }
 
 export function scsCloseModal() {
@@ -2083,7 +1854,7 @@ export async function scsRunNudge() {
 /** Test helper: reset module state between cases. */
 export function _resetState() {
   _container = null;
-  _tab = 'import';
+  _tab = 'roster';
   _sessions = [];
   _statePacks = [];
   _tenantPack = { packCode: null, pack: null };
@@ -2092,6 +1863,9 @@ export function _resetState() {
   _consentSummary = {};
   _studentsTotal = 0;
   _importResult = null;
+  _rosterTeachers = 0;
+  _rosterSchemes = 0;
+  _rosterSections = 0;
   _syllabusPacks = [];
   _syllabusInstalled = [];
   _syllabusDetail = null;
@@ -2108,6 +1882,7 @@ export function _resetState() {
   _eligCapped = false;
   _nudgeConfig = null;
   _nudgeReport = null;
+  rosterResetState();
 }
 
 registerModule('school_settings', renderSchoolSettingsPage);

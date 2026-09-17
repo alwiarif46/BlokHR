@@ -1,5 +1,6 @@
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { AuditService } from '../audit/audit-service';
 import type { NotificationDispatcher } from './notification/dispatcher';
 import {
@@ -406,8 +407,8 @@ export class ExpenseService {
 
   async isAdmin(email: string): Promise<boolean> {
     if (!email) return false;
-    const row = await this.db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-      email,
+    const row = await this.db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+      getTenantId(), email,
     ]);
     return !!row;
   }

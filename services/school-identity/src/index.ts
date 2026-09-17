@@ -11,6 +11,13 @@ import { GuardianAuthService } from './services/guardian-auth-service';
 import { createIdentityRouter } from './routes/identity';
 import { createGuardianAuthRouter } from './routes/guardian-auth';
 import { resolveInternalSecret } from './internal-auth';
+import { identityDbAls } from './db-context';
+import {
+  createIdentityTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolIdentityAppOptions {
   dbPath: string;
@@ -29,15 +36,26 @@ export async function createSchoolIdentityApp(
   guardianAuth: GuardianAuthService;
   guardianAuthRepo: GuardianAuthRepository;
   db: SchoolIdentitySqlite;
+  pool?: TenantSqlitePool<SchoolIdentitySqlite>;
+  close?: () => Promise<void>;
 }> {
-  const db = await SchoolIdentitySqlite.create(options.dbPath);
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolIdentityMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
+
+  const fallbackDb = await SchoolIdentitySqlite.create(options.dbPath);
+  await runSchoolIdentityMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createIdentityTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
 
   const events = options.eventPublisher ?? new LogEventPublisher(options.logger);
-  const repo = new IdentityRepository(db);
-  const authRepo = new GuardianAuthRepository(db);
+  const repo = new IdentityRepository(fallbackDb);
+  const authRepo = new GuardianAuthRepository(fallbackDb);
   const clock = options.clock ?? (() => new Date());
   const service = new IdentityService(repo, events);
   const guardianAuth = new GuardianAuthService(repo, authRepo, clock);
@@ -52,6 +70,31 @@ export async function createSchoolIdentityApp(
     res.json({ ok: true });
   });
 
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/identity',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        identityDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/identity', bindTenantDb);
+  }
+
   app.use('/api/identity/guardian-auth', createGuardianAuthRouter(guardianAuth));
   app.use(
     '/api/identity',
@@ -63,7 +106,18 @@ export async function createSchoolIdentityApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, guardianAuth, guardianAuthRepo: authRepo, db };
+  return {
+    app,
+    service,
+    guardianAuth,
+    guardianAuthRepo: authRepo,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -110,3 +164,9 @@ export type {
   UdiseValidationResult,
   UdiseValidateContext,
 } from './services/udise-validator';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createIdentityTenantPool,
+} from './tenant-db';

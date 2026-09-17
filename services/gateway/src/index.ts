@@ -37,6 +37,8 @@ import {
 import { isPublicSvcPath } from './guards/public-paths';
 import { resolveHrCompatRewrite } from './guards/hr-compat';
 import { createFeatureFlagCache, type FeatureFlagCache } from './guards/feature-flags';
+import { parseTenantHostMap, resolveTenantId } from './resolve-tenant';
+import { assertTenantPathMatch } from './guards/tenant-path';
 
 const PROXY_TIMEOUT_MS = 30_000;
 /** 0 = no timeout kill (SSE must stay open). */
@@ -44,6 +46,7 @@ const SSE_NO_TIMEOUT = 0;
 
 type BlokProxyRequest = Request & {
   _blokExtraHeaders?: Record<string, string>;
+  _blokHostTenant?: string;
 };
 
 export interface GatewayAppOptions {
@@ -67,7 +70,11 @@ function buildProxyHooks(
   return {
     proxyReq: (proxyReq, req) => {
       markProxyStart(req);
-      const extra = (req as BlokProxyRequest)._blokExtraHeaders;
+      const blokReq = req as BlokProxyRequest;
+      const hostTenant = blokReq._blokHostTenant;
+      const extra: Record<string, string> = {};
+      if (hostTenant) extra['X-Blok-Tenant'] = hostTenant;
+      Object.assign(extra, blokReq._blokExtraHeaders || {});
       applyProxyHeaderHygiene(proxyReq, internalSecret, extra);
       if (opts.ssePassthrough || isSseStreamPath(req)) {
         req.socket?.setTimeout(0);
@@ -113,6 +120,18 @@ export function createGatewayApp(options: GatewayAppOptions): {
   const { config, logger } = options;
   const app = express();
   app.use(cors());
+
+  const hostMap = parseTenantHostMap(config.tenantHostMap);
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    const tenantId = resolveTenantId({
+      headers: req.headers as Record<string, string | string[] | undefined>,
+      hostMap,
+      trustBlokTenantHeader: false,
+      fallback: config.defaultTenantId,
+    });
+    (req as BlokProxyRequest)._blokHostTenant = tenantId;
+    next();
+  });
 
   const introspectFn =
     options.introspect ??
@@ -326,6 +345,18 @@ export function createGatewayApp(options: GatewayAppOptions): {
       return;
     }
 
+    const hostTenant =
+      (req as BlokProxyRequest)._blokHostTenant || config.defaultTenantId;
+    const tenantCheck = assertTenantPathMatch({
+      upstreamPath: match.upstreamPath,
+      hostTenant,
+      sessionTenant: result.tenantId,
+    });
+    if (!tenantCheck.ok) {
+      res.status(403).json({ error: 'tenant_mismatch' });
+      return;
+    }
+
     const proxy = serviceProxies.get(match.service);
     if (!proxy) {
       res.status(502).json({ error: 'upstream_unavailable', service: match.service });
@@ -361,7 +392,23 @@ export function createGatewayApp(options: GatewayAppOptions): {
 
     // Upstream path is whatever remains after /svc/:service (Express strips the mount).
     const upstreamPath = req.url && req.url.length > 0 ? req.url : '/';
+    const hostTenant =
+      (req as BlokProxyRequest)._blokHostTenant || config.defaultTenantId;
+
     if (isPublicSvcPath(service, req.method, upstreamPath)) {
+      const pubCheck = assertTenantPathMatch({
+        upstreamPath,
+        hostTenant,
+      });
+      if (!pubCheck.ok) {
+        res.status(403).json({ error: 'tenant_mismatch' });
+        return;
+      }
+      const pReq = req as BlokProxyRequest;
+      pReq._blokExtraHeaders = {
+        ...(pReq._blokExtraHeaders || {}),
+        'X-Blok-Tenant': hostTenant,
+      };
       proxy(req, res, next);
       return;
     }
@@ -387,8 +434,21 @@ export function createGatewayApp(options: GatewayAppOptions): {
       return;
     }
 
+    const tenantCheck = assertTenantPathMatch({
+      upstreamPath,
+      hostTenant,
+      sessionTenant: result.tenantId,
+    });
+    if (!tenantCheck.ok) {
+      res.status(403).json({ error: 'tenant_mismatch' });
+      return;
+    }
+
     const sReq = req as BlokProxyRequest;
-    sReq._blokExtraHeaders = staffBlokHeaders(result);
+    sReq._blokExtraHeaders = {
+      ...staffBlokHeaders(result),
+      'X-Blok-Tenant': hostTenant,
+    };
     proxy(req, res, next);
   });
 
@@ -546,3 +606,7 @@ export {
   staffBlokHeaders,
 } from './guards/staff-introspect';
 export { PUBLIC_PATHS, isPublicSvcPath } from './guards/public-paths';
+export {
+  extractPathTenantId,
+  assertTenantPathMatch,
+} from './guards/tenant-path';

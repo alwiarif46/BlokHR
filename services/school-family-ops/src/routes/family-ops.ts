@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import type { SchoolFamilyOpsDb } from '../db';
+import { currentFamilyOpsDb } from '../db-context';
 import { enforceGuardianAccess, isGuardianPrincipal } from '../internal-auth';
 import { guardRoutes } from '../role-guard';
 import { FAMILY_OPS_ROUTE_POLICIES } from '../route-policies';
@@ -78,9 +79,10 @@ function modulesPayload(): Record<
 }
 
 export function createFamilyOpsRouter(
-  db: SchoolFamilyOpsDb,
+  fallbackDb: SchoolFamilyOpsDb,
   internalSecret: string,
 ): Router {
+  const db = (): SchoolFamilyOpsDb => currentFamilyOpsDb(fallbackDb);
   const router = Router({ mergeParams: true });
   guardRoutes(router, FAMILY_OPS_ROUTE_POLICIES, { internalSecret });
 
@@ -106,7 +108,7 @@ export function createFamilyOpsRouter(
           return;
         }
         const table = AREA_TABLE[area];
-        const rows = await db.all(
+        const rows = await db().all(
           `SELECT id, tenant_id, student_ref, status, created_at, updated_at
            FROM ${table}
            WHERE tenant_id = ? AND student_ref = ?
@@ -138,13 +140,13 @@ export function createFamilyOpsRouter(
       }
       const id = uuidv4();
       const tenantId = req.params.tenantId;
-      await db.run(
+      await db().run(
         `INSERT INTO pickup_authorizations
            (id, tenant_id, student_ref, guardian_ref, status)
          VALUES (?, ?, ?, ?, 'active')`,
         [id, tenantId, studentId, gate.guardianId],
       );
-      const row = await db.get(
+      const row = await db().get(
         `SELECT id, tenant_id, student_ref, guardian_ref, status, created_at, updated_at
          FROM pickup_authorizations WHERE id = ? AND tenant_id = ?`,
         [id, tenantId],
@@ -158,7 +160,7 @@ export function createFamilyOpsRouter(
       `/:tenantId/${area}`,
       asyncHandler(async (req, res) => {
         const table = STAFF_TABLE[area];
-        const rows = await db.all(
+        const rows = await db().all(
           `SELECT id, tenant_id, student_ref, status, created_at, updated_at
            FROM ${table}
            WHERE tenant_id = ?

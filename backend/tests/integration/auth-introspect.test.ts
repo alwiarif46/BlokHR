@@ -16,7 +16,10 @@ describe('POST /api/auth/introspect (P12-01)', () => {
     db = setup.db;
     await seedMember(db, { email: 'admin@shaavir.com', name: 'Admin User' });
     await seedMember(db, { email: 'alice@shaavir.com', name: 'Alice' });
-    await db.run("UPDATE branding SET tenant_id = 'tenant-school-1' WHERE id = 1");
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', [
+      'default',
+      'admin@shaavir.com',
+    ]);
   });
 
   afterEach(async () => {
@@ -55,7 +58,7 @@ describe('POST /api/auth/introspect (P12-01)', () => {
     expect(res.body.active).toBe(true);
     expect(res.body.email).toBe('alice@shaavir.com');
     expect(res.body.name).toBe('Alice');
-    expect(res.body.tenantId).toBe('tenant-school-1');
+    expect(res.body.tenantId).toBe('default');
     expect(res.body.isAdmin).toBe(roles.body.isAdmin);
     expect(res.body.isGlobalManager).toBe(roles.body.isGlobalManager);
     expect(res.body.isGlobalHR).toBe(roles.body.isGlobalHR);
@@ -64,7 +67,10 @@ describe('POST /api/auth/introspect (P12-01)', () => {
   });
 
   it('returns admin claims for an admin session', async () => {
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', [
+      'default',
+      'admin@shaavir.com',
+    ]);
     const token = await loginAs('admin@shaavir.com', 'adminpass99');
 
     const res = await request(app)

@@ -2,6 +2,7 @@ import type { Logger } from 'pino';
 import type { BdMeetingRepository, BdMeeting } from '../repositories/bd-meeting-repository';
 import type { NotificationDispatcher } from './notification/dispatcher';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { EventBus } from '../events';
 
 interface MemberNotifInfo {
@@ -239,7 +240,8 @@ export class BdMeetingService {
     );
 
     const admins = await this.db.all<{ email: string; [key: string]: unknown }>(
-      'SELECT email FROM admins',
+      'SELECT email FROM admins WHERE tenant_id = ?',
+      [getTenantId()],
     );
 
     const allEmails = new Set([

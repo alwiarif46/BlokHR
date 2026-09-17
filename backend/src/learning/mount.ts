@@ -2,6 +2,7 @@ import path from 'path';
 import type { Express } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { AppConfig } from '../config';
 import type { FeatureFlagService } from '../services/feature-flags';
 import {
@@ -64,8 +65,8 @@ export function mountLearningRouter(
       tenantId: config.defaultTenantId,
       isAdmin: async (email: string) => {
         const row = await monolithDb.get<{ email: string }>(
-          'SELECT email FROM admins WHERE email = ?',
-          [email],
+          'SELECT email FROM admins WHERE tenant_id = ? AND email = ?',
+          [getTenantId(), email],
         );
         return !!row;
       },

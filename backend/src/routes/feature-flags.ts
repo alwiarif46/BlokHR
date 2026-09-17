@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import { AppError, asyncHandler } from '../app';
 import { FeatureFlagService, type FeatureFlag } from '../services/feature-flags';
 import { TenantSettingsService } from '../services/tenant-settings-service';
@@ -59,7 +60,7 @@ export function createFeatureFlagsRouter(
       const callerEmail = req.identity?.email ?? '';
       let isAdmin = false;
       if (callerEmail && db) {
-        const admin = await db.get('SELECT email FROM admins WHERE email = ?', [callerEmail]);
+        const admin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), callerEmail]);
         isAdmin = !!admin;
       }
       const flags = await featureFlags.getForUser(isAdmin);
@@ -89,7 +90,7 @@ export function createFeatureFlagsRouter(
 
       // Admin-only enforcement
       if (db) {
-        const admin = await db.get('SELECT email FROM admins WHERE email = ?', [updatedBy]);
+        const admin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), updatedBy]);
         if (!admin) throw new AppError('Admin access required', 403);
       }
 
@@ -115,7 +116,7 @@ export function createFeatureFlagsRouter(
 
       // Admin-only enforcement
       if (db) {
-        const admin = await db.get('SELECT email FROM admins WHERE email = ?', [updatedBy]);
+        const admin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), updatedBy]);
         if (!admin) throw new AppError('Admin access required', 403);
       }
 

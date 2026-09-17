@@ -26,7 +26,7 @@ describe('EventBus Module', () => {
       groupShiftStart: '00:00',
       groupShiftEnd: '23:59',
     });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
   });
 
   afterEach(async () => {

@@ -1,4 +1,5 @@
 import type { SchoolComplianceDb } from '../db';
+import { currentComplianceDb } from '../db-context';
 import type {
   DataRequest,
   DataRequestAudit,
@@ -75,7 +76,11 @@ function mapAudit(row: AuditRow): DataRequestAudit {
 }
 
 export class DsrRepository {
-  constructor(private readonly db: SchoolComplianceDb) {}
+  constructor(private readonly fallbackDb: SchoolComplianceDb) {}
+
+  private get db(): SchoolComplianceDb {
+    return currentComplianceDb(this.fallbackDb);
+  }
 
   async getConfig(tenantId: string, key: string): Promise<string | null> {
     const row = await this.db.get<{ value: string }>(

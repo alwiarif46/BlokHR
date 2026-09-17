@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { NotificationDispatcher } from '../services/notification/dispatcher';
 import { AppError, asyncHandler } from '../app';
 import { ProfileService } from '../services/profile-service';
@@ -48,8 +49,8 @@ export function createProfileRouter(
   }
 
   async function isCallerAdmin(email: string): Promise<boolean> {
-    const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-      email,
+    const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+      getTenantId(), email,
     ]);
     return !!admin;
   }

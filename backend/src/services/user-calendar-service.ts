@@ -4,6 +4,8 @@ import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
 import type { AppConfig } from '../config';
 import { UserCalendarRepository } from '../repositories/user-calendar-repository';
+import { getBrandingForTenant } from '../tenant/branding-access';
+import { getTenantId } from '../tenant/context';
 import {
   decryptToken,
   encryptToken,
@@ -75,16 +77,15 @@ export class UserCalendarService {
   }
 
   async resolveTenantCalendarConfig(): Promise<CalendarTenantConfig> {
-    const branding = await this.db.get<{
+    const branding = await getBrandingForTenant<{
       msal_client_id: string;
       msal_tenant_id: string;
       google_oauth_client_id: string;
-    }>(
-      `SELECT msal_client_id, msal_tenant_id, google_oauth_client_id FROM branding WHERE id = 1`,
-    );
+    }>(this.db);
 
     const row = await this.db.get<{ settings_json: string }>(
-      `SELECT settings_json FROM tenant_settings WHERE id = 'default'`,
+      `SELECT settings_json FROM tenant_settings WHERE id = ?`,
+      [getTenantId('default')],
     );
     let meetings: Record<string, unknown> = {};
     if (row?.settings_json) {

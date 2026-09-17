@@ -268,6 +268,71 @@ describe('Gateway G-02 — header hygiene', () => {
     expect(res.body.headers['x-blok-principal']).toBe('staff');
   });
 
+  it('injects Host-mapped tenant on monolith /api when unauthenticated', async () => {
+    const mapped = loadGatewayConfig(
+      baseEnv(monolithPort, echoPort, frontendDir, {
+        INTERNAL_SECRET: 'gw-test-secret',
+        TENANT_HOST_MAP: JSON.stringify({ 'blokhr.vercel.app': 'default', 'si.blokhr.app': 'si' }),
+      }),
+      path.resolve(__dirname, '..'),
+    );
+    const { app } = createGatewayApp({ config: mapped, logger });
+    const res = await request(app)
+      .get('/api/setup/status')
+      .set('Host', 'si.blokhr.app');
+    expect(res.status).toBe(200);
+    expect(res.body.headers['x-blok-tenant']).toBe('si');
+    expect(res.body.headers['x-blok-internal']).toBe('gw-test-secret');
+  });
+
+  it('rejects school path tenant that does not match Host', async () => {
+    const mapped = loadGatewayConfig(
+      baseEnv(monolithPort, echoPort, frontendDir, {
+        INTERNAL_SECRET: 'gw-test-secret',
+        TENANT_HOST_MAP: JSON.stringify({
+          'tenant-a.test': 'tenant-a',
+          'tenant-b.test': 'tenant-b',
+        }),
+        DEFAULT_TENANT_ID: 'default',
+      }),
+      path.resolve(__dirname, '..'),
+    );
+    const { app } = createGatewayApp({
+      config: mapped,
+      logger,
+      featureFlagCache: {
+        isServiceEnabled: async () => true,
+        isHrCompatEnabled: async () => true,
+      } as never,
+      staffIntrospect: async () => ({
+        active: true,
+        email: 'staff@school.edu',
+        name: 'Staff',
+        tenantId: 'tenant-a',
+        isAdmin: false,
+        isGlobalManager: false,
+        isGlobalHR: false,
+        managerOf: [],
+        hrOf: [],
+        role: 'office',
+        memberId: 'mem-9',
+      }),
+    });
+    const bad = await request(app)
+      .get('/svc/school-attendance/api/attendance/tenant-b/reason-codes')
+      .set('Host', 'tenant-a.test')
+      .set('Authorization', 'Bearer staff-tok');
+    expect(bad.status).toBe(403);
+    expect(bad.body.error).toBe('tenant_mismatch');
+
+    const ok = await request(app)
+      .get('/svc/school-attendance/api/attendance/tenant-a/reason-codes')
+      .set('Host', 'tenant-a.test')
+      .set('Authorization', 'Bearer staff-tok');
+    expect(ok.status).toBe(200);
+    expect(ok.body.headers['x-blok-tenant']).toBe('tenant-a');
+  });
+
   it('injects X-Blok-Internal with configured secret', async () => {
     const { app } = createGatewayApp({ config, logger });
     const res = await request(app).get('/api/setup/status');

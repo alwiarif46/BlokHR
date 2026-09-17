@@ -8,6 +8,7 @@
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
 import { confirmDialog } from '../../shared/modal.js';
+import { getSession } from '../../shared/session.js';
 import { registerModule, navigateToModule } from '../../shared/router.js';
 
 let _container = null;
@@ -28,14 +29,23 @@ function _ini(name) {
 
 export function renderPeoplePage(container) {
   _container = container;
+  const session = getSession() || {};
+  const isSchool = session.vertical === 'school';
   container.innerHTML =
     '<div class="ppl-wrap" id="pplWrap">' +
       '<div class="ppl-toolbar">' +
         '<div class="ppl-title"><span>&#128101;</span> People</div>' +
         '<div class="ppl-spacer"></div>' +
+        (isSchool
+          ? '<button class="ppl-btn ghost" type="button" id="pplTeachersBtn">Teachers…</button>'
+          : '') +
         '<button class="ppl-btn" type="button" id="pplAddBtn">+ Add employee</button>' +
       '</div>' +
-      '<div class="ppl-hint mf">Add teammates with a temporary password. They must change it on first sign-in. Seats follow your plan.</div>' +
+      '<div class="ppl-hint mf">' +
+      (isSchool
+        ? 'School teachers are managed in School Settings → Roster. Use People for other staff seats.'
+        : 'Add teammates with a temporary password. They must change it on first sign-in. Seats follow your plan.') +
+      '</div>' +
       '<div class="ppl-stats" id="pplStats"></div>' +
       '<div id="pplContent"></div>' +
       '<div class="ppl-modal" id="pplModal"><div class="ppl-modal-box" id="pplModalBox"></div></div>' +
@@ -114,6 +124,8 @@ export function pplRender() {
 export function pplShowForm() {
   const box = _container && _container.querySelector('#pplModalBox');
   if (!box) return;
+  const session = getSession() || {};
+  const isSchool = session.vertical === 'school';
   box.innerHTML =
     '<div class="ppl-modal-title">Add employee</div>' +
     '<div class="ppl-field"><label>Full name *</label><input type="text" id="pplF_name" placeholder="Jane Doe" autocomplete="name"></div>' +
@@ -123,12 +135,15 @@ export function pplShowForm() {
       '<option value="employee">Employee</option>' +
       '<option value="manager">Manager</option>' +
       '<option value="hr">HR</option>' +
-      '<option value="teacher">Teacher</option>' +
+      (isSchool ? '' : '<option value="teacher">Teacher</option>') +
       '<option value="office">Office</option>' +
       '<option value="school_admin">School admin</option>' +
       '<option value="parent">Parent</option>' +
       '<option value="admin">Admin</option>' +
     '</select></div>' +
+    (isSchool
+      ? '<div class="ppl-hint mf">Teachers: use School Settings → Roster (or Teachers…).</div>'
+      : '') +
     '<div class="ppl-form-actions">' +
       '<button class="ppl-btn ghost" type="button" data-action="close-modal">Cancel</button>' +
       '<button class="ppl-btn" type="button" id="pplSaveBtn">Create</button>' +
@@ -268,6 +283,20 @@ export async function pplClearPin(email) {
 function _bindEvents(container) {
   const addBtn = container.querySelector('#pplAddBtn');
   if (addBtn) addBtn.addEventListener('click', function () { pplShowForm(); });
+
+  const teachersBtn = container.querySelector('#pplTeachersBtn');
+  if (teachersBtn) {
+    teachersBtn.addEventListener('click', function () {
+      try {
+        sessionStorage.setItem('scs_open_tab', 'roster');
+        sessionStorage.setItem('scs_open_mode', 'manual');
+        sessionStorage.setItem('scs_open_entity', 'teachers');
+      } catch (_) {
+        /* ignore */
+      }
+      navigateToModule('school_settings');
+    });
+  }
 
   container.addEventListener('click', function (e) {
     const t = e.target.closest('[data-action]');

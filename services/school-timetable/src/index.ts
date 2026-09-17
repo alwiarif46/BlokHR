@@ -13,6 +13,13 @@ import {
   createHttpIdentityClient,
   type IdentityClient,
 } from './clients/identity-client';
+import { timetableDbAls } from './db-context';
+import {
+  createTimetableTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolTimetableAppOptions {
   dbPath: string;
@@ -25,13 +32,28 @@ export interface SchoolTimetableAppOptions {
 
 export async function createSchoolTimetableApp(
   options: SchoolTimetableAppOptions,
-): Promise<{ app: Express; service: TimetableService; db: SchoolTimetableSqlite }> {
-  const db = await SchoolTimetableSqlite.create(options.dbPath);
+): Promise<{
+  app: Express;
+  service: TimetableService;
+  db: SchoolTimetableSqlite;
+  pool?: TenantSqlitePool<SchoolTimetableSqlite>;
+  close?: () => Promise<void>;
+}> {
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolTimetableMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
 
-  const repo = new TimetableRepository(db);
+  const fallbackDb = await SchoolTimetableSqlite.create(options.dbPath);
+  await runSchoolTimetableMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createTimetableTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
+
+  const repo = new TimetableRepository(fallbackDb);
   const events = options.eventPublisher ?? new LogEventPublisher(options.logger);
   const service = new TimetableService(repo, events);
   const internalSecret =
@@ -44,6 +66,31 @@ export async function createSchoolTimetableApp(
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
   });
+
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/timetable',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        timetableDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/timetable', bindTenantDb);
+  }
 
   app.use(
     '/api/timetable',
@@ -60,7 +107,16 @@ export async function createSchoolTimetableApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, db };
+  return {
+    app,
+    service,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -82,3 +138,9 @@ export {
   createHttpIdentityClient,
   createStubIdentityClient,
 } from './clients/identity-client';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createTimetableTenantPool,
+} from './tenant-db';

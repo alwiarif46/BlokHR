@@ -14,7 +14,7 @@ describe('learning mount via /api/training', () => {
     app = ctx.app;
     db = ctx.db;
     learning = ctx.learning;
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@test.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@test.com']);
   });
 
   afterAll(async () => {

@@ -1,5 +1,7 @@
 import type { DatabaseEngine } from '../db/engine';
 import { tenureMonths, tenureYears, isInProbation } from '../formula';
+import { getBrandingForTenant } from '../tenant/branding-access';
+import { getTenantId } from '../tenant/context';
 
 // ── Types ──
 
@@ -425,8 +427,9 @@ export class TemplateEngine {
     }
 
     // Company name from branding
-    const branding = await context.db.get<{ company_name: string; [key: string]: unknown }>(
-      'SELECT company_name FROM branding WHERE id = 1',
+    const branding = await getBrandingForTenant<{ company_name: string; [key: string]: unknown }>(
+      context.db,
+      getTenantId(),
     );
     vars.company_name = branding?.company_name ?? '';
 

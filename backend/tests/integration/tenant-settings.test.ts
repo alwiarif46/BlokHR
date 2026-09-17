@@ -20,7 +20,7 @@ describe('Tenant settings — terminology (W-04)', () => {
     commercial = setup.commercial;
     await seedMember(db, { email: 'admin@shaavir.com', name: 'Admin' });
     await seedMember(db, { email: 'alice@shaavir.com', name: 'Alice' });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
   });
 
   afterEach(async () => {

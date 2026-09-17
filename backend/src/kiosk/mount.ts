@@ -2,6 +2,7 @@ import path from 'path';
 import type { Express } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import type { AppConfig } from '../config';
 import type { FeatureFlagService } from '../services/feature-flags';
 import { ClockRepository } from '../repositories/clock-repository';
@@ -73,7 +74,7 @@ export async function createKioskBundle(
       const q = query.toLowerCase().trim();
 
       if (deps.directory) {
-        const all = await deps.directory.listMembers(config.defaultTenantId);
+        const all = await deps.directory.listMembers(getTenantId(config.defaultTenantId));
         const fromDir = all
           .filter((m) => m.active)
           .filter(
@@ -100,10 +101,10 @@ export async function createKioskBundle(
         [key: string]: unknown;
       }>(
         `SELECT email, name, designation, group_id FROM members
-         WHERE active = 1
+         WHERE tenant_id = ? AND active = 1
          ORDER BY name ASC
          LIMIT ?`,
-        [Math.max(limit * 3, 120)],
+        [getTenantId(config.defaultTenantId), Math.max(limit * 3, 120)],
       );
       return rows
         .filter(
@@ -124,7 +125,7 @@ export async function createKioskBundle(
     async getMemberByEmail(email: string): Promise<KioskMemberSummary | null> {
       const clean = email.toLowerCase().trim();
       if (deps.directory) {
-        const all = await deps.directory.listMembers(config.defaultTenantId);
+        const all = await deps.directory.listMembers(getTenantId(config.defaultTenantId));
         const m = all.find((x) => x.active && x.email.toLowerCase() === clean);
         if (m) {
           return {
@@ -142,8 +143,8 @@ export async function createKioskBundle(
         group_id: string | null;
         [key: string]: unknown;
       }>(
-        'SELECT email, name, designation, group_id FROM members WHERE active = 1 AND lower(email) = ?',
-        [clean],
+        'SELECT email, name, designation, group_id FROM members WHERE tenant_id = ? AND active = 1 AND lower(email) = ?',
+        [getTenantId(config.defaultTenantId), clean],
       );
       if (!row) return null;
       return {
@@ -193,8 +194,8 @@ export function mountKioskRouter(
       tenantId: config.defaultTenantId,
       isAdmin: async (email: string) => {
         const row = await monolithDb.get<{ email: string }>(
-          'SELECT email FROM admins WHERE email = ?',
-          [email],
+          'SELECT email FROM admins WHERE tenant_id = ? AND email = ?',
+          [getTenantId(), email],
         );
         return !!row;
       },

@@ -14,7 +14,7 @@ describe('Multi-Provider Auth Module', () => {
     db = setup.db;
     await seedMember(db, { email: 'admin@shaavir.com', name: 'Admin' });
     await seedMember(db, { email: 'alice@shaavir.com', name: 'Alice' });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
   });
 
   afterEach(async () => { await db.close(); });
@@ -31,7 +31,7 @@ describe('Multi-Provider Auth Module', () => {
     });
 
     it('includes Microsoft provider when msal_client_id is set', async () => {
-      await db.run("UPDATE branding SET msal_client_id = 'test-msal-id' WHERE id = 1");
+      await db.run("UPDATE branding SET msal_client_id = 'test-msal-id' WHERE tenant_id = 'default'");
       const res = await request(app).get('/api/auth/providers');
       const ms = res.body.providers.find((p: { id: string }) => p.id === 'microsoft');
       expect(ms).toBeTruthy();
@@ -39,7 +39,7 @@ describe('Multi-Provider Auth Module', () => {
 
     it('includes OIDC provider when configured', async () => {
       await db.run(
-        "UPDATE branding SET oidc_enabled = 1, oidc_client_id = 'oidc-id', oidc_issuer_url = 'https://idp.example.com' WHERE id = 1",
+        "UPDATE branding SET oidc_enabled = 1, oidc_client_id = 'oidc-id', oidc_issuer_url = 'https://idp.example.com' WHERE tenant_id = 'default'",
       );
       const res = await request(app).get('/api/auth/providers');
       const oidc = res.body.providers.find((p: { id: string }) => p.id === 'oidc');
@@ -377,7 +377,7 @@ describe('Multi-Provider Auth Module', () => {
   describe('OIDC auth', () => {
     it('returns auth URL when configured', async () => {
       await db.run(
-        "UPDATE branding SET oidc_enabled = 1, oidc_client_id = 'client-123', oidc_issuer_url = 'https://idp.example.com', oidc_redirect_uri = 'https://app.shaavir.com/callback' WHERE id = 1",
+        "UPDATE branding SET oidc_enabled = 1, oidc_client_id = 'client-123', oidc_issuer_url = 'https://idp.example.com', oidc_redirect_uri = 'https://app.shaavir.com/callback' WHERE tenant_id = 'default'",
       );
       const res = await request(app).get('/api/auth/oidc/authorize');
       expect(res.status).toBe(200);
@@ -405,7 +405,7 @@ describe('Multi-Provider Auth Module', () => {
   describe('SAML auth', () => {
     it('returns login URL when configured', async () => {
       await db.run(
-        "UPDATE branding SET saml_enabled = 1, saml_entry_point = 'https://idp.corp.com/saml', saml_issuer = 'shaavir-app', saml_callback_url = 'https://app.shaavir.com/saml/callback' WHERE id = 1",
+        "UPDATE branding SET saml_enabled = 1, saml_entry_point = 'https://idp.corp.com/saml', saml_issuer = 'shaavir-app', saml_callback_url = 'https://app.shaavir.com/saml/callback' WHERE tenant_id = 'default'",
       );
       const res = await request(app).get('/api/auth/saml/login');
       expect(res.status).toBe(200);
@@ -431,7 +431,7 @@ describe('Multi-Provider Auth Module', () => {
   describe('POST /api/auth/ldap', () => {
     beforeEach(async () => {
       await db.run(
-        "UPDATE branding SET ldap_enabled = 1, ldap_url = 'ldap://dc.corp.com:389', ldap_search_base = 'DC=corp,DC=com' WHERE id = 1",
+        "UPDATE branding SET ldap_enabled = 1, ldap_url = 'ldap://dc.corp.com:389', ldap_search_base = 'DC=corp,DC=com' WHERE tenant_id = 'default'",
       );
       // Seed local credentials as LDAP fallback in dev mode
       await request(app).post('/api/auth/local/register')
@@ -447,7 +447,7 @@ describe('Multi-Provider Auth Module', () => {
     });
 
     it('rejects when LDAP not configured', async () => {
-      await db.run("UPDATE branding SET ldap_enabled = 0, ldap_url = '' WHERE id = 1");
+      await db.run("UPDATE branding SET ldap_enabled = 0, ldap_url = '' WHERE tenant_id = 'default'");
       const res = await request(app).post('/api/auth/ldap')
         .send({ email: 'alice@shaavir.com', password: 'pass' });
       expect(res.status).toBe(401);

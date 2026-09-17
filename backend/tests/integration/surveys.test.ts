@@ -16,7 +16,7 @@ describe('Employee Surveys Module', () => {
     await seedMember(db, { email: 'alice@shaavir.com', name: 'Alice' });
     await seedMember(db, { email: 'bob@shaavir.com', name: 'Bob' });
     await seedMember(db, { email: 'carol@shaavir.com', name: 'Carol' });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
   });
 
   afterEach(async () => {

@@ -74,6 +74,8 @@ describe('school_settings (F-07)', () => {
           total: 42,
         };
       }
+      if (path === '/day-schemes') return { daySchemes: [] };
+      if (path === '/sections') return { sections: [] };
       if (path === '/consents/summary') {
         return {
           summary: {
@@ -246,6 +248,19 @@ describe('school_settings (F-07)', () => {
     toastFn = vi.fn();
     navigateToModule = vi.fn();
 
+    let apiGet = vi.fn(async (path) => {
+      if (path === '/api/directory/members') {
+        return { members: [{ id: 't1', name: 'Priya', email: 'p@s.test', role: 'teacher' }] };
+      }
+      return {};
+    });
+    let apiPost = vi.fn(async (path) => {
+      if (path === '/api/directory/members/import') {
+        return { success: true, created: 1, skipped: 0, errors: [] };
+      }
+      return {};
+    });
+
     vi.doMock('../../shared/api.js', async () => {
       const actual = await vi.importActual('../../shared/api.js');
       return {
@@ -253,8 +268,8 @@ describe('school_settings (F-07)', () => {
         api: Object.assign(
           async () => null,
           {
-            get: vi.fn(),
-            post: vi.fn(),
+            get: apiGet,
+            post: apiPost,
             put: vi.fn(),
             patch: vi.fn(),
             delete: vi.fn(),
@@ -330,7 +345,8 @@ describe('school_settings (F-07)', () => {
     });
   });
 
-  it('downloads CSV template', () => {
+  it('downloads CSV template', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false })));
     vi.stubGlobal('URL', {
       createObjectURL: vi.fn(() => 'blob:template'),
       revokeObjectURL: vi.fn(),
@@ -343,9 +359,9 @@ describe('school_settings (F-07)', () => {
       return el;
     });
 
-    mod.scsDownloadTemplate();
+    await mod.scsDownloadTemplate();
     expect(clickSpy).toHaveBeenCalled();
-    expect(toastFn).toHaveBeenCalledWith(expect.stringMatching(/Template downloaded/), 'success');
+    expect(toastFn).toHaveBeenCalledWith(expect.stringMatching(/template downloaded/i), 'success');
   });
 
   it('import happy path renders counts', async () => {
@@ -370,6 +386,7 @@ describe('school_settings (F-07)', () => {
     expect(document.getElementById('scsImpCreated').textContent).toBe('2');
     expect(document.getElementById('scsImpEnrolled').textContent).toBe('2');
     expect(document.getElementById('scsImpSkipped').textContent).toBe('1');
+    expect(document.getElementById('scsImpTeachers').textContent).toBe('1');
     expect(document.getElementById('scsImpSchemes').textContent).toBe('1');
     expect(document.getElementById('scsImpClasses').textContent).toBe('2');
     expect(toastFn).toHaveBeenCalledWith(expect.stringMatching(/2 students/), 'success');

@@ -1,4 +1,5 @@
 import type { SchoolAttendanceDb } from '../db';
+import { currentAttendanceDb } from '../db-context';
 import type {
   AttendanceAuditRow,
   AttendanceExcuse,
@@ -60,7 +61,11 @@ function mapReasonCode(row: ReasonCodeRow): ReasonCode {
 }
 
 export class AttendanceRepository {
-  constructor(private readonly db: SchoolAttendanceDb) {}
+  constructor(private readonly fallbackDb: SchoolAttendanceDb) {}
+
+  private get db(): SchoolAttendanceDb {
+    return currentAttendanceDb(this.fallbackDb);
+  }
 
   async countReasonCodes(tenantId: string): Promise<number> {
     const row = await this.db.get<{ c: number }>(

@@ -15,7 +15,7 @@ describe('Mobile-Native Features Module', () => {
     await seedMember(db, { email: 'alice@shaavir.com', name: 'Alice', groupShiftStart: '09:00', groupShiftEnd: '18:00' });
     await seedMember(db, { email: 'bob@shaavir.com', name: 'Bob', groupShiftStart: '09:00', groupShiftEnd: '18:00' });
     await seedMember(db, { email: 'admin@shaavir.com', name: 'Admin' });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
   });
 
   afterEach(async () => { await db.close(); });

@@ -80,3 +80,7 @@ Every sidebar module has a matching L2 feature flag. Admins manage them under **
 - **School** — master switch `school_vertical` (derived from tenant vertical) plus per-module flags (`school_students`, `school_academics`, …).
 
 Toggling a flag hides the sidebar item and returns **404** for that module’s API routes (monolith guard + gateway cache for `/svc/*` and HR compat paths). The Features admin page itself cannot be disabled from the UI to avoid lockout.
+
+### Multi-tenant (Host map)
+
+Production resolves tenant from **Host** via `TENANT_HOST_MAP` on gateway + backend (see `docs/DEPLOYMENT-VERCEL-RAILWAY.md`). Do not point two organizations at one Railway backend without separate Host → tenant entries. Branding/setup/admins/credentials are per `tenant_id` (migration `055_tenant_isolation`).

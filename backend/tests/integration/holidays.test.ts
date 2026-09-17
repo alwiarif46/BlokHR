@@ -305,7 +305,7 @@ describe('Holiday Calendar Module', () => {
 
   describe('POST /api/holidays/import', () => {
     beforeEach(async () => {
-      await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', ['admin@shaavir.com']);
+      await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
     });
 
     it('rejects non-admin', async () => {

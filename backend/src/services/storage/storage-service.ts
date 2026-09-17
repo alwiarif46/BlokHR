@@ -4,6 +4,8 @@ import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../../db/engine';
 import type { StorageProvider, StorageConfig } from './storage-provider';
 import { createStorageProvider } from './storage-provider';
+import { getBrandingForTenant, ensureBrandingRow } from '../../tenant/branding-access';
+import { getTenantId } from '../../tenant/context';
 
 // ── Row types ──
 
@@ -58,7 +60,7 @@ export class StorageService {
    * Called lazily on first operation, or explicitly after config change.
    */
   async loadConfig(): Promise<StorageConfig> {
-    const row = await this.db.get<{
+    const row = await getBrandingForTenant<{
       storage_provider: string;
       storage_local_path: string;
       storage_azure_connection_string: string;
@@ -69,7 +71,7 @@ export class StorageService {
       storage_aws_secret_key: string;
       storage_max_file_size_mb: number;
       [key: string]: unknown;
-    }>('SELECT * FROM branding WHERE id = 1', []);
+    }>(this.db);
 
     this.config = {
       provider: (row?.storage_provider as StorageConfig['provider']) ?? 'local',
@@ -129,8 +131,10 @@ export class StorageService {
     if (sets.length === 0) return { success: false, error: 'No fields to update' };
 
     sets.push("updated_at = datetime('now')");
-    vals.push(1);
-    await this.db.run(`UPDATE branding SET ${sets.join(', ')} WHERE id = ?`, vals);
+    const tid = getTenantId('default');
+    await ensureBrandingRow(this.db, tid);
+    vals.push(tid);
+    await this.db.run(`UPDATE branding SET ${sets.join(', ')} WHERE tenant_id = ?`, vals);
 
     // Reload config to pick up changes
     await this.loadConfig();

@@ -5,7 +5,7 @@
 
 import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
-import { registerModule } from '../../shared/router.js';
+import { registerModule, navigateToModule } from '../../shared/router.js';
 
 const TABS = ['classes', 'grid', 'cover'];
 const WEEK_DAYS = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
@@ -226,11 +226,6 @@ function _renderClasses(el) {
 }
 
 function _sectionsPanel() {
-  const schemeOpts = _daySchemes
-    .map(function (s) {
-      return '<option value="' + _esc(s.id) + '">' + _esc(s.label) + '</option>';
-    })
-    .join('');
   const rows = _sections
     .map(function (s) {
       return (
@@ -249,20 +244,11 @@ function _sectionsPanel() {
 
   return (
     '<div class="stt-card">' +
-    '<form class="stt-form" data-form="section">' +
-    '<div class="stt-form-title">New section</div>' +
-    '<input class="stt-input" name="class_label" placeholder="Class label (e.g. 8)" required />' +
-    '<input class="stt-input" name="section" placeholder="Section (e.g. A)" required />' +
-    '<input class="stt-input" name="academic_session_id" placeholder="Academic session id" required />' +
-    '<select class="stt-input" name="day_scheme_id" required><option value="">Day scheme…</option>' +
-    schemeOpts +
-    '</select>' +
-    '<input class="stt-input" name="class_teacher_member_id" placeholder="Class teacher member id (optional)" />' +
-    '<button type="submit" class="stt-btn">Create section</button>' +
-    '</form>' +
+    '<div class="stt-hint">Manage class sections in School Settings → Roster (Classes). Timetable keeps the grid and allocations here.</div>' +
+    '<button type="button" class="stt-btn ghost" data-action="go-roster-classes">Open Roster → Classes</button>' +
     (_daySchemes.length
       ? ''
-      : '<div class="stt-hint">No day schemes yet — create one under Grid helpers or import from School Settings.</div>') +
+      : '<div class="stt-hint">No day schemes yet — add periods under School Settings → Roster.</div>') +
     '<table class="stt-table"><thead><tr><th>Class</th><th>Section</th><th>Id</th><th></th></tr></thead><tbody>' +
     (rows || '<tr><td colspan="4">No sections</td></tr>') +
     '</tbody></table></div>'
@@ -455,11 +441,8 @@ function _renderGrid(el) {
   }
 
   const schemeForm =
-    '<form class="stt-form inline" data-form="day-scheme">' +
-    '<div class="stt-form-title">Quick day scheme (Mon–Fri, 4 periods)</div>' +
-    '<input class="stt-input" name="label" placeholder="Label" value="Mon-Fri" required />' +
-    '<button type="submit" class="stt-btn ghost">Create default scheme</button>' +
-    '</form>';
+    '<div class="stt-hint">Day schemes and periods are managed in School Settings → Roster.</div>' +
+    '<button type="button" class="stt-btn ghost" data-action="go-roster-periods">Open Roster → Periods</button>';
 
   el.innerHTML =
     '<div class="stt-toolbar">' +
@@ -560,6 +543,20 @@ async function _onClick(e) {
   if (action === 'panel') {
     _panel = btn.dataset.panel;
     sttRender();
+    return;
+  }
+  if (action === 'go-roster-classes' || action === 'go-roster-periods') {
+    try {
+      sessionStorage.setItem('scs_open_tab', 'roster');
+      sessionStorage.setItem('scs_open_mode', 'manual');
+      sessionStorage.setItem(
+        'scs_open_entity',
+        action === 'go-roster-classes' ? 'classes' : 'periods',
+      );
+    } catch (_) {
+      /* ignore */
+    }
+    navigateToModule('school_settings');
     return;
   }
   if (action === 'del-section') {
@@ -678,18 +675,14 @@ async function _onSubmit(e) {
   const kind = form.dataset.form;
 
   if (kind === 'section') {
-    const res = await _tt().post('/sections', {
-      class_label: String(fd.get('class_label') || ''),
-      section: String(fd.get('section') || ''),
-      academic_session_id: String(fd.get('academic_session_id') || ''),
-      day_scheme_id: String(fd.get('day_scheme_id') || ''),
-      class_teacher_member_id: String(fd.get('class_teacher_member_id') || '') || null,
-    });
-    if (_err(res, 'create failed')) toast(_err(res), 'error');
-    else {
-      toast('Section created', 'success');
-      sttLoadData();
+    try {
+      sessionStorage.setItem('scs_open_tab', 'roster');
+      sessionStorage.setItem('scs_open_mode', 'manual');
+      sessionStorage.setItem('scs_open_entity', 'classes');
+    } catch (_) {
+      /* ignore */
     }
+    navigateToModule('school_settings');
     return;
   }
   if (kind === 'subject') {
@@ -721,25 +714,14 @@ async function _onSubmit(e) {
     return;
   }
   if (kind === 'day-scheme') {
-    const periods = [0, 1, 2, 3].map(function (i) {
-      return {
-        index: i,
-        label: 'P' + (i + 1),
-        start_time: String(8 + i).padStart(2, '0') + ':00',
-        end_time: String(8 + i).padStart(2, '0') + ':45',
-        is_teaching: true,
-      };
-    });
-    const res = await _tt().post('/day-schemes', {
-      label: String(fd.get('label') || 'Mon-Fri'),
-      kind: 'weekly',
-      periods: periods,
-    });
-    if (_err(res, 'scheme failed')) toast(_err(res), 'error');
-    else {
-      toast('Day scheme created', 'success');
-      sttLoadData();
+    try {
+      sessionStorage.setItem('scs_open_tab', 'roster');
+      sessionStorage.setItem('scs_open_mode', 'manual');
+      sessionStorage.setItem('scs_open_entity', 'periods');
+    } catch (_) {
+      /* ignore */
     }
+    navigateToModule('school_settings');
     return;
   }
   if (kind === 'absence') {

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import { AppError, asyncHandler } from '../app';
 import { LeavePolicyRepository } from '../repositories/leave-policy-repository';
 import { LeavePolicyService } from '../services/leave-policy-service';
@@ -31,7 +32,7 @@ export function createLeavePolicyRouter(db: DatabaseEngine, logger: Logger): Rou
   async function requireAdmin(req: Request): Promise<string> {
     const callerEmail = req.identity?.email ?? '';
     if (!callerEmail) throw new AppError('Authentication required', 401);
-    const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [callerEmail]);
+    const isAdmin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), callerEmail]);
     if (!isAdmin) throw new AppError('Admin access required', 403);
     return callerEmail;
   }

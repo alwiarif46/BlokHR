@@ -12,6 +12,13 @@ import {
   HttpTimetableClient,
   type TimetableClient,
 } from './clients/timetable-client';
+import { attendanceDbAls } from './db-context';
+import {
+  createAttendanceTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolAttendanceAppOptions {
   dbPath: string;
@@ -24,13 +31,28 @@ export interface SchoolAttendanceAppOptions {
 
 export async function createSchoolAttendanceApp(
   options: SchoolAttendanceAppOptions,
-): Promise<{ app: Express; service: AttendanceService; db: SchoolAttendanceSqlite }> {
-  const db = await SchoolAttendanceSqlite.create(options.dbPath);
+): Promise<{
+  app: Express;
+  service: AttendanceService;
+  db: SchoolAttendanceSqlite;
+  pool?: TenantSqlitePool<SchoolAttendanceSqlite>;
+  close?: () => Promise<void>;
+}> {
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolAttendanceMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
 
-  const repo = new AttendanceRepository(db);
+  const fallbackDb = await SchoolAttendanceSqlite.create(options.dbPath);
+  await runSchoolAttendanceMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createAttendanceTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
+
+  const repo = new AttendanceRepository(fallbackDb);
   const events = options.eventPublisher ?? new LogEventPublisher(options.logger);
   const service = new AttendanceService(repo, events);
   const internalSecret =
@@ -46,6 +68,31 @@ export async function createSchoolAttendanceApp(
     res.json({ ok: true });
   });
 
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/attendance',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        attendanceDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/attendance', bindTenantDb);
+  }
+
   app.use(
     '/api/attendance',
     createAttendanceRouter(service, { internalSecret, timetable }),
@@ -56,7 +103,16 @@ export async function createSchoolAttendanceApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, db };
+  return {
+    app,
+    service,
+    db: fallbackDb,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -79,3 +135,9 @@ export * from './events';
 export { asRole, guardRoutes, staffFromHeaders } from './role-guard';
 export type { Role, RoutePolicy } from './role-guard';
 export { ATTENDANCE_ROUTE_POLICIES } from './route-policies';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createAttendanceTenantPool,
+} from './tenant-db';

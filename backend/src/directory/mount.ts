@@ -6,12 +6,11 @@ import type { AppConfig } from '../config';
 import type { EventBus } from '../events';
 import type { EntitlementsService } from '@blokhr/entitlements';
 import {
-  DirectorySqlite,
-  runDirectoryMigrations,
-  DirectoryRepository,
-  DirectoryService,
   createDirectoryRouter,
+  createDirectoryApp,
   DIRECTORY_DEFAULTS,
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
   type DirectoryMember,
 } from '@blokhr/directory';
 import type { FeatureFlagService } from '../services/feature-flags';
@@ -47,10 +46,11 @@ export async function ensureDefaultGroup(
 function createProjectionPort(db: DatabaseEngine, logger: Logger) {
   return {
     async upsertMember(member: DirectoryMember): Promise<void> {
+      const tenantId = member.tenantId || 'default';
       await ensureDefaultGroup(db, member.timezone);
       const existing = await db.get<{ id: string }>(
-        'SELECT id FROM members WHERE email = ? OR id = ?',
-        [member.email, member.id],
+        'SELECT id FROM members WHERE tenant_id = ? AND (email = ? OR id = ?)',
+        [tenantId, member.email, member.id],
       );
       if (existing) {
         await db.run(
@@ -65,7 +65,7 @@ function createProjectionPort(db: DatabaseEngine, logger: Logger) {
             individual_shift_end = ?,
             active = ?,
             updated_at = datetime('now')
-           WHERE id = ? OR email = ?`,
+           WHERE tenant_id = ? AND (id = ? OR email = ?)`,
           [
             member.name,
             member.groupId,
@@ -76,6 +76,7 @@ function createProjectionPort(db: DatabaseEngine, logger: Logger) {
             member.individualShiftStart,
             member.individualShiftEnd,
             member.active ? 1 : 0,
+            tenantId,
             member.id,
             member.email,
           ],
@@ -83,10 +84,11 @@ function createProjectionPort(db: DatabaseEngine, logger: Logger) {
       } else {
         await db.run(
           `INSERT INTO members (
-            id, email, name, group_id, member_type_id, role, designation,
+            tenant_id, id, email, name, group_id, member_type_id, role, designation,
             phone, timezone, individual_shift_start, individual_shift_end, active
-          ) VALUES (?, ?, ?, ?, 'fte', ?, ?, ?, ?, ?, ?, ?)`,
+          ) VALUES (?, ?, ?, ?, ?, 'fte', ?, ?, ?, ?, ?, ?, ?)`,
           [
+            tenantId,
             member.id,
             member.email,
             member.name,
@@ -101,13 +103,14 @@ function createProjectionPort(db: DatabaseEngine, logger: Logger) {
           ],
         );
       }
-      logger.debug({ email: member.email }, 'Projected directory member to monolith');
+      logger.debug({ email: member.email, tenantId }, 'Projected directory member to monolith');
     },
 
-    async deactivateMember(id: string): Promise<void> {
+    async deactivateMember(id: string, tenantId?: string): Promise<void> {
+      const tid = tenantId || 'default';
       await db.run(
-        "UPDATE members SET active = 0, updated_at = datetime('now') WHERE id = ? OR email = ?",
-        [id, id],
+        "UPDATE members SET active = 0, updated_at = datetime('now') WHERE tenant_id = ? AND (id = ? OR email = ?)",
+        [tid, id, id],
       );
     },
   };
@@ -122,10 +125,17 @@ export async function createDirectoryBundle(
     eventBus?: EventBus;
   },
 ): Promise<DirectoryBundle> {
-  const directoryDbPath =
+  const legacyDirectoryPath =
     config.nodeEnv === 'test' ? ':memory:' : config.directoryDbPath;
+  const directoryDbPath =
+    config.nodeEnv === 'test' || !isTenantDbSplitEnabled()
+      ? legacyDirectoryPath
+      : resolveTenantDbPath({
+          tenantId: config.defaultTenantId,
+          serviceFile: 'directory.db',
+          legacyPath: legacyDirectoryPath,
+        });
 
-  const db = await DirectorySqlite.create(directoryDbPath);
   const migrationsDir = path.resolve(
     __dirname,
     '..',
@@ -135,7 +145,6 @@ export async function createDirectoryBundle(
     'directory',
     'migrations',
   );
-  await runDirectoryMigrations(db, migrationsDir);
 
   const settingsService = new SettingsService(
     new SettingsRepository(deps.monolithDb),
@@ -148,9 +157,11 @@ export async function createDirectoryBundle(
   const authService = new MultiAuthService(deps.monolithDb, logger, settingsService);
   const projection = createProjectionPort(deps.monolithDb, logger);
 
-  const service = new DirectoryService({
-    repo: new DirectoryRepository(db),
-    defaultTenantId: config.defaultTenantId,
+  const created = await createDirectoryApp({
+    dbPath: directoryDbPath,
+    migrationsDir,
+    logger,
+    tenantId: config.defaultTenantId,
     seatChecker: {
       checkSeats: (tenantId, activeSeats) =>
         deps.entitlements.checkSeats(tenantId, activeSeats),
@@ -168,11 +179,13 @@ export async function createDirectoryBundle(
         }
       : undefined,
   });
+  const { service, db } = created;
 
   await ensureDefaultGroup(deps.monolithDb);
 
   // One-time backfill from legacy monolith members when directory is empty
   const legacy = await deps.monolithDb.all<{
+    tenant_id: string;
     id: string;
     email: string;
     name: string;
@@ -185,9 +198,10 @@ export async function createDirectoryBundle(
     individual_shift_end: string | null;
     active: number;
   }>(
-    `SELECT id, email, name, role, group_id, designation, phone, timezone,
+    `SELECT tenant_id, id, email, name, role, group_id, designation, phone, timezone,
             individual_shift_start, individual_shift_end, active
-     FROM members`,
+     FROM members WHERE tenant_id = ?`,
+    [config.defaultTenantId],
   );
 
   const imported = await service.backfillFromLegacy(
@@ -222,7 +236,8 @@ export async function createDirectoryBundle(
     service,
     db,
     close: async () => {
-      await db.close();
+      if (created.close) await created.close();
+      else await db.close();
     },
   };
 }

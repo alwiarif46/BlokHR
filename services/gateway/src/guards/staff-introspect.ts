@@ -78,6 +78,7 @@ async function lookupDirectoryMember(input: {
   directoryUrl: string;
   internalSecret: string;
   email: string;
+  tenantId: string;
 }): Promise<{ id: string; role: string; active: boolean } | null> {
   let res: Response;
   try {
@@ -87,7 +88,10 @@ async function lookupDirectoryMember(input: {
     url.searchParams.set('email', input.email);
     res = await fetch(url.toString(), {
       method: 'GET',
-      headers: { 'X-Blok-Internal': input.internalSecret },
+      headers: {
+        'X-Blok-Internal': input.internalSecret,
+        'X-Blok-Tenant': input.tenantId,
+      },
     });
   } catch {
     throw new StaffIntrospectUnavailableError('directory_lookup_failed');
@@ -149,10 +153,12 @@ export function createHttpStaffIntrospect(input: {
     }
 
     const isAdmin = body.isAdmin === true;
+    const tenantId = (body.tenantId ?? '').trim() || 'default';
     const member = await lookupDirectoryMember({
       directoryUrl: input.directoryUrl,
       internalSecret: input.internalSecret,
       email: body.email,
+      tenantId,
     });
     const role = resolveStaffRole(member?.role, isAdmin);
 
@@ -160,7 +166,7 @@ export function createHttpStaffIntrospect(input: {
       active: true,
       email: body.email,
       name: body.name ?? body.email,
-      tenantId: (body.tenantId ?? '').trim() || 'default',
+      tenantId,
       isAdmin,
       isGlobalManager: body.isGlobalManager === true,
       isGlobalHR: body.isGlobalHR === true,

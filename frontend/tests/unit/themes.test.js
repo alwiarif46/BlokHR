@@ -59,17 +59,21 @@ describe('themes catalog and setTheme', () => {
     expect(document.body.classList.contains('guardian-body')).toBe(true);
   });
 
-  it('swaps mono logos when theme changes between dark and clean', () => {
+  it('swaps mono logos when theme changes between dark and light surfaces', () => {
     setTheme('chromium');
     expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
       'blok-mono-white.png',
     );
-    setTheme('clean');
+    setTheme('neural');
     expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
       'blok-mono-ink.png',
     );
     expect(document.getElementById('loginLogoImg').getAttribute('src')).toContain(
       'blok-mono-ink.png',
+    );
+    setTheme('clean');
+    expect(document.getElementById('loginLogoImg').getAttribute('src')).toContain(
+      'blok-mono-white.png',
     );
   });
 });

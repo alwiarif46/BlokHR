@@ -124,6 +124,8 @@ export interface AppConfig {
   captureRollcallDbPath: string;
   transportDbPath: string;
   defaultTenantId: string;
+  /** JSON map of hostname → tenant id for multi-tenant Host resolution. */
+  tenantHostMap: string;
   trialSeatLimit: number;
   razorpayKeyId: string | undefined;
   razorpayKeySecret: string | undefined;
@@ -250,6 +252,7 @@ export function loadConfig(): AppConfig {
     })(),
     transportDbPath: envDefault('TRANSPORT_DB_PATH', './transport.db'),
     defaultTenantId: envDefault('DEFAULT_TENANT_ID', 'default'),
+    tenantHostMap: envDefault('TENANT_HOST_MAP', ''),
     trialSeatLimit: envInt('TRIAL_SEAT_LIMIT', 25),
     razorpayKeyId: env('RAZORPAY_KEY_ID'),
     razorpayKeySecret: env('RAZORPAY_KEY_SECRET'),

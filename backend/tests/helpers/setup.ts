@@ -139,6 +139,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     captureRollcallDbPath: ':memory:',
     transportDbPath: ':memory:',
     defaultTenantId: 'default',
+    tenantHostMap: '',
     trialSeatLimit: 25,
     razorpayKeyId: undefined,
     razorpayKeySecret: undefined,
@@ -151,7 +152,9 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
  * Creates a fully-wired test app with in-memory SQLite, migrations applied,
  * and all routes mounted. Returns the app, db, and SSE broadcaster.
  */
-export async function createTestApp(): Promise<{
+export async function createTestApp(
+  configOverrides: Partial<AppConfig> = {},
+): Promise<{
   app: Express;
   db: DatabaseEngine;
   broadcaster: SseBroadcaster;
@@ -172,7 +175,7 @@ export async function createTestApp(): Promise<{
   const runner = new MigrationRunner(db, migrationsDir, testLogger);
   await runner.run();
 
-  const config = testConfig();
+  const config = testConfig(configOverrides);
   const broadcaster = new SseBroadcaster(testLogger, 60_000);
   const mockFaceApi = new MockFaceApiClient();
   const mockLlm = new MockLlmClient();
@@ -333,9 +336,10 @@ export async function seedMember(
     [groupId, groupName, shiftStart, shiftEnd],
   );
   await db.run(
-    `INSERT OR IGNORE INTO members (id, email, name, group_id, active, individual_shift_start, individual_shift_end)
-     VALUES (?, ?, ?, ?, 1, ?, ?)`,
+    `INSERT OR IGNORE INTO members (tenant_id, id, email, name, group_id, active, individual_shift_start, individual_shift_end)
+     VALUES (?, ?, ?, ?, ?, 1, ?, ?)`,
     [
+      'default',
       email,
       email,
       name,

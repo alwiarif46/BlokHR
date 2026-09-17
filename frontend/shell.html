@@ -764,7 +764,7 @@
     <!-- Boot script — loads shared infrastructure, then boots -->
     <script type="module">
       import { initApi, api, isMockMode, setSchoolTenantId, setHrTenantId } from './shared/api.js';
-      import { saveSession, loadSession, clearSession, getSession, updateSession } from './shared/session.js';
+      import { saveSession, loadSession, clearSession, getSession, updateSession, setTenantId } from './shared/session.js';
       import { toast, setToastDuration } from './shared/toast.js';
       import { setTheme, applyBranding, syncThemeDots } from './shared/themes.js';
       import { loadPrefs } from './shared/prefs.js';
@@ -1510,6 +1510,12 @@
         try {
           const status = await api.get('/api/setup/status');
           clearTimeout(_bootTimeout);
+          /* Bind session storage + school/HR API paths to host-resolved tenant. */
+          const resolvedTenant =
+            (status && (status.tenantId || status.tenant_id)) || 'default';
+          setTenantId(resolvedTenant);
+          setSchoolTenantId(resolvedTenant);
+          setHrTenantId(resolvedTenant);
           const sessionEarly = loadSession();
           const vertical =
             (status && status.vertical) ||

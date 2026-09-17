@@ -5,10 +5,12 @@ import cors from 'cors';
 import { v4 as uuidv4 } from 'uuid';
 import type { Logger } from 'pino';
 import type { AppConfig } from './config';
+import { runWithTenant } from './tenant/context';
+import { parseTenantHostMap, resolveTenantId } from './tenant/resolve-tenant';
 
 /**
- * Augment Express Request with identity and correlationId.
- * Every downstream handler can access req.correlationId and req.identity.
+ * Augment Express Request with identity, correlationId, and tenantId.
+ * Every downstream handler can access req.correlationId, req.identity, req.tenantId.
  */
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
@@ -16,6 +18,7 @@ declare global {
     interface Request {
       correlationId: string;
       identity: { email: string; name: string } | null;
+      tenantId: string;
     }
   }
 }
@@ -144,6 +147,21 @@ export function createApp(
       req.identity = null;
     }
     next();
+  });
+
+  // ── 8b. Tenant resolution (Host map → X-Blok-Tenant → DEFAULT_TENANT_ID) ──
+  const hostMap = parseTenantHostMap(config.tenantHostMap);
+  app.use((req: Request, _res: Response, next: NextFunction) => {
+    const tenantId = resolveTenantId({
+      headers: req.headers as Record<string, string | string[] | undefined>,
+      hostMap,
+      trustBlokTenantHeader: true,
+      fallback: config.defaultTenantId,
+    });
+    req.tenantId = tenantId;
+    // Propagate for directory/school routers that read X-Blok-Tenant
+    req.headers['x-blok-tenant'] = tenantId;
+    runWithTenant(tenantId, () => next());
   });
 
   // ── 9. Health check (before auth, always accessible) ──

@@ -37,7 +37,7 @@ describe('AI Agent / Chatbot Module', () => {
     });
     await seedMember(db, { email: ADMIN, name: 'Admin' });
     await seedMember(db, { email: OTHER, name: 'Bob' });
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', [ADMIN]);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', ADMIN]);
   });
 
   afterEach(async () => {

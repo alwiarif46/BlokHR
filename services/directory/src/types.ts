@@ -67,7 +67,7 @@ export interface AuthPort {
 /** Keeps legacy monolith members in sync so clock/shift still works during extraction. */
 export interface MemberProjectionPort {
   upsertMember(member: DirectoryMember): Promise<void>;
-  deactivateMember(id: string): Promise<void>;
+  deactivateMember(id: string, tenantId?: string): Promise<void>;
 }
 
 export interface EventPort {

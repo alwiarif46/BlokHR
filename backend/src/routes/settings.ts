@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { getTenantId } from '../tenant/context';
 import { AppError, asyncHandler } from '../app';
 import { SettingsRepository } from '../repositories/settings-repository';
 import { LeaveRepository } from '../repositories/leave-repository';
@@ -74,7 +75,7 @@ export function createSettingsRouter(
     asyncHandler(async (req: Request, res: Response) => {
       const callerEmail = req.identity?.email ?? '';
       if (!callerEmail) throw new AppError('Authentication required', 401);
-      const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [callerEmail]);
+      const isAdmin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), callerEmail]);
       if (!isAdmin) throw new AppError('Admin access required', 403);
 
       const body = req.body as Record<string, unknown>;
@@ -140,8 +141,8 @@ export function createSettingsRouter(
     asyncHandler(async (req: Request, res: Response) => {
       const callerEmail = req.identity?.email ?? '';
       if (!callerEmail) throw new AppError('Authentication required', 401);
-      const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-        callerEmail,
+      const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+        getTenantId(), callerEmail,
       ]);
       if (!admin) throw new AppError('Admin access required', 403);
 
@@ -208,21 +209,22 @@ export function createSettingsRouter(
     asyncHandler(async (req: Request, res: Response) => {
       const callerEmail = req.identity?.email ?? '';
       if (!callerEmail) throw new AppError('Authentication required', 401);
-      const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-        callerEmail,
+      const admin = await db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+        getTenantId(), callerEmail,
       ]);
       if (!admin) throw new AppError('Admin access required', 403);
 
       const { id } = req.params;
       if (directory) {
-        const result = await directory.deactivateMember(id);
+        const result = await directory.deactivateMember(id, getTenantId());
         if (!result.success) {
           throw new AppError(result.error ?? 'Failed to deactivate member', result.status ?? 400);
         }
       } else {
-        await db.run("UPDATE members SET active = 0, updated_at = datetime('now') WHERE id = ?", [
-          id,
-        ]);
+        await db.run(
+          "UPDATE members SET active = 0, updated_at = datetime('now') WHERE tenant_id = ? AND id = ?",
+          [getTenantId(), id],
+        );
       }
 
       if (broadcaster) {
@@ -335,7 +337,7 @@ export function createSettingsRouter(
     asyncHandler(async (req: Request, res: Response) => {
       const callerEmail = req.identity?.email ?? '';
       if (!callerEmail) throw new AppError('Authentication required', 401);
-      const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [callerEmail]);
+      const isAdmin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), callerEmail]);
       if (!isAdmin) throw new AppError('Admin access required', 403);
 
       const { action } = req.params;
@@ -404,7 +406,7 @@ export function createSettingsRouter(
     asyncHandler(async (req: Request, res: Response) => {
       const callerEmail = req.identity?.email ?? '';
       if (!callerEmail) throw new AppError('Authentication required', 401);
-      const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [callerEmail]);
+      const isAdmin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), callerEmail]);
       if (!isAdmin) throw new AppError('Admin access required', 403);
 
       const { action } = req.params;
@@ -426,8 +428,8 @@ export function createSettingsRouter(
     asyncHandler(async (req: Request, res: Response) => {
       const callerEmail = req.identity?.email ?? '';
       if (!callerEmail) throw new AppError('Authentication required', 401);
-      const caller = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-        callerEmail,
+      const caller = await db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+        getTenantId(), callerEmail,
       ]);
       if (!caller) throw new AppError('Admin access required', 403);
 
@@ -439,23 +441,23 @@ export function createSettingsRouter(
 
       // Member must exist and be active
       const member = await db.get<{ email: string; active: number }>(
-        'SELECT email, active FROM members WHERE email = ?',
-        [target],
+        'SELECT email, active FROM members WHERE tenant_id = ? AND email = ?',
+        [getTenantId(), target],
       );
       if (!member) throw new AppError('Member not found', 404);
       if (member.active === 0) throw new AppError('Cannot promote an inactive member', 400);
 
       // Idempotent — already an admin is a no-op
       const alreadyAdmin = await db.get<{ email: string }>(
-        'SELECT email FROM admins WHERE email = ?',
-        [target],
+        'SELECT email FROM admins WHERE tenant_id = ? AND email = ?',
+        [getTenantId(), target],
       );
       if (alreadyAdmin) {
         res.json({ success: true, message: 'Already an admin', email: target });
         return;
       }
 
-      await db.run('INSERT INTO admins (email) VALUES (?)', [target]);
+      await db.run('INSERT INTO admins (tenant_id, email) VALUES (?, ?)', [getTenantId(), target]);
 
       if (broadcaster) {
         broadcaster.broadcast('settings-update', { source: 'admin_promoted', email: target });
@@ -472,8 +474,8 @@ export function createSettingsRouter(
     asyncHandler(async (req: Request, res: Response) => {
       const callerEmail = req.identity?.email ?? '';
       if (!callerEmail) throw new AppError('Authentication required', 401);
-      const caller = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-        callerEmail,
+      const caller = await db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+        getTenantId(), callerEmail,
       ]);
       if (!caller) throw new AppError('Admin access required', 403);
 
@@ -484,12 +486,12 @@ export function createSettingsRouter(
         throw new AppError('Cannot demote yourself', 400);
       }
 
-      const existing = await db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [
-        target,
+      const existing = await db.get<{ email: string }>('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+        getTenantId(), target,
       ]);
       if (!existing) throw new AppError('Admin not found', 404);
 
-      await db.run('DELETE FROM admins WHERE email = ?', [target]);
+      await db.run('DELETE FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), target]);
 
       if (broadcaster) {
         broadcaster.broadcast('settings-update', { source: 'admin_demoted', email: target });

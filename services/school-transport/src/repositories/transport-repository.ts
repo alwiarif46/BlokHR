@@ -1,4 +1,5 @@
 import type { SchoolTransportDb } from '../db';
+import { currentTransportDb } from '../db-context';
 import type {
   BoardingDirection,
   BoardingEvent,
@@ -113,7 +114,11 @@ function mapRouteStudent(row: RouteStudentRow): RouteStudent {
 }
 
 export class TransportRepository {
-  constructor(private readonly db: SchoolTransportDb) {}
+  constructor(private readonly fallbackDb: SchoolTransportDb) {}
+
+  private get db(): SchoolTransportDb {
+    return currentTransportDb(this.fallbackDb);
+  }
 
   async insertVehicle(v: Vehicle): Promise<Vehicle> {
     await this.db.run(

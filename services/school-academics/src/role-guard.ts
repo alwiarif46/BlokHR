@@ -129,6 +129,18 @@ export function guardRoutes(
       return;
     }
 
+    // Defense in depth: path :tenantId must match gateway X-Blok-Tenant when both present.
+    const pathTenant = String((req.params as { tenantId?: string }).tenantId ?? '')
+      .trim()
+      .toLowerCase();
+    const headerTenant = String(req.headers['x-blok-tenant'] ?? '')
+      .trim()
+      .toLowerCase();
+    if (pathTenant && headerTenant && pathTenant !== headerTenant) {
+      res.status(403).json({ error: 'tenant_mismatch' });
+      return;
+    }
+
     if (policy.internalOnly) {
       const internal = requireInternalMatch(req, opts.internalSecret);
       if (!('ok' in internal) || !internal.ok) {

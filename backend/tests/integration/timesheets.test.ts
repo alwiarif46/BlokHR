@@ -36,7 +36,7 @@ describe('Automated Timesheets Module', () => {
 
     // Alice reports to the manager; the admin is authorized everywhere
     await db.run('UPDATE members SET reports_to = ? WHERE email = ?', [MANAGER, EMAIL]);
-    await db.run('INSERT OR IGNORE INTO admins (email) VALUES (?)', [ADMIN]);
+    await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', ['default', ADMIN]);
   });
 
   afterEach(async () => {

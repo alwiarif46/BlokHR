@@ -17,6 +17,13 @@ import {
   type IdentityClient,
 } from './clients/identity-client';
 import { resolveInternalSecret } from './internal-auth';
+import { academicsDbAls } from './db-context';
+import {
+  createAcademicsTenantPool,
+  extractRequestTenant,
+  isTenantDbSplitEnabled,
+  type TenantSqlitePool,
+} from './tenant-db';
 
 export interface SchoolAcademicsAppOptions {
   dbPath: string;
@@ -37,17 +44,28 @@ export async function createSchoolAcademicsApp(
   service: AcademicsService;
   db: SchoolAcademicsSqlite;
   packs: SyllabusPackRegistry;
+  pool?: TenantSqlitePool<SchoolAcademicsSqlite>;
+  close?: () => Promise<void>;
 }> {
-  const db = await SchoolAcademicsSqlite.create(options.dbPath);
   const migrationsDir =
     options.migrationsDir ?? path.resolve(__dirname, '..', 'migrations');
-  await runSchoolAcademicsMigrations(db, migrationsDir);
+  const split = isTenantDbSplitEnabled();
+
+  const fallbackDb = await SchoolAcademicsSqlite.create(options.dbPath);
+  await runSchoolAcademicsMigrations(fallbackDb, migrationsDir);
+
+  const pool = split
+    ? createAcademicsTenantPool({
+        legacyPath: options.dbPath,
+        migrationsDir,
+      })
+    : undefined;
 
   const packsDir =
     options.packsDir ?? path.resolve(__dirname, '..', 'packs');
   const packs = loadSyllabusPackRegistry(packsDir);
 
-  const repo = new AcademicsRepository(db);
+  const repo = new AcademicsRepository(fallbackDb);
   const events = options.eventPublisher ?? new LogEventPublisher(options.logger);
   const service = new AcademicsService(repo, events, packs);
 
@@ -58,6 +76,31 @@ export async function createSchoolAcademicsApp(
   app.get('/health', (_req, res) => {
     res.json({ ok: true });
   });
+
+  if (pool) {
+    const bindTenantDb = async (
+      req: Request,
+      _res: Response,
+      next: NextFunction,
+    ) => {
+      const tid = extractRequestTenant({
+        headerTenant: String(req.headers['x-blok-tenant'] ?? ''),
+        path: req.path,
+        apiPrefix: '/api/academics',
+      });
+      if (!tid) {
+        next();
+        return;
+      }
+      try {
+        const tenantDb = await pool.get(tid);
+        academicsDbAls.run(tenantDb, () => next());
+      } catch (err) {
+        next(err);
+      }
+    };
+    app.use('/api/academics', bindTenantDb);
+  }
 
   app.use(
     '/api/academics',
@@ -84,7 +127,17 @@ export async function createSchoolAcademicsApp(
     res.status(500).json({ error: err.message || 'Internal server error' });
   });
 
-  return { app, service, db, packs };
+  return {
+    app,
+    service,
+    db: fallbackDb,
+    packs,
+    pool,
+    close: async () => {
+      await pool?.closeAll();
+      await fallbackDb.close();
+    },
+  };
 }
 
 export {
@@ -119,3 +172,9 @@ export {
   createHttpIdentityClient,
   createStubIdentityClient,
 } from './clients/identity-client';
+export {
+  resolveTenantDbPath,
+  isTenantDbSplitEnabled,
+  getTenantDataRoot,
+  createAcademicsTenantPool,
+} from './tenant-db';
