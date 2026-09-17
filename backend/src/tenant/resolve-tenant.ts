@@ -164,6 +164,15 @@ function candidateHosts(
 }
 
 /**
+ * Public Host for apex signupPortal detection behind gateway/Vercel proxies.
+ */
+export function resolvePublicHost(
+  headers: Record<string, string | string[] | undefined>,
+): string {
+  return candidateHosts(headers)[0] || '';
+}
+
+/**
  * Resolve tenant id for an HTTP request.
  * Order: TENANT_HOST_MAP → subdomain rule → trusted X-Blok-Tenant → fallback.
  */

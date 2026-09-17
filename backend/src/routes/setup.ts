@@ -6,7 +6,7 @@ import type { EntitlementsService } from '@blokhr/entitlements';
 import type { DirectoryService } from '@blokhr/directory';
 import { AppError, asyncHandler } from '../app';
 import { SetupService } from '../services/setup-service';
-import { isApexHost, normalizeHost, parseHostList } from '../tenant/resolve-tenant';
+import { isApexHost, normalizeHost, parseHostList, resolvePublicHost } from '../tenant/resolve-tenant';
 
 /**
  * Setup Wizard routes (3-screen first-run):
