@@ -12,6 +12,7 @@
     />
     <link rel="stylesheet" href="shared/shared.css?v=fonts-jakarta-1" />
     <link rel="stylesheet" href="modules/setup_wizard/setup_wizard.css" />
+    <link rel="stylesheet" href="modules/landing/landing.css" />
   </head>
   <body class="theme-chromium">
     <!-- Background Layer -->
@@ -29,41 +30,10 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════
-     SCREEN: APEX SIGNUP PORTAL (create workspace → subdomain)
+     SCREEN: APEX LANDING + SIGNUP PORTAL
      ══════════════════════════════════════════════════════════════ -->
-    <div class="screen" id="screenSignup">
-      <div class="wz-wrap" style="max-width: 440px; margin: 0 auto; padding: 48px 20px">
-        <div class="wz-card" style="padding: 28px">
-          <div class="wz-header" style="margin-bottom: 20px">
-            <div class="wz-title" style="font-size: 22px">Create your workspace</div>
-            <div class="wz-subtitle" style="margin-top: 8px">
-              Pick a unique subdomain. Your team will use it for setup and sign-in.
-            </div>
-          </div>
-          <div class="wz-fg">
-            <div class="wz-fl"><span class="req">*</span> Workspace URL</div>
-            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
-              <input
-                class="wz-fi"
-                id="suSlug"
-                placeholder="acme"
-                autocomplete="off"
-                spellcheck="false"
-                style="flex: 1; min-width: 120px"
-              />
-              <span id="suSuffix" style="font-size: 13px; opacity: 0.7">.13blok.com</span>
-            </div>
-            <div class="wz-fe" id="suErr" style="display: none"></div>
-            <div id="suHint" style="font-size: 12px; margin-top: 8px; opacity: 0.65"></div>
-          </div>
-          <div class="wz-br" style="margin-top: 20px">
-            <span></span>
-            <button class="wz-btn wz-btn-p" id="suBtn" disabled>
-              <span class="btn-text">Continue &#8594;</span><span class="wz-spin"></span>
-            </button>
-          </div>
-        </div>
-      </div>
+    <div class="screen" id="screenLanding">
+      <div id="landingRoot"></div>
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════
@@ -126,7 +96,7 @@
               </div>
               <p class="wz-vwarn">This choice is permanent for this workspace and cannot be changed later.</p>
               <p class="wz-vwarn" style="margin-top: 8px">
-                Each organization uses its own subdomain (for example <code>acme.13blok.com</code>).
+                Each organization uses its own subdomain (for example <code>acme.&lt;your-domain&gt;</code>).
                 Create a new workspace from the main site if you need another company.
               </p>
               <div class="wz-br">
@@ -840,6 +810,7 @@
       import { initRouter, navigateToModule, loadFeatureFlags, registerModule } from './shared/router.js';
       import { triggerLottie } from './shared/lottie.js';
       import { initWizard } from './modules/setup_wizard/setup_wizard.js';
+      import { initLanding, pickBootScreen } from './modules/landing/landing.js';
       import { applyBrand } from './shared/brand.js';
       import { applySchoolRoleGates } from './shared/school-roles.js';
 
@@ -901,7 +872,7 @@
         document.body.classList.toggle(
           'on-login-screen',
           id === 'screenLogin' ||
-            id === 'screenSignup' ||
+            id === 'screenLanding' ||
             id === 'screenChangePassword' ||
             id === 'screenForgotPassword' ||
             id === 'screenResetPassword',
@@ -921,7 +892,7 @@
             }
             document.getElementById('themeBar').style.display =
             id === 'screenLogin' ||
-            id === 'screenSignup' ||
+            id === 'screenLanding' ||
             id === 'screenChangePassword' ||
             id === 'screenForgotPassword' ||
             id === 'screenResetPassword'
@@ -1634,84 +1605,7 @@
       /* ══════════════════════════════════════════════════════════════
    BOOT SEQUENCE
    ══════════════════════════════════════════════════════════════ */
-      let _signupWired = false;
-      function initSignupPortal(status) {
-        const base = (status && status.subdomainBase) || '13blok.com';
-        const suffixEl = document.getElementById('suSuffix');
-        if (suffixEl) suffixEl.textContent = '.' + base;
-        const input = document.getElementById('suSlug');
-        const err = document.getElementById('suErr');
-        const hint = document.getElementById('suHint');
-        const btn = document.getElementById('suBtn');
-        if (!input || !btn) return;
-
-        function setErr(msg) {
-          if (!err) return;
-          if (msg) {
-            err.textContent = msg;
-            err.style.display = 'block';
-          } else {
-            err.textContent = '';
-            err.style.display = 'none';
-          }
-        }
-
-        async function refreshAvailability() {
-          const raw = (input.value || '').trim().toLowerCase();
-          btn.disabled = true;
-          setErr('');
-          if (hint) hint.textContent = '';
-          if (!raw) return;
-          if (raw.length < 3) {
-            setErr('Use at least 3 characters');
-            return;
-          }
-          const check = await api.get('/api/tenants/check/' + encodeURIComponent(raw));
-          if (!check || check._error) {
-            setErr((check && check.message) || 'Could not check availability');
-            return;
-          }
-          if (check.status === 'available') {
-            if (hint) hint.textContent = 'Available — ' + raw + '.' + base;
-            btn.disabled = false;
-          } else if (check.status === 'incomplete') {
-            if (hint) hint.textContent = 'Workspace exists but setup is unfinished — continue there';
-            btn.disabled = false;
-          } else if (check.status === 'taken') {
-            setErr('That workspace URL is already taken');
-          } else {
-            setErr('Invalid workspace name');
-          }
-        }
-
-        if (!_signupWired) {
-          _signupWired = true;
-          let timer = null;
-          input.addEventListener('input', () => {
-            btn.disabled = true;
-            clearTimeout(timer);
-            timer = setTimeout(refreshAvailability, 350);
-          });
-          btn.addEventListener('click', async () => {
-            const raw = (input.value || '').trim().toLowerCase();
-            if (!raw) return;
-            btn.disabled = true;
-            const claimed = await api.post('/api/tenants', { slug: raw });
-            if (claimed && !claimed._error && claimed.workspaceUrl) {
-              window.location.href = claimed.workspaceUrl;
-              return;
-            }
-            if (claimed && claimed.error === 'slug_taken') {
-              // Already claimed — send user to the subdomain to finish or log in
-              window.location.href = 'https://' + raw + '.' + base + '/';
-              return;
-            }
-            setErr((claimed && (claimed.message || claimed.error)) || 'Could not create workspace');
-            btn.disabled = false;
-          });
-        }
-        refreshAvailability();
-      }
+      let _signupPortalActive = false;
 
       async function boot() {
         initApi();
@@ -1721,7 +1615,10 @@
         } catch (_err) {
           /* ignore private mode */
         }
-        const _bootTimeout = setTimeout(() => showScreen('screenLogin'), 6000);
+        const _bootTimeout = setTimeout(() => {
+          if (_signupPortalActive) return;
+          showScreen('screenLogin');
+        }, 6000);
         try {
           const status = await api.get('/api/setup/status');
           clearTimeout(_bootTimeout);
@@ -1755,9 +1652,10 @@
             showScreen('screenLogin');
             return;
           }
-          if (status && status.signupPortal) {
-            initSignupPortal(status);
-            showScreen('screenSignup');
+          if (pickBootScreen(status) === 'landing') {
+            _signupPortalActive = true;
+            initLanding(document.getElementById('landingRoot'), status);
+            showScreen('screenLanding');
             return;
           }
           if (status && !status.setupComplete) {
@@ -1786,6 +1684,7 @@
           showScreen('screenLogin');
         } catch (_e) {
           clearTimeout(_bootTimeout);
+          if (_signupPortalActive) return;
           _resolvedTenant = 'default';
           setTenantId(_resolvedTenant);
           setSchoolTenantId(_resolvedTenant);
