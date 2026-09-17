@@ -4,6 +4,7 @@
 
 | Path | What |
 |------|------|
+| `docs/DEPLOYMENT-VERCEL-RAILWAY.md` | Cloud deploy: **Vercel frontend (Arif)** + **Railway backend (Ubaid)** |
 | `docs/INSTRUCTIONS.md` | Implementation prompt for Claude Code — read this first |
 | `docs/blokhr-frontend-architecture.md` | 2,221-line architecture spec (36 admin sections, 28 modules, ~525 tests) |
 | `docs/SERVER-CHANGES.md` | 11 server gaps + 4 migrations + ~100 new tests |

@@ -5,14 +5,19 @@ import {
   getValidThemes,
   getThemeLabel,
 } from '../../shared/themes.js';
+import { setTenantLogoOverride } from '../../shared/brand.js';
 
 describe('themes catalog and setTheme', () => {
   beforeEach(() => {
+    setTenantLogoOverride(false);
     document.body.className = 'guardian-body on-login-screen';
+    document.body.innerHTML = '<img id="hdrLogoImg" /><img id="loginLogoImg" />';
   });
 
   afterEach(() => {
+    setTenantLogoOverride(false);
     document.body.className = '';
+    document.body.innerHTML = '';
   });
 
   it('exposes exactly the four product themes', () => {
@@ -52,5 +57,19 @@ describe('themes catalog and setTheme', () => {
     const themes = Array.from(document.body.classList).filter((c) => /^theme-/.test(c));
     expect(themes).toEqual(['theme-chromium']);
     expect(document.body.classList.contains('guardian-body')).toBe(true);
+  });
+
+  it('swaps mono logos when theme changes between dark and clean', () => {
+    setTheme('chromium');
+    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
+      'blok-mono-white.png',
+    );
+    setTheme('clean');
+    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
+      'blok-mono-ink.png',
+    );
+    expect(document.getElementById('loginLogoImg').getAttribute('src')).toContain(
+      'blok-mono-ink.png',
+    );
   });
 });

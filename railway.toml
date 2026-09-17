@@ -1,0 +1,13 @@
+# Default CLI upload config — prefer gateway Dockerfile when running
+# `railway up --service gateway` from repo root. For backend, set
+# RAILWAY_DOCKERFILE_PATH=backend/Dockerfile (already on the service)
+# or temporarily swap dockerfilePath before `railway up --service backend`.
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "services/gateway/Dockerfile"
+
+[deploy]
+healthcheckPath = "/healthz"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

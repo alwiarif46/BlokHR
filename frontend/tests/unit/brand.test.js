@@ -1,5 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getBrand, applyBrand } from '../../shared/brand.js';
+import {
+  getBrand,
+  applyBrand,
+  resolveBrandLogoPath,
+  isLightBrandSurface,
+  syncBrandLogos,
+  setTenantLogoOverride,
+  MONO_LOGO_DARK,
+  MONO_LOGO_LIGHT,
+} from '../../shared/brand.js';
 
 describe('getBrand', () => {
   it('returns BlokHR brand for hr vertical', () => {
@@ -7,7 +16,9 @@ describe('getBrand', () => {
     expect(b.name).toBe('BlokHR');
     expect(b.colourPresetKey).toBe('blokhr');
     expect(b.wordmarkPath).toContain('blokhr-wordmark.svg');
-    expect(b.headerLogoPath).toContain('blokhr-header.png');
+    expect(b.headerLogoDarkPath).toContain('blok-mono-white.png');
+    expect(b.headerLogoLightPath).toContain('blok-mono-ink.png');
+    expect(b.headerLogoPath).toContain('blok-mono-white.png');
     expect(b.faviconPath).toContain('blokhr-favicon.svg');
     expect(b.tagline).toBeTruthy();
     expect(b.loginHeading).toBeTruthy();
@@ -18,8 +29,8 @@ describe('getBrand', () => {
     expect(b.name).toBe('BlokSchool');
     expect(b.colourPresetKey).toBe('blokschool');
     expect(b.wordmarkPath).toContain('blokschool-wordmark.svg');
-    expect(b.headerLogoPath).toContain('blokcampus-header.png');
-    expect(b.loginLogoPath).toContain('blokcampus-login.png');
+    expect(b.headerLogoPath).toContain('blok-mono-white.png');
+    expect(b.loginLogoPath).toContain('blok-mono-white.png');
     expect(b.loginLogoIncludesName).toBe(true);
     expect(b.faviconPath).toContain('blokschool-favicon.svg');
   });
@@ -30,9 +41,28 @@ describe('getBrand', () => {
   });
 });
 
+describe('resolveBrandLogoPath', () => {
+  it('uses ink mark for clean / light surfaces', () => {
+    expect(isLightBrandSurface('clean')).toBe(true);
+    expect(isLightBrandSurface('light')).toBe(true);
+    expect(resolveBrandLogoPath('clean')).toBe(MONO_LOGO_LIGHT);
+    expect(resolveBrandLogoPath('light')).toBe(MONO_LOGO_LIGHT);
+  });
+
+  it('uses white mark for dark themes', () => {
+    expect(isLightBrandSurface('chromium')).toBe(false);
+    expect(resolveBrandLogoPath('chromium')).toBe(MONO_LOGO_DARK);
+    expect(resolveBrandLogoPath('neural')).toBe(MONO_LOGO_DARK);
+    expect(resolveBrandLogoPath('holodeck')).toBe(MONO_LOGO_DARK);
+    expect(resolveBrandLogoPath('dark')).toBe(MONO_LOGO_DARK);
+  });
+});
+
 describe('applyBrand', () => {
   beforeEach(() => {
+    setTenantLogoOverride(false);
     document.head.innerHTML = '';
+    document.body.className = 'theme-chromium';
     document.body.innerHTML = `
       <div id="hdrLogoLetter">B</div>
       <img id="hdrLogoImg" style="display:none" />
@@ -50,24 +80,34 @@ describe('applyBrand', () => {
   });
 
   afterEach(() => {
+    setTenantLogoOverride(false);
     document.body.innerHTML = '';
     document.head.innerHTML = '';
+    document.body.className = '';
   });
 
-  it('swaps title, favicon, and wordmark for a school session', () => {
+  it('swaps title, favicon, and mono wordmark for a school session', () => {
     applyBrand('school');
     expect(document.title).toBe('BlokSchool');
     const icon = document.querySelector("link[rel='icon']");
     expect(icon).toBeTruthy();
     expect(icon.getAttribute('href')).toContain('blokschool-favicon.svg');
     const img = document.getElementById('hdrLogoImg');
-    expect(img.getAttribute('src')).toContain('blokcampus-header.png');
+    expect(img.getAttribute('src')).toContain('blok-mono-white.png');
     expect(img.style.display).toBe('block');
     expect(document.getElementById('hdrTitle').textContent).toBe('BlokSchool');
     expect(document.getElementById('loginLogoImg').getAttribute('src')).toContain(
-      'blokcampus-login.png',
+      'blok-mono-white.png',
     );
     expect(document.getElementById('loginTitle').hidden).toBe(true);
+  });
+
+  it('applies ink mono when theme is clean', () => {
+    document.body.className = 'theme-clean';
+    applyBrand('hr', 'clean');
+    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
+      'blok-mono-ink.png',
+    );
   });
 
   it('applies hr brand chrome', () => {
@@ -76,5 +116,12 @@ describe('applyBrand', () => {
     expect(document.querySelector("link[rel='icon']").getAttribute('href')).toContain(
       'blokhr-favicon.svg',
     );
+  });
+
+  it('skips mono sync when tenant logo override is active', () => {
+    setTenantLogoOverride(true);
+    document.getElementById('hdrLogoImg').setAttribute('src', 'tenant://logo');
+    syncBrandLogos('clean');
+    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toBe('tenant://logo');
   });
 });

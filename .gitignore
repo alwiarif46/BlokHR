@@ -2,6 +2,7 @@ node_modules/
 dist/
 *.db
 *.db-journal
+*.sqlite
 .env
 *.tar.gz
 .versions/

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://gateway-production-5a5f.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/svc/:path*",
+      "destination": "https://gateway-production-5a5f.up.railway.app/svc/:path*"
+    },
+    {
+      "source": "/healthz",
+      "destination": "https://gateway-production-5a5f.up.railway.app/healthz"
+    },
+    {
+      "source": "/guardian",
+      "destination": "/guardian.html"
+    },
+    {
+      "source": "/((?!shared/|modules/|assets/|tests/).*)",
+      "destination": "/shell.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/shared/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "public, max-age=60" }]
+    }
+  ]
+}

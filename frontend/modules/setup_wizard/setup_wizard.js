@@ -12,6 +12,7 @@
 import { isMockMode } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
 import { confirmDialog } from '../../shared/modal.js';
+import { syncBrandLogos } from '../../shared/brand.js';
 
 /** HR / company default accent (matches colour picker default). */
 const WZ_ACCENT_HR = '#F5A623';
@@ -38,6 +39,9 @@ export function initWizard(statusData) {
   if (!scr) return;
 
   _mock = isMockMode();
+  const wzTheme = scr.getAttribute('data-wz-theme') || 'dark';
+  const logoUrlEarly = ((document.getElementById('wzLogoUrl') || {}).value || '').trim();
+  if (!logoUrlEarly) syncBrandLogos(wzTheme);
   _deploymentMode =
     (statusData && statusData.deploymentMode) || 'cloud';
   wzApplyDeploymentMode(_deploymentMode);
@@ -513,6 +517,8 @@ function _bindEvents() {
       const next =
         scr.getAttribute('data-wz-theme') === 'dark' ? 'light' : 'dark';
       scr.setAttribute('data-wz-theme', next);
+      const logoUrl = ((document.getElementById('wzLogoUrl') || {}).value || '').trim();
+      if (!logoUrl) syncBrandLogos(next);
     });
   }
 

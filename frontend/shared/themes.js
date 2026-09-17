@@ -15,6 +15,8 @@
  * are loaded from the server — not hardcoded here.
  */
 
+import { syncBrandLogos, setTenantLogoOverride } from './brand.js';
+
 const VALID_THEMES = ['chromium', 'neural', 'holodeck', 'clean'];
 const THEME_NAMES = {
   chromium: 'Chromium Forge',
@@ -48,6 +50,7 @@ export function setTheme(name) {
   });
   document.body.className = ['theme-' + t].concat(keep).join(' ');
   syncThemeDots();
+  syncBrandLogos(t);
 }
 
 /**
@@ -173,6 +176,7 @@ export function applyBranding(branding) {
   if (hdrLogoLetter) hdrLogoLetter.textContent = name[0] || 'B';
 
   if (branding.logo_data_url) {
+    setTenantLogoOverride(true);
     const img = document.getElementById('loginLogoImg');
     if (img) {
       img.src = branding.logo_data_url;
@@ -186,6 +190,14 @@ export function applyBranding(branding) {
       hdrImg.src = branding.logo_data_url;
       hdrImg.style.display = 'block';
     }
+    const hdrWordmark = document.getElementById('hdrWordmark');
+    if (hdrWordmark) {
+      hdrWordmark.src = branding.logo_data_url;
+      hdrWordmark.style.display = 'block';
+    }
+  } else {
+    setTenantLogoOverride(false);
+    syncBrandLogos(_currentTheme);
   }
 }
 
