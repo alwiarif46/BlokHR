@@ -183,6 +183,7 @@ Deploy includes migrations that add `tenant_id` across operational and domain ta
 - `058_fact_tables_tenant_scope.sql` — attendance_daily, clock_events, monthly_late_counts, leave_requests, pto_balances
 - `059_domain_tables_tenant_scope.sql` — groups, role_assignments, regularizations, overtime_records, timesheets, time_entries, holidays
 - `060_pii_domain_tenant_scope.sql` — bd_meetings, documents, visitors, assets, expense_receipts, surveys, face/iris enrollments, clients/projects, chat_sessions
+- `061_rehome_default_setup_to_si.sql` — if a completed org still sits on `default`, move it to `si` and reopen the wizard on `blokhr.vercel.app`
 
 Run backend migrations **before** serving traffic from this release.
 
