@@ -524,6 +524,15 @@ export function createGatewayApp(options: GatewayAppOptions): {
         ...body,
         signupPortal,
         subdomainBase: subdomainBaseOut,
+        /* temporary deploy diagnostic — remove after apex smoke passes */
+        _apexDebug: {
+          publicHost,
+          apexHosts: [...apexHosts],
+          hostHdr: req.headers.host || null,
+          xfHost: req.headers['x-forwarded-host'] || null,
+          origin: req.headers.origin || null,
+          referer: req.headers.referer || null,
+        },
       });
     } catch (err) {
       logger.warn({ err }, 'setup/status upstream failed');

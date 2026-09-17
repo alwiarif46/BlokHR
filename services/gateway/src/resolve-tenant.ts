@@ -156,13 +156,18 @@ function candidateHosts(
       }
     })(),
   );
-  return [forwarded, originHost, refererHost, host].filter(Boolean);
+  /* Railway often sets XFHost equal to Host; prefer browser Origin/Referer then. */
+  const usefulForwarded = forwarded && forwarded !== host ? forwarded : '';
+  const ordered = [usefulForwarded, originHost, refererHost, host, forwarded].filter(
+    Boolean,
+  );
+  return [...new Set(ordered)];
 }
 
 /**
  * Public Host for upstreams (apex signupPortal, branding).
- * Prefer X-Forwarded-Host / Origin / Referer over the gateway's own Host
- * so Vercel → Railway rewrites still see www.13blok.com.
+ * Prefer a real browser Host over Railway's X-Forwarded-Host when that header
+ * merely echoes the gateway Host (common on *.up.railway.app).
  */
 export function resolvePublicHost(
   headers: Record<string, string | string[] | undefined>,

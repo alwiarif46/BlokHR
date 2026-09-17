@@ -63,7 +63,17 @@ describe('gateway resolveTenantId subdomain', () => {
     expect(normalizeTenantSlug('ab', reserved)).toBeNull();
   });
 
-  it('resolvePublicHost prefers X-Forwarded-Host over gateway Host', () => {
+  it('resolvePublicHost prefers Origin when XFHost echoes gateway Host', () => {
+    expect(
+      resolvePublicHost({
+        host: 'gateway-production-5a5f.up.railway.app',
+        'x-forwarded-host': 'gateway-production-5a5f.up.railway.app',
+        origin: 'https://www.13blok.com',
+      }),
+    ).toBe('www.13blok.com');
+  });
+
+  it('resolvePublicHost prefers distinct X-Forwarded-Host', () => {
     expect(
       resolvePublicHost({
         host: 'gateway-production-5a5f.up.railway.app',

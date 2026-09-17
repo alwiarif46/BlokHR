@@ -160,11 +160,17 @@ function candidateHosts(
       }
     })(),
   );
-  return [forwarded, originHost, refererHost, host].filter(Boolean);
+  const usefulForwarded = forwarded && forwarded !== host ? forwarded : '';
+  const ordered = [usefulForwarded, originHost, refererHost, host, forwarded].filter(
+    Boolean,
+  );
+  return [...new Set(ordered)];
 }
 
 /**
  * Public Host for apex signupPortal detection behind gateway/Vercel proxies.
+ * Prefer browser Origin/Referer when X-Forwarded-Host merely echoes Host
+ * (Railway edge on *.up.railway.app).
  */
 export function resolvePublicHost(
   headers: Record<string, string | string[] | undefined>,
