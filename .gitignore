@@ -5,3 +5,6 @@ dist
 *.zip
 *.tar.gz
 backend/public
+
+playwright-report/
+test-results/
