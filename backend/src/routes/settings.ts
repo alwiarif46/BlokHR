@@ -190,7 +190,12 @@ export function createSettingsRouter(
   /** GET /api/pending-actions — counts for the pending badge. */
   router.get(
     '/pending-actions',
-    asyncHandler(async (_req: Request, res: Response) => {
+    asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+      const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [callerEmail]);
+      if (!isAdmin) throw new AppError('Admin access required', 403);
+
       const counts = await service.getPendingCounts();
       res.json(counts);
     }),
@@ -199,7 +204,12 @@ export function createSettingsRouter(
   /** GET /api/pending-actions-detail — full detail for the pending modal. */
   router.get(
     '/pending-actions-detail',
-    asyncHandler(async (_req: Request, res: Response) => {
+    asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+      const isAdmin = await db.get('SELECT email FROM admins WHERE email = ?', [callerEmail]);
+      if (!isAdmin) throw new AppError('Admin access required', 403);
+
       const detail = await service.getPendingDetail();
       res.json(detail);
     }),
