@@ -38,6 +38,7 @@ import { isPublicSvcPath } from './guards/public-paths';
 import { resolveHrCompatRewrite } from './guards/hr-compat';
 import { createFeatureFlagCache, type FeatureFlagCache } from './guards/feature-flags';
 import {
+  isApexHost,
   parseHostList,
   parseReservedSlugs,
   parseTenantHostMap,
@@ -490,6 +491,44 @@ export function createGatewayApp(options: GatewayAppOptions): {
   // P12-02: never let a browser reach introspect via gateway (would attach X-Blok-Internal).
   app.all('/api/auth/introspect', (_req: Request, res: Response) => {
     res.status(404).json({ error: 'not_found' });
+  });
+
+  /**
+   * Apex signupPortal must be decided on the gateway: Vercel→Railway rewrites replace
+   * Host with the gateway hostname, and X-Forwarded-Host is unreliable. The gateway
+   * already resolved the public Host (XFHost / Origin / Referer / Host).
+   */
+  app.get('/api/setup/status', async (req: Request, res: Response) => {
+    const blokReq = req as BlokProxyRequest;
+    const publicHost = blokReq._blokPublicHost || resolvePublicHost(
+      req.headers as Record<string, string | string[] | undefined>,
+    );
+    const signupPortal = apexHosts.size > 0 && isApexHost(publicHost, apexHosts);
+    const subdomainBaseOut = (config.tenantSubdomainBase || '').trim() || null;
+    const tenantId = blokReq._blokHostTenant || config.defaultTenantId;
+    try {
+      const upstream = await fetch(
+        `${config.monolithUrl.replace(/\/$/, '')}/api/setup/status`,
+        {
+          method: 'GET',
+          headers: {
+            'X-Blok-Internal': config.internalSecret,
+            'X-Blok-Tenant': tenantId,
+            'X-Forwarded-Host': publicHost || '',
+            Accept: 'application/json',
+          },
+        },
+      );
+      const body = (await upstream.json().catch(() => ({}))) as Record<string, unknown>;
+      res.status(upstream.status).json({
+        ...body,
+        signupPortal,
+        subdomainBase: subdomainBaseOut,
+      });
+    } catch (err) {
+      logger.warn({ err }, 'setup/status upstream failed');
+      res.status(502).json({ error: 'upstream_unavailable', service: 'monolith' });
+    }
   });
 
   /**
