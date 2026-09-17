@@ -98,6 +98,11 @@ export class BdMeetingService {
     const meeting = await this.repo.getById(meetingId);
     if (!meeting) return { success: false, error: 'BD meeting not found' };
 
+    const canManage = await this.canManage(qualifierEmail, meeting.email);
+    if (!canManage) {
+      return { success: false, error: 'Unauthorized to qualify this BD meeting' };
+    }
+
     if (meeting.status !== 'pending') {
       return { success: false, error: `Cannot qualify with status "${meeting.status}"` };
     }
@@ -130,6 +135,11 @@ export class BdMeetingService {
   ): Promise<{ success: boolean; error?: string }> {
     const meeting = await this.repo.getById(meetingId);
     if (!meeting) return { success: false, error: 'BD meeting not found' };
+
+    const isAdmin = await this.isAdmin(approverEmail);
+    if (!isAdmin) {
+      return { success: false, error: 'Only Admin/HR can final-approve BD meetings' };
+    }
 
     if (meeting.status !== 'qualified' && meeting.status !== 'notified') {
       return { success: false, error: `Cannot approve with status "${meeting.status}"` };
@@ -165,6 +175,11 @@ export class BdMeetingService {
     const meeting = await this.repo.getById(meetingId);
     if (!meeting) return { success: false, error: 'BD meeting not found' };
 
+    const canManage = await this.canManage(rejectorEmail, meeting.email);
+    if (!canManage) {
+      return { success: false, error: 'Unauthorized to reject this BD meeting' };
+    }
+
     if (meeting.status === 'approved' || meeting.status === 'rejected') {
       return { success: false, error: `Cannot reject with status "${meeting.status}"` };
     }
@@ -195,7 +210,23 @@ export class BdMeetingService {
     return this.repo.getByEmail(email);
   }
 
-  // ── BD department check ──
+  // ── Authorization & BD department check ──
+
+  public async canManage(callerEmail: string, targetEmail: string): Promise<boolean> {
+    if (callerEmail.toLowerCase().trim() === targetEmail.toLowerCase().trim()) return true;
+    const isAdmin = await this.isAdmin(callerEmail);
+    if (isAdmin) return true;
+    const targetMember = await this.db.get<{ reports_to: string }>(
+      'SELECT reports_to FROM members WHERE email = ?',
+      [targetEmail],
+    );
+    return targetMember?.reports_to === callerEmail;
+  }
+
+  private async isAdmin(email: string): Promise<boolean> {
+    const row = await this.db.get('SELECT 1 FROM admins WHERE email = ?', [email]);
+    return !!row;
+  }
 
   /**
    * Determines if a member belongs to the Business Development department.

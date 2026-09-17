@@ -27,23 +27,23 @@ export function createBdMeetingRouter(
   router.post(
     '/bd-meetings',
     asyncHandler(async (req: Request, res: Response) => {
-      const { email, name, client, date, time, location, notes } = req.body as {
-        email?: string;
-        name?: string;
-        client?: string;
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      const { date, time, client, location, notes } = req.body as {
         date?: string;
         time?: string;
+        client?: string;
         location?: string;
         notes?: string;
       };
 
-      if (!email) throw new AppError('email is required', 400);
       if (!date) throw new AppError('date is required', 400);
       if (!client) throw new AppError('client is required', 400);
 
       const result = await service.submit({
-        email: email.toLowerCase().trim(),
-        name: name ?? email,
+        email: callerEmail.toLowerCase().trim(),
+        name: req.identity?.name ?? callerEmail,
         client: client.trim(),
         date,
         time: time ?? '',
@@ -59,12 +59,21 @@ export function createBdMeetingRouter(
     }),
   );
 
-  /** GET /api/bd-meetings?email= — list BD meetings for an employee. */
+  /** GET /api/bd-meetings — list BD meetings. */
   router.get(
     '/bd-meetings',
     asyncHandler(async (req: Request, res: Response) => {
-      const email = req.query.email as string | undefined;
-      if (!email) throw new AppError('email query parameter required', 400);
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      const email = (req.query.email as string) || callerEmail;
+
+      if (email.toLowerCase().trim() !== callerEmail.toLowerCase().trim()) {
+        const canView = await service.canManage(callerEmail, email);
+        if (!canView) {
+          throw new AppError('Unauthorized to view these BD meetings', 403);
+        }
+      }
 
       const meetings = await service.getByEmail(email.toLowerCase().trim());
       res.json({ meetings });
@@ -75,15 +84,16 @@ export function createBdMeetingRouter(
   router.post(
     '/bd-meetings/qualify',
     asyncHandler(async (req: Request, res: Response) => {
-      const { meetingId, approverEmail } = req.body as {
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      const { meetingId } = req.body as {
         meetingId?: string;
-        approverEmail?: string;
       };
 
       if (!meetingId) throw new AppError('meetingId is required', 400);
 
-      const qualifier = approverEmail ?? req.identity?.email ?? '';
-      const result = await service.qualify(meetingId, qualifier);
+      const result = await service.qualify(meetingId, callerEmail);
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to qualify', 400);
@@ -96,15 +106,16 @@ export function createBdMeetingRouter(
   router.post(
     '/bd-meetings/approve',
     asyncHandler(async (req: Request, res: Response) => {
-      const { meetingId, approverEmail } = req.body as {
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      const { meetingId } = req.body as {
         meetingId?: string;
-        approverEmail?: string;
       };
 
       if (!meetingId) throw new AppError('meetingId is required', 400);
 
-      const approver = approverEmail ?? req.identity?.email ?? '';
-      const result = await service.approve(meetingId, approver);
+      const result = await service.approve(meetingId, callerEmail);
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to approve', 400);
@@ -117,16 +128,17 @@ export function createBdMeetingRouter(
   router.post(
     '/bd-meetings/reject',
     asyncHandler(async (req: Request, res: Response) => {
-      const { meetingId, approverEmail, reason } = req.body as {
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      const { meetingId, reason } = req.body as {
         meetingId?: string;
-        approverEmail?: string;
         reason?: string;
       };
 
       if (!meetingId) throw new AppError('meetingId is required', 400);
 
-      const rejector = approverEmail ?? req.identity?.email ?? '';
-      const result = await service.reject(meetingId, rejector, reason ?? '');
+      const result = await service.reject(meetingId, callerEmail, reason ?? '');
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to reject', 400);

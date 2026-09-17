@@ -33,12 +33,14 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
   router.post(
     '/meetings',
     asyncHandler(async (req: Request, res: Response) => {
-      const { name, joinUrl, client, purpose, addedBy } = req.body as {
+      const callerEmail = req.identity?.email;
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
+      const { name, joinUrl, client, purpose } = req.body as {
         name?: string;
         joinUrl?: string;
         client?: string;
         purpose?: string;
-        addedBy?: string;
       };
 
       if (!name) throw new AppError('Meeting name is required', 400);
@@ -48,7 +50,7 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
         joinUrl: (joinUrl ?? '').trim(),
         client: (client ?? '').trim(),
         purpose: (purpose ?? '').trim(),
-        addedBy: addedBy ?? req.identity?.email ?? '',
+        addedBy: callerEmail,
       });
 
       if (!result.success) {
