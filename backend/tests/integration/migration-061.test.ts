@@ -87,4 +87,39 @@ describe('Migration 061 — rehome default setup to si', () => {
     expect(settings?.company_legal_name).toBeNull();
     expect(settings?.settings_json).toBe('{}');
   });
+
+  it('062 forces wizard when si is already complete with empty company', async () => {
+    await engine.run(
+      `UPDATE branding SET
+         company_name = 'Hanfia High School',
+         setup_complete = 1,
+         license_key = 'cloud-trial',
+         license_valid = 1
+       WHERE tenant_id = 'default'`,
+    );
+    // Reproduce prod: si marked complete but no company (061 gate missed)
+    await engine.run(
+      `UPDATE branding SET setup_complete = 1, company_name = '' WHERE tenant_id = 'si'`,
+    );
+
+    const sql = fs.readFileSync(
+      path.resolve(__dirname, '../../migrations/062_force_default_wizard.sql'),
+      'utf8',
+    );
+    await engine.exec(sql);
+
+    const def = await engine.get<{ company_name: string; setup_complete: number }>(
+      'SELECT company_name, setup_complete FROM branding WHERE tenant_id = ?',
+      ['default'],
+    );
+    const si = await engine.get<{ company_name: string; setup_complete: number }>(
+      'SELECT company_name, setup_complete FROM branding WHERE tenant_id = ?',
+      ['si'],
+    );
+
+    expect(def?.setup_complete).toBe(0);
+    expect(def?.company_name || '').toBe('');
+    expect(si?.setup_complete).toBe(1);
+    expect(si?.company_name).toBe('Hanfia High School');
+  });
 });
