@@ -17,6 +17,7 @@ import { registerModule, renderModuleInto } from '../../shared/router.js';
 
 let _data = {
   attendance: null,
+  myEvents: [],
   leaveBalances: [],
 };
 let _activeTab = 'dashboard';
@@ -133,6 +134,8 @@ async function dashLoadData(container) {
     else if (attendance.status) _clockState = attendance.status;
     if (mine && mine.firstIn) _clockStart = new Date(mine.firstIn);
     else if (attendance.clockIn) _clockStart = new Date(attendance.clockIn);
+    /* Board returns per-person events as `timeline`; there is no top-level `events`. */
+    _data.myEvents = (mine && mine.timeline) || attendance.events || [];
   }
 
   if (leaveBalances && !leaveBalances._error) {
@@ -181,7 +184,7 @@ function renderDashboardTab(el) {
     '</div></div>';
 
   html += '<div class="mc"><div class="mc-t"><span class="ic">&#128337;</span> Today\'s Timeline</div>' +
-    '<div class="my-tl" id="myTimeline">' + _renderTimeline(_data.attendance) + '</div></div>';
+    '<div class="my-tl" id="myTimeline">' + _renderTimeline(_data.myEvents) + '</div></div>';
 
   html += '<div class="mc sp3"><div class="mc-t"><span class="ic">&#128197;</span> This Week</div>' +
     '<div class="week-row" id="myWeek">' + _renderWeek() + '</div></div>';
@@ -241,6 +244,8 @@ async function _doClock(action, container) {
   }
 
   renderDashboardTab(container.querySelector('#dashTabContent') || container);
+  /* Refresh from the server so the timeline picks up the new event. */
+  if (_dashRoot) dashLoadData(_dashRoot);
 }
 
 function _startClockTimer(el) {
@@ -257,14 +262,15 @@ function _startClockTimer(el) {
 
 /* ── Render helpers ── */
 
-function _renderTimeline(attendance) {
-  if (!attendance || !attendance.events || !attendance.events.length) {
+function _renderTimeline(events) {
+  if (!events || !events.length) {
     return '<div style="font-size:11px;color:var(--tx3);padding:8px 0">No events yet today</div>';
   }
-  return attendance.events.map(function (ev) {
-    const cls = 'my-tl-item ev-' + (ev.action || 'in');
-    const time = ev.time ? '<span class="my-tl-time">' + _esc(ev.time) + '</span>' : '';
-    const label = { in: 'Clocked In', out: 'Clocked Out', break: 'Break Started', back: 'Back from Break' }[ev.action] || ev.action;
+  return events.map(function (ev) {
+    const key = String(ev.type || ev.action || 'in').toLowerCase();
+    const cls = 'my-tl-item ev-' + key;
+    const time = ev.time ? '<span class="my-tl-time">' + _esc(_fmtTime(ev.time)) + '</span>' : '';
+    const label = { in: 'Clocked In', out: 'Clocked Out', break: 'Break Started', back: 'Back from Break' }[key] || key;
     return '<div class="' + cls + '">' + time + _esc(label) + '</div>';
   }).join('');
 }
@@ -295,6 +301,7 @@ function _renderLeaveBalances(balances) {
 /* ── Utility ── */
 function _esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
 function _fmtDur(mins) { if (mins == null) return '--:--'; const h = Math.floor(mins / 60), m = Math.round(mins % 60); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
+function _fmtTime(iso) { if (!iso) return ''; try { return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }); } catch (_e) { return String(iso); } }
 function _todayStr() { return new Date(Date.now() + 330 * 60000).toISOString().split('T')[0]; }
 
 registerModule('dashboard', renderDashboardPage);
