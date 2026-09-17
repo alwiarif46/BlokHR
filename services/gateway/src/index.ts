@@ -39,7 +39,6 @@ import { resolveHrCompatRewrite } from './guards/hr-compat';
 import { createFeatureFlagCache, type FeatureFlagCache } from './guards/feature-flags';
 import {
   isApexHost,
-  normalizeHost,
   parseHostList,
   parseReservedSlugs,
   parseTenantHostMap,
@@ -502,17 +501,7 @@ export function createGatewayApp(options: GatewayAppOptions): {
   app.get('/api/setup/status', async (req: Request, res: Response) => {
     const blokReq = req as BlokProxyRequest;
     const headers = req.headers as Record<string, string | string[] | undefined>;
-    const clientHost = normalizeHost(
-      String(
-        (Array.isArray(headers['x-blok-client-host'])
-          ? headers['x-blok-client-host'][0]
-          : headers['x-blok-client-host']) ?? '',
-      ),
-    );
-    const publicHost =
-      blokReq._blokPublicHost ||
-      resolvePublicHost(headers) ||
-      clientHost;
+    const publicHost = resolvePublicHost(headers) || blokReq._blokPublicHost || '';
     const signupPortal = apexHosts.size > 0 && isApexHost(publicHost, apexHosts);
     const subdomainBaseOut = (config.tenantSubdomainBase || '').trim() || null;
     const tenantId = blokReq._blokHostTenant || config.defaultTenantId;

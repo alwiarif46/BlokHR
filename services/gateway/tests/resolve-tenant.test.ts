@@ -81,4 +81,28 @@ describe('gateway resolveTenantId subdomain', () => {
       }),
     ).toBe('www.13blok.com');
   });
+
+  it('resolvePublicHost prefers X-Blok-Client-Host over everything', () => {
+    expect(
+      resolvePublicHost({
+        host: 'gateway-production-5a5f.up.railway.app',
+        'x-forwarded-host': 'gateway-production-5a5f.up.railway.app',
+        'x-blok-client-host': 'www.13blok.com',
+      }),
+    ).toBe('www.13blok.com');
+  });
+
+  it('resolveTenantId maps subdomain via X-Blok-Client-Host', () => {
+    expect(
+      resolveTenantId({
+        headers: {
+          host: 'gateway-production-5a5f.up.railway.app',
+          'x-blok-client-host': 'acme.13blok.com',
+        },
+        subdomainBase: '13blok.com',
+        reservedSlugs: reserved,
+        apexHosts,
+      }),
+    ).toBe('acme');
+  });
 });

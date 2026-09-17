@@ -160,10 +160,17 @@ function candidateHosts(
       }
     })(),
   );
+  /* Frontend api.js sends the browser's location.host; survives Vercel→Railway rewrites. */
+  const clientHost = normalizeHost(firstHeader(headers, 'x-blok-client-host'));
   const usefulForwarded = forwarded && forwarded !== host ? forwarded : '';
-  const ordered = [usefulForwarded, originHost, refererHost, host, forwarded].filter(
-    Boolean,
-  );
+  const ordered = [
+    clientHost,
+    usefulForwarded,
+    originHost,
+    refererHost,
+    host,
+    forwarded,
+  ].filter(Boolean);
   return [...new Set(ordered)];
 }
 

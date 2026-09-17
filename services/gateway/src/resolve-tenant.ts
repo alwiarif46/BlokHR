@@ -156,11 +156,18 @@ function candidateHosts(
       }
     })(),
   );
+  /* Frontend api.js sends the browser's location.host; survives Vercel→Railway rewrites. */
+  const clientHost = normalizeHost(firstHeader(headers, 'x-blok-client-host'));
   /* Railway often sets XFHost equal to Host; prefer browser Origin/Referer then. */
   const usefulForwarded = forwarded && forwarded !== host ? forwarded : '';
-  const ordered = [usefulForwarded, originHost, refererHost, host, forwarded].filter(
-    Boolean,
-  );
+  const ordered = [
+    clientHost,
+    usefulForwarded,
+    originHost,
+    refererHost,
+    host,
+    forwarded,
+  ].filter(Boolean);
   return [...new Set(ordered)];
 }
 
