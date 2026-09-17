@@ -18,8 +18,11 @@ import { registerModule, renderModuleInto } from '../../shared/router.js';
 let _data = {
   attendance: null,
   myEvents: [],
+  /** @type {Record<string, number>} date → worked hours */
+  week: {},
   leaveBalances: [],
 };
+let _weekKey = '';
 let _activeTab = 'dashboard';
 let _clockState = 'out';
 let _clockTimer = null;
@@ -123,19 +126,18 @@ async function dashLoadData(container) {
       : Promise.resolve({ balances: [] }),
   ]);
 
+  let todayHours = 0;
   if (attendance && !attendance._error) {
     _data.attendance = attendance;
     /* Prefer the signed-in person's row when board returns a list */
-    const people = attendance.people || [];
-    const mine = people.find(function (p) {
-      return (p.email || '').toLowerCase() === (session.email || '').toLowerCase();
-    });
-    if (mine && mine.status) _clockState = mine.status;
-    else if (attendance.status) _clockState = attendance.status;
+    const mine = _findMe(attendance, session);
+    if (mine && mine.status) _clockState = _normStatus(mine.status);
+    else if (attendance.status) _clockState = _normStatus(attendance.status);
     if (mine && mine.firstIn) _clockStart = new Date(mine.firstIn);
     else if (attendance.clockIn) _clockStart = new Date(attendance.clockIn);
     /* Board returns per-person events as `timeline`; there is no top-level `events`. */
     _data.myEvents = (mine && mine.timeline) || attendance.events || [];
+    if (mine && typeof mine.totalWorked === 'number') todayHours = mine.totalWorked;
   }
 
   if (leaveBalances && !leaveBalances._error) {
@@ -148,6 +150,46 @@ async function dashLoadData(container) {
   if (_activeTab === 'dashboard') {
     renderDashboardTab(container.querySelector('#dashTabContent'));
   }
+
+  /* Week hours arrive later; earlier days are fetched once per week. */
+  const weekChanged = await dashLoadWeek(session, todayHours);
+  if (weekChanged && _activeTab === 'dashboard') {
+    renderDashboardTab(container.querySelector('#dashTabContent'));
+  }
+}
+
+/**
+ * Fill in worked hours for the current week from the attendance board.
+ * Today comes from the board already loaded; earlier days are fetched once.
+ * @returns {Promise<boolean>} true when new day totals were added
+ */
+async function dashLoadWeek(session, todayHours) {
+  const dates = _weekDates();
+  const today = _todayStr();
+
+  if (_weekKey !== dates[0]) {
+    _weekKey = dates[0];
+    _data.week = {};
+  }
+  _data.week[today] = todayHours;
+
+  const pending = dates.filter(function (d) {
+    return d < today && !(d in _data.week);
+  });
+  if (!pending.length) return false;
+
+  const boards = await Promise.all(
+    pending.map(function (d) {
+      return api.get('/api/attendance?date=' + d);
+    }),
+  );
+
+  boards.forEach(function (board, i) {
+    if (!board || board._error) return;
+    const mine = _findMe(board, session);
+    _data.week[pending[i]] = mine && typeof mine.totalWorked === 'number' ? mine.totalWorked : 0;
+  });
+  return true;
 }
 
 /* ── Tab renderers ── */
@@ -225,6 +267,14 @@ async function _doClock(action, container) {
     return;
   }
 
+  /* Blocked and duplicate actions come back HTTP 200 with success:false —
+     never flip the card to a state the server did not record. */
+  if (!result || result.success === false) {
+    toast(result && result.error ? result.error : 'Clock action was not recorded', 'error');
+    if (_dashRoot) dashLoadData(_dashRoot);
+    return;
+  }
+
   if (action === 'in' || action === 'back') {
     _clockState = 'in';
     _clockStart = new Date();
@@ -277,11 +327,14 @@ function _renderTimeline(events) {
 
 function _renderWeek() {
   const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const today = new Date().getDay();
-  const todayIdx = today === 0 ? 6 : today - 1;
+  const dates = _weekDates();
+  const today = _todayStr();
   return days.map(function (d, i) {
-    const cls = 'week-day' + (i === todayIdx ? ' today' : '');
-    return '<div class="' + cls + '"><div class="week-day-name">' + d + '</div><div class="week-day-hrs mf">--</div></div>';
+    const date = dates[i];
+    const cls = 'week-day' + (date === today ? ' today' : '');
+    const hrs = _data.week[date];
+    const label = typeof hrs === 'number' ? (hrs > 0 ? hrs.toFixed(1) + 'h' : '0h') : '--';
+    return '<div class="' + cls + '"><div class="week-day-name">' + d + '</div><div class="week-day-hrs mf">' + label + '</div></div>';
   }).join('');
 }
 
@@ -300,6 +353,33 @@ function _renderLeaveBalances(balances) {
 
 /* ── Utility ── */
 function _esc(s) { const d = document.createElement('div'); d.textContent = s || ''; return d.innerHTML; }
+/** Find the signed-in person's row on an attendance board. */
+function _findMe(board, session) {
+  const email = (session && session.email ? session.email : '').toLowerCase();
+  return (board.people || []).find(function (p) {
+    return (p.email || '').toLowerCase() === email;
+  });
+}
+/** Board reports 'off' for a day with no clock activity. */
+function _normStatus(s) { const v = String(s || '').toLowerCase(); return v === 'off' ? 'out' : v; }
+/** Local YYYY-MM-DD — toISOString would shift the day back east of UTC. */
+function _ymd(d) {
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+/** Mon→Sun dates for the week containing today. */
+function _weekDates() {
+  const base = new Date(_todayStr() + 'T00:00:00');
+  const dow = base.getDay();
+  const monday = new Date(base);
+  monday.setDate(base.getDate() - (dow === 0 ? 6 : dow - 1));
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    out.push(_ymd(d));
+  }
+  return out;
+}
 function _fmtDur(mins) { if (mins == null) return '--:--'; const h = Math.floor(mins / 60), m = Math.round(mins % 60); return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0'); }
 function _fmtTime(iso) { if (!iso) return ''; try { return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }); } catch (_e) { return String(iso); } }
 function _todayStr() { return new Date(Date.now() + 330 * 60000).toISOString().split('T')[0]; }
