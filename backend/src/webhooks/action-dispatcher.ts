@@ -89,7 +89,7 @@ export class ActionDispatcher {
         case 'reg.approve': {
           const regId = (payload.regId as string) ?? '';
           if (!regId) return { success: false, message: 'Missing regId', error: 'Missing regId' };
-          const result = await this.regService.approve(regId, 'manager', callerEmail);
+          const result = await this.regService.approve(regId, callerEmail);
           return result.success
             ? { success: true, message: 'Correction approved by manager' }
             : { success: false, message: result.error ?? 'Approval failed', error: result.error };
@@ -98,7 +98,7 @@ export class ActionDispatcher {
         case 'reg.hr_approve': {
           const regId = (payload.regId as string) ?? '';
           if (!regId) return { success: false, message: 'Missing regId', error: 'Missing regId' };
-          const result = await this.regService.approve(regId, 'hr', callerEmail);
+          const result = await this.regService.approve(regId, callerEmail);
           return result.success
             ? { success: true, message: 'Correction HR-approved' }
             : {

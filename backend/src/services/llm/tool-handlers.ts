@@ -182,7 +182,7 @@ export function buildHandlerMap(db: DatabaseEngine, logger: Logger): Map<string,
 
   // ADMIN REGULARIZATION
   h.set('pending_regularizations', async () => db.all("SELECT * FROM regularizations WHERE status = 'pending' ORDER BY created_at"));
-  h.set('approve_regularization', async (p, caller) => regService.approve(String(p.id), 'manager', (p.approverEmail as string) || caller));
+  h.set('approve_regularization', async (p, caller) => regService.approve(String(p.id), (p.approverEmail as string) || caller));
   h.set('reject_regularization', async (p, caller) => regService.reject(String(p.id), (p.approverEmail as string) || caller, p.reason as string));
   h.set('regularizations_for_employee', async (p) => db.all('SELECT * FROM regularizations WHERE email = ? ORDER BY created_at DESC', [p.email]));
 
