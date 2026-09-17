@@ -126,6 +126,12 @@ export interface AppConfig {
   defaultTenantId: string;
   /** JSON map of hostname → tenant id for multi-tenant Host resolution. */
   tenantHostMap: string;
+  /** Base domain for `{slug}.base` → tenant (e.g. 13blok.com). Empty disables. */
+  tenantSubdomainBase: string;
+  /** Comma-separated apex hosts that are signup portals, not workspaces. */
+  tenantApexHosts: string;
+  /** Comma-separated extra reserved slugs (merged with built-in defaults). */
+  tenantReservedSlugs: string;
   /**
    * When true, accept client X-User-Email / X-User-Name as identity.
    * Default: only in test (production/dev require Bearer session tokens).
@@ -258,6 +264,9 @@ export function loadConfig(): AppConfig {
     transportDbPath: envDefault('TRANSPORT_DB_PATH', './transport.db'),
     defaultTenantId: envDefault('DEFAULT_TENANT_ID', 'default'),
     tenantHostMap: envDefault('TENANT_HOST_MAP', ''),
+    tenantSubdomainBase: envDefault('TENANT_SUBDOMAIN_BASE', ''),
+    tenantApexHosts: envDefault('TENANT_APEX_HOSTS', ''),
+    tenantReservedSlugs: envDefault('TENANT_RESERVED_SLUGS', ''),
     allowHeaderIdentity: (() => {
       const raw = env('ALLOW_HEADER_IDENTITY');
       if (raw === '1' || raw === 'true') return true;

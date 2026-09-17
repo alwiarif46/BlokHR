@@ -11,6 +11,7 @@ import { createMeetingRouter } from '../../src/routes/meetings';
 import { createSettingsRouter } from '../../src/routes/settings';
 import { createSseRouter } from '../../src/routes/sse';
 import { createSetupRouter } from '../../src/routes/setup';
+import { createTenantsRouter } from '../../src/routes/tenants';
 import { createAuthRouter } from '../../src/routes/auth';
 import { createProfileRouter } from '../../src/routes/profile';
 import { createInteractionRouter } from '../../src/routes/interactions';
@@ -40,6 +41,8 @@ import { createIrisScanRouter } from '../../src/routes/iris-scan';
 import { createMobileRouter } from '../../src/routes/mobile';
 import { createMultiAuthRouter } from '../../src/routes/multi-auth';
 import { FeatureFlagService } from '../../src/services/feature-flags';
+import { RoleAccessService } from '../../src/services/role-access-service';
+import { createRoleAccessRouter } from '../../src/routes/role-access';
 import { MockStorageProvider } from '../../src/services/storage';
 import { MockLlmClient } from '../../src/services/llm';
 import { MockFaceApiClient } from '../../src/services/face-recognition';
@@ -141,6 +144,9 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     transportDbPath: ':memory:',
     defaultTenantId: 'default',
     tenantHostMap: '',
+    tenantSubdomainBase: '',
+    tenantApexHosts: '',
+    tenantReservedSlugs: '',
     allowHeaderIdentity: true,
     trialSeatLimit: 25,
     razorpayKeyId: undefined,
@@ -164,6 +170,7 @@ export async function createTestApp(
   mockLlm: MockLlmClient;
   mockStorage: MockStorageProvider;
   featureFlags: FeatureFlagService;
+  roleAccess: RoleAccessService;
   commercial: CommercialServices;
   directory: DirectoryBundle;
   learning: LearningBundle;
@@ -183,6 +190,7 @@ export async function createTestApp(
   const mockLlm = new MockLlmClient();
   const mockStorage = new MockStorageProvider();
   const featureFlags = new FeatureFlagService(db, testLogger);
+  const roleAccess = new RoleAccessService(db, testLogger);
   const commercial = await createCommercialServices(config, testLogger);
   const directory = await createDirectoryBundle(config, testLogger, {
     monolithDb: db,
@@ -207,8 +215,8 @@ export async function createTestApp(
     mountLearningRouter(a, learning, config, db);
     mountKioskRouter(a, kiosk, config, db);
     mountCapturePlatform(a, capturePlatform, config, db);
-    // Feature flag guard — BEFORE all route handlers
-    a.use(featureFlags.guard());
+    // Feature flag + role-access guard — BEFORE all route handlers
+    a.use(featureFlags.guardWithAdmin(db, roleAccess));
 
     const roster = {
       listActiveMembers: async () => {
@@ -236,6 +244,7 @@ export async function createTestApp(
     a.use('/api', meetingRouter);
     const settingsRouter = createSettingsRouter(db, testLogger, broadcaster, directory.service);
     a.use('/api', settingsRouter);
+    a.use('/api', createRoleAccessRouter(db, testLogger, roleAccess, broadcaster, directory.service));
     const sseRouter = createSseRouter(broadcaster);
     a.use('/api', sseRouter);
     const setupRouter = createSetupRouter(
@@ -246,6 +255,7 @@ export async function createTestApp(
       directory.service,
     );
     a.use('/api', setupRouter);
+    a.use('/api', createTenantsRouter(db, testLogger, config));
     const authRouter = createAuthRouter(testLogger);
     a.use('/api', authRouter);
     const profileRouter = createProfileRouter(db, testLogger);
@@ -316,8 +326,9 @@ export async function createTestApp(
 
   // Load feature flags into cache (must be after migrations)
   await featureFlags.load();
+  await roleAccess.load();
 
-  return { app, db, broadcaster, mockFaceApi, mockLlm, mockStorage, featureFlags, commercial, directory, learning, kiosk, capturePlatform };
+  return { app, db, broadcaster, mockFaceApi, mockLlm, mockStorage, featureFlags, roleAccess, commercial, directory, learning, kiosk, capturePlatform };
 }
 
 /** Seed a member and group so clock actions can succeed. */

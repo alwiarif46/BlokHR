@@ -1,0 +1,88 @@
+/* Roles & Access matrix */
+.ra-wrap {
+  padding: 16px 20px 32px;
+  max-width: 1100px;
+}
+.ra-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.ra-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--tx);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.ra-spacer {
+  flex: 1;
+}
+.ra-hint {
+  font-size: 12px;
+  opacity: 0.75;
+  margin: 0 0 16px;
+  line-height: 1.45;
+  max-width: 720px;
+}
+.ra-btn {
+  border: 1px solid var(--bd, #ccc);
+  background: var(--bg-elev, #fff);
+  color: var(--tx);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.ra-btn.ghost {
+  background: transparent;
+}
+.ra-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--bd, #e2e2e2);
+  border-radius: 8px;
+}
+.ra-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12px;
+}
+.ra-table th,
+.ra-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bd, #eee);
+  text-align: center;
+  white-space: nowrap;
+}
+.ra-table th:first-child,
+.ra-table td.ra-mod {
+  text-align: left;
+  min-width: 160px;
+}
+.ra-section td {
+  background: var(--bg-muted, #f5f5f5);
+  font-weight: 700;
+  text-align: left !important;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.ra-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--bg-muted, #eee);
+  opacity: 0.9;
+  margin-left: 4px;
+}
+.ra-na {
+  color: var(--tx-muted, #999);
+}
+.ra-toggle input {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}

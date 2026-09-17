@@ -1,0 +1,411 @@
+/**
+ * modules/school_exams/school_exams.css
+ * Terms | Planner | Marks | Report cards — CSS variables only.
+ */
+
+.sex-wrap {
+  padding: 16px 20px 72px;
+  height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sex-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--tx);
+}
+
+.sex-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  overflow: hidden;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.sex-tab {
+  padding: 8px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  border: none;
+  background: transparent;
+  color: var(--tx3);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sex-tab.active {
+  background: var(--accent);
+  color: #000;
+}
+
+.theme-clean .sex-tab.active {
+  color: var(--ink-on-accent, #00112b);
+}
+
+.sex-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.sex-input,
+.sex-select {
+  padding: 7px 10px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  color: var(--tx);
+  font-size: 11px;
+  font-family: inherit;
+  min-width: 100px;
+}
+
+.sex-input.narrow {
+  min-width: 72px;
+  width: 80px;
+}
+
+.sex-btn {
+  padding: 7px 14px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--tx2);
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.sex-btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #000;
+}
+
+.theme-clean .sex-btn.primary {
+  color: var(--ink-on-accent, #00112b);
+  border-radius: 10px;
+}
+
+.sex-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.sex-hint {
+  font-size: 11px;
+  color: var(--tx3);
+}
+
+.sex-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sex-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--bd);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--tx2);
+  background: var(--bg1);
+}
+
+.sex-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+}
+
+.sex-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.sex-table th,
+.sex-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bd);
+  text-align: left;
+  color: var(--tx);
+  vertical-align: middle;
+}
+
+.sex-table th {
+  background: var(--bg2);
+  font-weight: 700;
+  color: var(--tx2);
+  white-space: nowrap;
+}
+
+.sex-table tr:last-child td {
+  border-bottom: none;
+}
+
+.sex-table input[type='number'] {
+  width: 72px;
+  padding: 5px 8px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  color: var(--tx);
+  font-size: 11px;
+  font-family: inherit;
+}
+
+.sex-table input[type='checkbox'] {
+  margin: 0 4px 0 0;
+}
+
+.sex-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-right: 10px;
+  white-space: nowrap;
+  color: var(--tx2);
+}
+
+.sex-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--tx3);
+  font-size: 12px;
+}
+
+.sex-service-error {
+  padding: 20px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+}
+
+.sex-service-error-title {
+  font-weight: 800;
+  color: var(--tx);
+  margin-bottom: 6px;
+}
+
+.sex-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.sex-form-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--tx3);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.sex-error-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--danger, #c0392b);
+  font-size: 11px;
+}
+
+.sex-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  border: 1px solid var(--bd);
+  color: var(--tx2);
+}
+
+.sex-badge.live {
+  background: var(--accent);
+  color: #000;
+  border-color: var(--accent);
+}
+
+.theme-clean .sex-badge.live {
+  color: var(--ink-on-accent, #00112b);
+}
+
+.sex-weightage {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--tx2);
+}
+
+.sex-weightage.warn {
+  color: var(--danger, #c0392b);
+}
+
+.sex-file {
+  font-size: 11px;
+  color: var(--tx2);
+  max-width: 220px;
+}
+
+.sex-import-errors {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border: 1px solid var(--danger, #c0392b);
+  border-radius: var(--r);
+  background: var(--bg1);
+}
+
+.sex-textarea {
+  min-height: 72px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.sex-lock-bar {
+  margin-bottom: 8px;
+}
+
+.sex-ticket-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.sex-ticket-card {
+  width: 220px;
+  padding: 14px 16px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  background: var(--bg1);
+  color: var(--tx);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.sex-ticket-code {
+  font-size: 14px;
+  font-weight: 800;
+  margin-bottom: 6px;
+  color: var(--tx);
+}
+
+.sex-print-toolbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sex-print {
+  background: var(--bg0, #fff);
+  color: var(--tx);
+  padding: 24px;
+  border: 1px solid var(--bd);
+  border-radius: var(--r);
+  max-width: 210mm;
+  margin: 0 auto;
+}
+
+.sex-print-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin-bottom: 16px;
+  font-size: 12px;
+  color: var(--tx2);
+}
+
+.sex-print-header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.sex-print-school {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.sex-print-block {
+  margin-bottom: 16px;
+  page-break-inside: avoid;
+}
+
+.sex-print-block h3 {
+  font-size: 13px;
+  margin: 0 0 8px;
+}
+
+.sex-print-block table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+
+.sex-print-block th,
+.sex-print-block td {
+  border: 1px solid var(--bd);
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.sex-print-signatures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+}
+
+.sex-print-sig {
+  min-width: 140px;
+  padding-top: 36px;
+  border-top: 1px solid var(--bd);
+  font-size: 11px;
+}
+
+.sex-print-footer {
+  margin-top: 24px;
+  font-size: 11px;
+  color: var(--tx3);
+  text-align: center;
+}
+
+@media print {
+  .sex-tabs,
+  .sex-toolbar,
+  .sex-print-toolbar,
+  .sex-form-grid,
+  .sb-item,
+  #sidebar,
+  .topbar {
+    display: none !important;
+  }
+
+  .sex-print {
+    border: none;
+    padding: 0;
+    max-width: none;
+    width: 210mm;
+    min-height: 297mm;
+  }
+
+  .sex-ticket-card {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  @page {
+    size: A4;
+    margin: 12mm;
+  }
+}

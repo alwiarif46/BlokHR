@@ -24,6 +24,8 @@ export interface Exam {
   date: string;
   maxMarks: number;
   kind: ExamKind;
+  /** ISO datetime; after this, teacher PUT marks → 409 until unlock */
+  entryClosesAt: string | null;
   createdAt: string;
 }
 
@@ -51,6 +53,7 @@ export interface CreateExamInput {
   date: string;
   maxMarks: number;
   kind: ExamKind;
+  entryClosesAt?: string | null;
 }
 
 export interface PatchExamInput {
@@ -61,6 +64,28 @@ export interface PatchExamInput {
   date?: string;
   maxMarks?: number;
   kind?: ExamKind;
+  entryClosesAt?: string | null;
+}
+
+export interface MarksImportRowError {
+  line: number;
+  studentId: string;
+  error: string;
+}
+
+export interface MarksImportInput {
+  enteredBy: string;
+  rows: BulkMarkEntry[];
+}
+
+export interface ExamEntryUnlock {
+  id: string;
+  tenantId: string;
+  examId: string;
+  unlockedBy: string;
+  reason: string;
+  previousClosesAt: string | null;
+  unlockedAt: string;
 }
 
 export interface Mark {
@@ -167,7 +192,18 @@ export type {
   PatchReportTemplateInput,
   GenerateReportCardStudent,
   GenerateReportCardsInput,
+  ReportCardRank,
 } from './types-reportcards';
+
+export type {
+  AttemptStatus,
+  ExamSitting,
+  SeatAssignment,
+  HallTicket,
+  ExamAttempt,
+  CreateSittingInput,
+  HallTicketPrintView,
+} from './types-sittings';
 
 export interface OutcomePerformance {
   tenantId: string;

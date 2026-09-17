@@ -39,18 +39,23 @@ GitHub source of truth for this product line: `https://github.com/alwiarif46/Blo
 | Health | `GET /healthz` → gateway; `GET /api/health` → monolith via gateway |
 | `SERVER_BASE_URL` | `https://blokhr.vercel.app` (email / reset links) |
 
-### Multi-tenant Host map (required for shared gateway)
+### Multi-tenant Host resolution (required for shared gateway)
 
-BlokHR resolves tenant from **request Host** (not client-chosen IDs). Set the same JSON on **gateway** and **backend**:
+BlokHR resolves tenant from **request Host** (not client-chosen IDs). Set the same values on **gateway** and **backend**:
 
 | Env | Example | Purpose |
 |-----|---------|---------|
-| `TENANT_HOST_MAP` | `{"www.13blok.com":"default","13blok.com":"default","blokhr.vercel.app":"default","si.blokhr.app":"si"}` | Hostname → `tenant_id` |
-| `DEFAULT_TENANT_ID` | `default` | Fallback when Host is unmapped (local/dev) |
+| `TENANT_SUBDOMAIN_BASE` | `13blok.com` | `{slug}.13blok.com` → tenant `slug` (self-serve SaaS) |
+| `TENANT_APEX_HOSTS` | `www.13blok.com,13blok.com` | Apex signup portal Hosts (no wizard; Create workspace UI) |
+| `TENANT_RESERVED_SLUGS` | `www,api,admin,...` | Extra reserved labels (merged with built-in defaults) |
+| `TENANT_HOST_MAP` | `{"blokhr.vercel.app":"default","custom.acme.com":"acme"}` | Exact Host overrides (preview + custom domains) |
+| `DEFAULT_TENANT_ID` | `default` | Fallback when Host is unmapped (local/dev only) |
 
-**Ops rule:** do **not** point two organizations at the same Railway backend until each has its own Host entry (or a dedicated empty backend). Migration `055_tenant_isolation` moves a completed singleton setup to tenant `si` and leaves `default` with `setup_complete=0` so `blokhr.vercel.app` can run the wizard again.
+**Self-serve flow:** visitor opens `www.13blok.com` → picks slug → `POST /api/tenants` claims branding row → redirect to `https://{slug}.13blok.com` → setup wizard. Setup POSTs on apex Hosts return `400 use_workspace_subdomain`. Completed workspaces return `409 already_configured` on that slug only.
 
-One Vercel project can serve many tenants via custom domains; each Host maps to isolated branding/setup/members.
+**DNS / Vercel:** add wildcard `*.13blok.com` (plus apex/`www`) on the `13blok` project so every slug resolves without per-tenant DNS.
+
+**Ops rule:** do **not** map apex/`www` to `default` in `TENANT_HOST_MAP` when subdomain SaaS is enabled — that recreates the shared-tenant deadlock. Keep preview (`blokhr.vercel.app`) on `default` or a dedicated `demo` slug.
 
 School microservices are **not** deployed yet — gateway lists them in `/healthz` config but upstreams still point at localhost defaults until those Railway services are added.
 
@@ -188,28 +193,30 @@ Deploy includes migrations that add `tenant_id` across operational and domain ta
 
 Run backend migrations **before** serving traffic from this release.
 
-### Host-per-tenant checklist (required for a second company)
+### Self-serve subdomain checklist (second company and beyond)
 
-BlokHR does **not** create a new tenant when you run the wizard twice on the same URL. Tenant = **Host**.
+Tenant = **subdomain slug** under `TENANT_SUBDOMAIN_BASE` (plus exact `TENANT_HOST_MAP` overrides for custom domains).
 
-1. DNS: add subdomain (e.g. `acme.13blok.com`) → Vercel project `13blok` (or wildcard `*.13blok.com`).
-2. Set the same JSON on **gateway** and **backend**:
+1. **DNS / Vercel:** wildcard `*.13blok.com` (+ apex/`www`) on project `13blok`.
+2. **Railway env (gateway + backend, same values):**
 
-```json
-{
-  "www.13blok.com": "default",
-  "13blok.com": "default",
-  "blokhr.vercel.app": "default",
-  "gateway-production-5a5f.up.railway.app": "default",
-  "acme.13blok.com": "acme"
-}
+```text
+TENANT_SUBDOMAIN_BASE=13blok.com
+TENANT_APEX_HOSTS=www.13blok.com,13blok.com
+TENANT_HOST_MAP={"blokhr.vercel.app":"default"}
+DEFAULT_TENANT_ID=default
 ```
 
-3. Redeploy gateway + backend (map is read at process start).
-4. Open `https://acme.13blok.com` → wizard for tenant `acme` only.
-5. Smoke: `curl -sS -H "Host: acme.13blok.com" https://www.13blok.com/api/setup/status` (via gateway) should show `tenantId: "acme"`.
+Do **not** map `www.13blok.com` / `13blok.com` → `default` when self-serve is on.
 
-Setup POSTs on an already-complete Host return `409 already_configured` so a second browser cannot merge another org into the same tenant.
+3. Redeploy gateway + backend (config is read at process start).
+4. Open `https://www.13blok.com` → Create workspace → redirect to `https://{slug}.13blok.com` → wizard.
+5. Smoke:
+   - `curl -sS -H "Host: acme.13blok.com" https://<gateway>/api/setup/status` → `tenantId: "acme"`, `signupPortal: false`
+   - `curl -sS -H "Host: www.13blok.com" https://<gateway>/api/setup/status` → `signupPortal: true`
+   - `curl -sS -X POST -H "Host: www.13blok.com" -H "Content-Type: application/json" -d '{"slug":"si"}' https://<gateway>/api/tenants` against an existing slug → `409 slug_taken`
+
+Setup POSTs on a completed slug still return `409 already_configured`. Apex setup POSTs return `400 use_workspace_subdomain`.
 
 **Wipe note:** migration 063 + wipe helper delete all members/branding (except empty `default`). Snapshot the Railway volume first if you need a backup.
 

@@ -12,7 +12,12 @@ export type ReportBlockType =
   | 'attendance'
   | 'hpc_summary'
   | 'remarks'
-  | 'custom_text';
+  | 'custom_text'
+  | 'header'
+  | 'footer'
+  | 'signatures'
+  | 'health'
+  | 'co_scholastic';
 
 export type MarksAggregation = 'sum' | 'avg' | 'weighted_by_term';
 
@@ -44,6 +49,8 @@ export interface ReportCard {
   payload: Record<string, unknown>;
   generatedAt: string;
   generatedBy: string;
+  /** ISO datetime; null = hidden from guardians */
+  visibleFrom: string | null;
 }
 
 export interface CreateReportTemplateInput {
@@ -62,6 +69,9 @@ export interface GenerateReportCardStudent {
   studentId: string;
   attendance?: Record<string, unknown> | null;
   remarks?: string | null;
+  health?: Record<string, unknown> | null;
+  coScholastic?: Record<string, unknown> | null;
+  signatures?: Array<Record<string, unknown>> | null;
 }
 
 export interface GenerateReportCardsInput {
@@ -69,4 +79,14 @@ export interface GenerateReportCardsInput {
   session: string;
   generatedBy: string;
   students: GenerateReportCardStudent[];
+  /** Optional default parent release time applied to all generated cards */
+  visibleFrom?: string | null;
 }
+
+/** Cohort rank snapshot fields stored on report card payload */
+export interface ReportCardRank {
+  rank: number | null;
+  outOf: number;
+  percentage: number | null;
+}
+

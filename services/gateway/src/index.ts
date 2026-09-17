@@ -37,7 +37,12 @@ import {
 import { isPublicSvcPath } from './guards/public-paths';
 import { resolveHrCompatRewrite } from './guards/hr-compat';
 import { createFeatureFlagCache, type FeatureFlagCache } from './guards/feature-flags';
-import { parseTenantHostMap, resolveTenantId } from './resolve-tenant';
+import {
+  parseHostList,
+  parseReservedSlugs,
+  parseTenantHostMap,
+  resolveTenantId,
+} from './resolve-tenant';
 import { assertTenantPathMatch } from './guards/tenant-path';
 
 const PROXY_TIMEOUT_MS = 30_000;
@@ -122,12 +127,17 @@ export function createGatewayApp(options: GatewayAppOptions): {
   app.use(cors());
 
   const hostMap = parseTenantHostMap(config.tenantHostMap);
+  const apexHosts = parseHostList(config.tenantApexHosts);
+  const reservedSlugs = parseReservedSlugs(config.tenantReservedSlugs);
   app.use((req: Request, _res: Response, next: NextFunction) => {
     const tenantId = resolveTenantId({
       headers: req.headers as Record<string, string | string[] | undefined>,
       hostMap,
       trustBlokTenantHeader: false,
       fallback: config.defaultTenantId,
+      subdomainBase: config.tenantSubdomainBase,
+      reservedSlugs,
+      apexHosts,
     });
     (req as BlokProxyRequest)._blokHostTenant = tenantId;
     next();

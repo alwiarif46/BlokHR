@@ -4,6 +4,7 @@ import type { AppConfig } from '../config';
 import type { DatabaseEngine } from '../db/engine';
 import type { EventBus } from '../events';
 import { FeatureFlagService } from '../services/feature-flags';
+import { RoleAccessService } from '../services/role-access-service';
 import { SseBroadcaster } from '../sse/broadcaster';
 import { createNotificationDispatcher } from '../services/notification';
 import { LeaveNotificationService } from '../services/leave-notifications';
@@ -18,6 +19,7 @@ import { createMeetingRouter } from './meetings';
 import { createSettingsRouter } from './settings';
 import { createSseRouter } from './sse';
 import { createSetupRouter } from './setup';
+import { createTenantsRouter } from './tenants';
 import { createAuthRouter } from './auth';
 import { createProfileRouter } from './profile';
 import { createInteractionRouter } from './interactions';
@@ -33,6 +35,7 @@ import { createStorageRouter } from './storage';
 import { createAuditRouter } from './audit';
 import { createWebhookReceiverRouter } from './webhook-receivers';
 import { createFeatureFlagsRouter } from './feature-flags';
+import { createRoleAccessRouter } from './role-access';
 
 // ── Phase 2 route factories ──
 import { createOrgChartRouter } from './org-chart';
@@ -70,6 +73,7 @@ export interface RouteDependencies {
   logger: Logger;
   broadcaster: SseBroadcaster;
   featureFlags: FeatureFlagService;
+  roleAccess: RoleAccessService;
   eventBus?: EventBus;
   entitlements?: EntitlementsService;
   directory?: DirectoryService;
@@ -87,15 +91,15 @@ export interface RouteDependencies {
  * the route handler runs — disabled modules are invisible, not forbidden.
  */
 export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
-  const { db, config, logger, broadcaster, featureFlags, eventBus, entitlements, directory } =
+  const { db, config, logger, broadcaster, featureFlags, roleAccess, eventBus, entitlements, directory } =
     deps;
 
   // ── Notification dispatcher wiring ──
   const notificationDispatcher = createNotificationDispatcher(config, db, logger);
   const leaveNotifier = new LeaveNotificationService(notificationDispatcher, db, logger);
 
-  // ── Feature flag guard with admin-only enforcement — BEFORE all route handlers ──
-  app.use(featureFlags.guardWithAdmin(db));
+  // ── Feature flag + role-access guard — BEFORE all route handlers ──
+  app.use(featureFlags.guardWithAdmin(db, roleAccess));
 
   // ── Phase 1: Core HRMS ──
 
@@ -122,8 +126,10 @@ export function registerAllRoutes(app: Express, deps: RouteDependencies): void {
   app.use('/api', createBdMeetingRouter(db, logger, notificationDispatcher));
   app.use('/api', createMeetingRouter(db, logger, config));
   app.use('/api', createSettingsRouter(db, logger, broadcaster, directory, featureFlags));
+  app.use('/api', createRoleAccessRouter(db, logger, roleAccess, broadcaster, directory));
   app.use('/api', createSseRouter(broadcaster));
   app.use('/api', createSetupRouter(db, logger, config, entitlements, directory));
+  app.use('/api', createTenantsRouter(db, logger, config));
   app.use('/api', createAuthRouter(logger));
   app.use('/api', createMultiAuthRouter(db, logger, { config }));
   app.use('/api', createProfileRouter(db, logger));

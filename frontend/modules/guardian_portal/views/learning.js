@@ -28,8 +28,11 @@ export async function renderLearning(main, gen) {
   const id = encodeURIComponent(state.selectedStudentId);
   await Promise.all([
     loadList(gen, 'gpReportCards', 'Report cards', `/guardian/students/${id}/report-cards`, (res) => {
-      const cards = res.reportCards || res.report_cards || res.items || [];
-      if (!cards.length) return '<p class="gp-sib-meta">No published report cards.</p>';
+      const cards =
+        res.cards || res.reportCards || res.report_cards || res.items || [];
+      if (!cards.length) {
+        return '<p class="gp-sib-meta">No report cards released yet. Your school will publish them when ready.</p>';
+      }
       return `<ul class="gp-list">${cards
         .map(
           (c) =>

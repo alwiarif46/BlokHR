@@ -26,6 +26,11 @@ import type {
   ReportTemplate,
   TemplateState,
   OutcomePerformance,
+  AttemptStatus,
+  ExamSitting,
+  SeatAssignment,
+  HallTicket,
+  ExamAttempt,
 } from '../types';
 
 interface ExamTermRow extends Record<string, unknown> {
@@ -51,6 +56,7 @@ interface ExamRow extends Record<string, unknown> {
   date: string;
   max_marks: number;
   kind: string;
+  entry_closes_at?: string | null;
   created_at: string;
 }
 
@@ -80,6 +86,7 @@ function mapExam(row: ExamRow): Exam {
     date: row.date,
     maxMarks: row.max_marks,
     kind: row.kind as ExamKind,
+    entryClosesAt: row.entry_closes_at ?? null,
     createdAt: row.created_at,
   };
 }
@@ -209,8 +216,8 @@ export class AssessmentRepository {
     await this.db.run(
       `INSERT INTO exams (
          id, tenant_id, exam_term_id, course_ref, section_ref, subject_code,
-         class_label, date, max_marks, kind
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         class_label, date, max_marks, kind, entry_closes_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         exam.id,
         exam.tenantId,
@@ -222,6 +229,7 @@ export class AssessmentRepository {
         exam.date,
         exam.maxMarks,
         exam.kind,
+        exam.entryClosesAt,
       ],
     );
     const created = await this.getExam(exam.tenantId, exam.id);
@@ -233,7 +241,7 @@ export class AssessmentRepository {
     await this.db.run(
       `UPDATE exams SET
          course_ref = ?, section_ref = ?, subject_code = ?, class_label = ?,
-         date = ?, max_marks = ?, kind = ?
+         date = ?, max_marks = ?, kind = ?, entry_closes_at = ?
        WHERE tenant_id = ? AND id = ?`,
       [
         next.courseRef,
@@ -243,6 +251,7 @@ export class AssessmentRepository {
         next.date,
         next.maxMarks,
         next.kind,
+        next.entryClosesAt,
         tenantId,
         id,
       ],
@@ -773,6 +782,7 @@ export class AssessmentRepository {
         max_marks: number;
         kind: string;
         exam_created_at: string;
+        entry_closes_at: string | null;
         weightage_pct: number;
         term_label: string;
       }
@@ -780,6 +790,7 @@ export class AssessmentRepository {
       `SELECT m.*,
               e.exam_term_id, e.course_ref, e.section_ref, e.subject_code,
               e.class_label, e.date, e.max_marks, e.kind, e.created_at as exam_created_at,
+              e.entry_closes_at,
               t.weightage_pct, t.label as term_label
        FROM marks m
        INNER JOIN exams e ON e.id = m.exam_id AND e.tenant_id = m.tenant_id
@@ -804,6 +815,7 @@ export class AssessmentRepository {
         date: row.date,
         maxMarks: row.max_marks,
         kind: row.kind as ExamKind,
+        entryClosesAt: row.entry_closes_at ?? null,
         createdAt: row.exam_created_at,
       },
       termWeightagePct: row.weightage_pct,
@@ -833,6 +845,7 @@ export class AssessmentRepository {
         max_marks: number;
         kind: string;
         exam_created_at: string;
+        entry_closes_at: string | null;
         weightage_pct: number;
         term_label: string;
       }
@@ -840,6 +853,7 @@ export class AssessmentRepository {
       `SELECT m.*,
               e.exam_term_id, e.course_ref, e.section_ref, e.subject_code,
               e.class_label, e.date, e.max_marks, e.kind, e.created_at as exam_created_at,
+              e.entry_closes_at,
               t.weightage_pct, t.label as term_label
        FROM marks m
        INNER JOIN exams e ON e.id = m.exam_id AND e.tenant_id = m.tenant_id
@@ -863,6 +877,7 @@ export class AssessmentRepository {
         date: row.date,
         maxMarks: row.max_marks,
         kind: row.kind as ExamKind,
+        entryClosesAt: row.entry_closes_at ?? null,
         createdAt: row.exam_created_at,
       },
       termWeightagePct: row.weightage_pct,
@@ -981,8 +996,8 @@ export class AssessmentRepository {
     await this.db.run(
       `INSERT INTO report_cards (
          id, tenant_id, student_id, template_id, template_version,
-         academic_session_ref, payload_json, generated_by
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+         academic_session_ref, payload_json, generated_by, visible_from
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         card.id,
         card.tenantId,
@@ -992,11 +1007,248 @@ export class AssessmentRepository {
         card.academicSessionRef,
         JSON.stringify(card.payload),
         card.generatedBy,
+        card.visibleFrom,
       ],
     );
     const created = await this.getReportCard(card.tenantId, card.id);
     if (!created) throw new Error('Failed to read inserted report card');
     return created;
+  }
+
+  async updateReportCardVisibleFrom(
+    tenantId: string,
+    id: string,
+    visibleFrom: string | null,
+  ): Promise<ReportCard | null> {
+    const existing = await this.getReportCard(tenantId, id);
+    if (!existing) return null;
+    await this.db.run(
+      `UPDATE report_cards SET visible_from = ? WHERE tenant_id = ? AND id = ?`,
+      [visibleFrom, tenantId, id],
+    );
+    return this.getReportCard(tenantId, id);
+  }
+
+  async listGuardianVisibleReportCards(
+    tenantId: string,
+    studentId: string,
+    session: string | undefined,
+    nowIso: string,
+  ): Promise<ReportCard[]> {
+    const clauses = [
+      'tenant_id = ?',
+      'student_id = ?',
+      'visible_from IS NOT NULL',
+      'visible_from <= ?',
+    ];
+    const params: unknown[] = [tenantId, studentId, nowIso];
+    if (session) {
+      clauses.push('academic_session_ref = ?');
+      params.push(session);
+    }
+    const rows = await this.db.all<ReportCardRow>(
+      `SELECT * FROM report_cards
+       WHERE ${clauses.join(' AND ')}
+       ORDER BY generated_at DESC`,
+      params,
+    );
+    return rows.map(mapReportCard);
+  }
+
+  async insertExamEntryUnlock(row: {
+    id: string;
+    tenantId: string;
+    examId: string;
+    unlockedBy: string;
+    reason: string;
+    previousClosesAt: string | null;
+  }): Promise<void> {
+    await this.db.run(
+      `INSERT INTO exam_entry_unlocks (
+         id, tenant_id, exam_id, unlocked_by, reason, previous_closes_at
+       ) VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        row.id,
+        row.tenantId,
+        row.examId,
+        row.unlockedBy,
+        row.reason,
+        row.previousClosesAt,
+      ],
+    );
+  }
+
+  async getExamSitting(tenantId: string, id: string): Promise<ExamSitting | null> {
+    const row = await this.db.get<ExamSittingRow>(
+      'SELECT * FROM exam_sittings WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
+    return row ? mapExamSitting(row) : null;
+  }
+
+  async listExamSittings(tenantId: string, examId: string): Promise<ExamSitting[]> {
+    const rows = await this.db.all<ExamSittingRow>(
+      `SELECT * FROM exam_sittings
+       WHERE tenant_id = ? AND exam_id = ?
+       ORDER BY starts_on ASC, created_at ASC`,
+      [tenantId, examId],
+    );
+    return rows.map(mapExamSitting);
+  }
+
+  async insertExamSitting(sitting: ExamSitting): Promise<ExamSitting> {
+    await this.db.run(
+      `INSERT INTO exam_sittings (
+         id, tenant_id, exam_id, room_label, starts_on, ends_on, invigilator_member_ref
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        sitting.id,
+        sitting.tenantId,
+        sitting.examId,
+        sitting.roomLabel,
+        sitting.startsOn,
+        sitting.endsOn,
+        sitting.invigilatorMemberRef,
+      ],
+    );
+    const created = await this.getExamSitting(sitting.tenantId, sitting.id);
+    if (!created) throw new Error('Failed to read inserted exam sitting');
+    return created;
+  }
+
+  async listSeatAssignments(
+    tenantId: string,
+    sittingId: string,
+  ): Promise<SeatAssignment[]> {
+    const rows = await this.db.all<SeatAssignmentRow>(
+      `SELECT * FROM seat_assignments
+       WHERE tenant_id = ? AND sitting_id = ?
+       ORDER BY seat_code ASC`,
+      [tenantId, sittingId],
+    );
+    return rows.map(mapSeatAssignment);
+  }
+
+  async insertSeatAssignment(seat: SeatAssignment): Promise<SeatAssignment> {
+    await this.db.run(
+      `INSERT INTO seat_assignments (
+         id, tenant_id, sitting_id, student_id, seat_code
+       ) VALUES (?, ?, ?, ?, ?)`,
+      [seat.id, seat.tenantId, seat.sittingId, seat.studentId, seat.seatCode],
+    );
+    const row = await this.db.get<SeatAssignmentRow>(
+      'SELECT * FROM seat_assignments WHERE tenant_id = ? AND id = ?',
+      [seat.tenantId, seat.id],
+    );
+    if (!row) throw new Error('Failed to read inserted seat assignment');
+    return mapSeatAssignment(row);
+  }
+
+  async getHallTicketByExamStudent(
+    tenantId: string,
+    examId: string,
+    studentId: string,
+  ): Promise<HallTicket | null> {
+    const row = await this.db.get<HallTicketRow>(
+      `SELECT * FROM hall_tickets
+       WHERE tenant_id = ? AND exam_id = ? AND student_id = ?`,
+      [tenantId, examId, studentId],
+    );
+    return row ? mapHallTicket(row) : null;
+  }
+
+  async listHallTicketsForSitting(
+    tenantId: string,
+    sittingId: string,
+  ): Promise<HallTicket[]> {
+    const rows = await this.db.all<HallTicketRow>(
+      `SELECT * FROM hall_tickets
+       WHERE tenant_id = ? AND sitting_id = ?
+       ORDER BY student_id ASC`,
+      [tenantId, sittingId],
+    );
+    return rows.map(mapHallTicket);
+  }
+
+  async insertHallTicket(ticket: HallTicket): Promise<HallTicket> {
+    await this.db.run(
+      `INSERT INTO hall_tickets (
+         id, tenant_id, exam_id, student_id, sitting_id, ticket_code, issued_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        ticket.id,
+        ticket.tenantId,
+        ticket.examId,
+        ticket.studentId,
+        ticket.sittingId,
+        ticket.ticketCode,
+        ticket.issuedAt,
+      ],
+    );
+    const row = await this.db.get<HallTicketRow>(
+      'SELECT * FROM hall_tickets WHERE tenant_id = ? AND id = ?',
+      [ticket.tenantId, ticket.id],
+    );
+    if (!row) throw new Error('Failed to read inserted hall ticket');
+    return mapHallTicket(row);
+  }
+
+  async getExamAttempt(tenantId: string, id: string): Promise<ExamAttempt | null> {
+    const row = await this.db.get<ExamAttemptRow>(
+      'SELECT * FROM exam_attempts WHERE tenant_id = ? AND id = ?',
+      [tenantId, id],
+    );
+    return row ? mapExamAttempt(row) : null;
+  }
+
+  async getExamAttemptBySittingStudent(
+    tenantId: string,
+    sittingId: string,
+    studentId: string,
+  ): Promise<ExamAttempt | null> {
+    const row = await this.db.get<ExamAttemptRow>(
+      `SELECT * FROM exam_attempts
+       WHERE tenant_id = ? AND sitting_id = ? AND student_id = ?`,
+      [tenantId, sittingId, studentId],
+    );
+    return row ? mapExamAttempt(row) : null;
+  }
+
+  async insertExamAttempt(attempt: ExamAttempt): Promise<ExamAttempt> {
+    await this.db.run(
+      `INSERT INTO exam_attempts (
+         id, tenant_id, sitting_id, student_id, paper_id,
+         started_at, submitted_at, answers_json, status
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        attempt.id,
+        attempt.tenantId,
+        attempt.sittingId,
+        attempt.studentId,
+        attempt.paperId,
+        attempt.startedAt,
+        attempt.submittedAt,
+        JSON.stringify(attempt.answers),
+        attempt.status,
+      ],
+    );
+    const created = await this.getExamAttempt(attempt.tenantId, attempt.id);
+    if (!created) throw new Error('Failed to read inserted exam attempt');
+    return created;
+  }
+
+  async updateExamAttempt(
+    tenantId: string,
+    id: string,
+    next: ExamAttempt,
+  ): Promise<ExamAttempt | null> {
+    await this.db.run(
+      `UPDATE exam_attempts SET
+         answers_json = ?, submitted_at = ?, status = ?
+       WHERE tenant_id = ? AND id = ?`,
+      [JSON.stringify(next.answers), next.submittedAt, next.status, tenantId, id],
+    );
+    return this.getExamAttempt(tenantId, id);
   }
 }
 
@@ -1275,6 +1527,7 @@ interface ReportCardRow extends Record<string, unknown> {
   payload_json: string;
   generated_at: string;
   generated_by: string;
+  visible_from?: string | null;
 }
 
 function mapReportCard(row: ReportCardRow): ReportCard {
@@ -1294,6 +1547,7 @@ function mapReportCard(row: ReportCardRow): ReportCard {
     payload,
     generatedAt: row.generated_at,
     generatedBy: row.generated_by,
+    visibleFrom: row.visible_from ?? null,
   };
 }
 
@@ -1314,5 +1568,102 @@ function mapOutcomePerformance(row: OutcomePerformanceRow): OutcomePerformance {
     meanPct: row.mean_pct,
     nStudents: row.n_students,
     computedAt: row.computed_at,
+  };
+}
+
+interface ExamSittingRow extends Record<string, unknown> {
+  id: string;
+  tenant_id: string;
+  exam_id: string;
+  room_label: string;
+  starts_on: string;
+  ends_on: string;
+  invigilator_member_ref: string | null;
+  created_at: string;
+}
+
+function mapExamSitting(row: ExamSittingRow): ExamSitting {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    examId: row.exam_id,
+    roomLabel: row.room_label,
+    startsOn: row.starts_on,
+    endsOn: row.ends_on,
+    invigilatorMemberRef: row.invigilator_member_ref,
+    createdAt: row.created_at,
+  };
+}
+
+interface SeatAssignmentRow extends Record<string, unknown> {
+  id: string;
+  tenant_id: string;
+  sitting_id: string;
+  student_id: string;
+  seat_code: string;
+}
+
+function mapSeatAssignment(row: SeatAssignmentRow): SeatAssignment {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    sittingId: row.sitting_id,
+    studentId: row.student_id,
+    seatCode: row.seat_code,
+  };
+}
+
+interface HallTicketRow extends Record<string, unknown> {
+  id: string;
+  tenant_id: string;
+  exam_id: string;
+  student_id: string;
+  sitting_id: string;
+  ticket_code: string;
+  issued_at: string;
+}
+
+function mapHallTicket(row: HallTicketRow): HallTicket {
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    examId: row.exam_id,
+    studentId: row.student_id,
+    sittingId: row.sitting_id,
+    ticketCode: row.ticket_code,
+    issuedAt: row.issued_at,
+  };
+}
+
+interface ExamAttemptRow extends Record<string, unknown> {
+  id: string;
+  tenant_id: string;
+  sitting_id: string;
+  student_id: string;
+  paper_id: string;
+  started_at: string;
+  submitted_at: string | null;
+  answers_json: string;
+  status: string;
+}
+
+function mapExamAttempt(row: ExamAttemptRow): ExamAttempt {
+  let answers: Record<string, unknown> = {};
+  try {
+    const parsed = JSON.parse(row.answers_json || '{}') as Record<string, unknown>;
+    if (parsed && typeof parsed === 'object') answers = parsed;
+  } catch {
+    answers = {};
+  }
+  return {
+    id: row.id,
+    tenantId: row.tenant_id,
+    sittingId: row.sitting_id,
+    studentId: row.student_id,
+    paperId: row.paper_id,
+    startedAt: row.started_at,
+    submittedAt: row.submitted_at,
+    answers,
+    status: row.status as AttemptStatus,
   };
 }

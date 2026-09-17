@@ -77,6 +77,8 @@ export interface UserRoles {
   isGlobalHR: boolean;
   managerOf: string[];
   hrOf: string[];
+  /** members.role for this email (tenant-scoped). Empty if no member row. */
+  effectiveRole: string;
 }
 
 /** Pending action counts for GET /api/pending-actions. */
@@ -338,6 +340,10 @@ export class SettingsService {
   async getUserRoles(email: string): Promise<UserRoles> {
     const isAdmin = await this.repo.isAdmin(email);
     const assignments = await this.repo.getRolesForEmail(email);
+    const member = await this.repo.getMemberByEmail(email);
+    const effectiveRole = String(member?.role ?? '')
+      .trim()
+      .toLowerCase();
 
     const result: UserRoles = {
       isAdmin,
@@ -345,6 +351,7 @@ export class SettingsService {
       isGlobalHR: false,
       managerOf: [],
       hrOf: [],
+      effectiveRole,
     };
 
     for (const ra of assignments) {

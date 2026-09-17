@@ -4,6 +4,7 @@ import { createApp } from './app';
 import { createDatabase } from './db';
 import { createEventBus } from './events';
 import { FeatureFlagService } from './services/feature-flags';
+import { RoleAccessService } from './services/role-access-service';
 import { SseBroadcaster } from './sse/broadcaster';
 import { SchedulerRunner } from './scheduler/runner';
 import { SchedulerService } from './scheduler/scheduler-service';
@@ -90,10 +91,14 @@ async function main(): Promise<void> {
     logger.warn({ err }, 'EventBus creation failed, continuing without EventBus');
   }
 
-  // ── 5. Feature flags ──
+  // ── 5. Feature flags + role access matrix ──
   const featureFlags = new FeatureFlagService(db, logger);
   await featureFlags.load();
   logger.info('Feature flags loaded');
+
+  const roleAccess = new RoleAccessService(db, logger);
+  await roleAccess.load();
+  logger.info('Role access matrix loaded');
 
   // ── 6. SSE broadcaster ──
   const broadcaster = new SseBroadcaster(logger);
@@ -139,6 +144,7 @@ async function main(): Promise<void> {
         logger,
         broadcaster,
         featureFlags,
+        roleAccess,
         eventBus,
         entitlements: commercial.entitlements,
         directory: directory.service,

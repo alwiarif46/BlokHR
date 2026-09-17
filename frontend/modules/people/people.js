@@ -102,7 +102,13 @@ export function pplRender() {
           '<div class="ppl-email">' + _esc(m.email) + '</div>' +
         '</div>' +
         '<div class="ppl-meta">' +
-          '<span class="ppl-badge">' + _esc(m.role || 'employee') + '</span>' +
+          '<select class="ppl-role-select" data-action="change-role" data-id="' +
+            _esc(m.id) +
+            '" data-prev="' +
+            _esc(m.role || 'employee') +
+            '">' +
+            pplRoleOptions(m.role || 'employee') +
+          '</select>' +
           (m.groupId ? '<span class="ppl-group">' + _esc(m.groupId) + '</span>' : '') +
         '</div>' +
         '<div class="ppl-row-actions">' +
@@ -121,25 +127,53 @@ export function pplRender() {
   el.innerHTML = html;
 }
 
+const HR_ROLES = [
+  { value: 'employee', label: 'Employee' },
+  { value: 'manager', label: 'Manager' },
+  { value: 'hr', label: 'HR' },
+  { value: 'admin', label: 'Admin' },
+];
+
+const SCHOOL_ROLES = [
+  { value: 'teacher', label: 'Teacher' },
+  { value: 'office', label: 'Office' },
+  { value: 'school_admin', label: 'School admin' },
+  { value: 'parent', label: 'Parent' },
+  { value: 'admin', label: 'Admin' },
+];
+
+function pplRoleOptions(selected) {
+  const session = getSession() || {};
+  const isSchool = session.vertical === 'school';
+  const list = isSchool ? SCHOOL_ROLES : HR_ROLES;
+  return list
+    .map(function (r) {
+      return (
+        '<option value="' +
+        r.value +
+        '"' +
+        (selected === r.value ? ' selected' : '') +
+        '>' +
+        r.label +
+        '</option>'
+      );
+    })
+    .join('');
+}
+
 export function pplShowForm() {
   const box = _container && _container.querySelector('#pplModalBox');
   if (!box) return;
   const session = getSession() || {};
   const isSchool = session.vertical === 'school';
+  const defaultRole = isSchool ? 'office' : 'employee';
   box.innerHTML =
     '<div class="ppl-modal-title">Add employee</div>' +
     '<div class="ppl-field"><label>Full name *</label><input type="text" id="pplF_name" placeholder="Jane Doe" autocomplete="name"></div>' +
     '<div class="ppl-field"><label>Work email *</label><input type="email" id="pplF_email" placeholder="jane@company.com" autocomplete="off"></div>' +
     '<div class="ppl-field"><label>Temporary password *</label><input type="password" id="pplF_pass" placeholder="Minimum 8 characters" autocomplete="new-password"></div>' +
     '<div class="ppl-field"><label>Role</label><select id="pplF_role">' +
-      '<option value="employee">Employee</option>' +
-      '<option value="manager">Manager</option>' +
-      '<option value="hr">HR</option>' +
-      (isSchool ? '' : '<option value="teacher">Teacher</option>') +
-      '<option value="office">Office</option>' +
-      '<option value="school_admin">School admin</option>' +
-      '<option value="parent">Parent</option>' +
-      '<option value="admin">Admin</option>' +
+      pplRoleOptions(defaultRole) +
     '</select></div>' +
     (isSchool
       ? '<div class="ppl-hint mf">Teachers: use School Settings → Roster (or Teachers…).</div>'
@@ -306,6 +340,28 @@ function _bindEvents(container) {
     if (action === 'deactivate') pplDeactivate(t.dataset.id);
     if (action === 'set-pin') pplShowPinForm(t.dataset.email, t.dataset.name);
   });
+
+  container.addEventListener('change', function (e) {
+    const t = e.target.closest('[data-action="change-role"]');
+    if (!t) return;
+    pplChangeRole(t.dataset.id, t.value, t);
+  });
+}
+
+export async function pplChangeRole(id, role, selectEl) {
+  if (!id || !role) return;
+  const prev = selectEl ? selectEl.getAttribute('data-prev') : '';
+  if (prev === role) return;
+  selectEl.disabled = true;
+  const result = await api.patch('/api/members/' + encodeURIComponent(id) + '/role', { role: role });
+  selectEl.disabled = false;
+  if (!result || result._error) {
+    if (selectEl && prev) selectEl.value = prev;
+    toast((result && (result.message || result.error)) || 'Role update failed', 'error');
+    return;
+  }
+  if (selectEl) selectEl.setAttribute('data-prev', role);
+  toast('Role updated', 'success');
 }
 
 registerModule('people', renderPeoplePage);

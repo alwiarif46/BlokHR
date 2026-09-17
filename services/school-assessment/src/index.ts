@@ -153,6 +153,11 @@ export {
 } from './services/item-analysis';
 export { deriveLevelFromCircled, majorityLevel } from './services/hpc-levels';
 export { mapCbse9Point, mapMsbshseSsc } from './services/grade-maps';
+export { computeCohortRanks } from './services/rank';
+export {
+  assignRowMajorSeatCodes,
+  scoreMcqDraftMarks,
+} from './services/assessment-service';
 export { SAMPLE_HPC_COMPETENCY_COUNT, seedSampleHpcCompetencies } from './seed-hpc-sample';
 export * from './types';
 export * from './events';

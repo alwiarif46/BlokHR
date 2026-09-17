@@ -8,7 +8,12 @@ import type { AppConfig } from './config';
 import type { DatabaseEngine } from './db/engine';
 import { resolveInternalSecret } from './internal-auth';
 import { runWithTenant } from './tenant/context';
-import { parseTenantHostMap, resolveTenantId } from './tenant/resolve-tenant';
+import {
+  parseHostList,
+  parseReservedSlugs,
+  parseTenantHostMap,
+  resolveTenantId,
+} from './tenant/resolve-tenant';
 
 /**
  * Augment Express Request with identity, correlationId, and tenantId.
@@ -144,9 +149,11 @@ export function createApp(
   // shell.html is the single app shell (the gateway serves it the same way).
   app.use(express.static(config.publicDir, { index: 'shell.html' }));
 
-  // ── 8. Tenant resolution (Host map → trusted X-Blok-Tenant → DEFAULT_TENANT_ID) ──
+  // ── 8. Tenant resolution (Host map → subdomain → trusted X-Blok-Tenant → fallback) ──
   // Only trust client/gateway X-Blok-Tenant when X-Blok-Internal matches INTERNAL_SECRET.
   const hostMap = parseTenantHostMap(config.tenantHostMap);
+  const apexHosts = parseHostList(config.tenantApexHosts);
+  const reservedSlugs = parseReservedSlugs(config.tenantReservedSlugs);
   app.use((req: Request, _res: Response, next: NextFunction) => {
     const gotInternal = String(req.headers['x-blok-internal'] ?? '');
     const trustBlokTenantHeader = !!(internalSecret && gotInternal === internalSecret);
@@ -155,6 +162,9 @@ export function createApp(
       hostMap,
       trustBlokTenantHeader,
       fallback: config.defaultTenantId,
+      subdomainBase: config.tenantSubdomainBase,
+      reservedSlugs,
+      apexHosts,
     });
     req.tenantId = tenantId;
     // Propagate for directory/school routers that read X-Blok-Tenant

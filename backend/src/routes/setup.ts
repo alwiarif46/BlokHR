@@ -6,6 +6,7 @@ import type { EntitlementsService } from '@blokhr/entitlements';
 import type { DirectoryService } from '@blokhr/directory';
 import { AppError, asyncHandler } from '../app';
 import { SetupService } from '../services/setup-service';
+import { isApexHost, normalizeHost, parseHostList } from '../tenant/resolve-tenant';
 
 /**
  * Setup Wizard routes (3-screen first-run):
@@ -22,6 +23,8 @@ export function createSetupRouter(
   directory?: DirectoryService,
 ): Router {
   const router = Router();
+  const apexHosts = parseHostList(config.tenantApexHosts);
+  const subdomainBase = (config.tenantSubdomainBase || '').trim().toLowerCase();
   const service = new SetupService(db, logger, {
     deploymentMode: config.deploymentMode,
     tenantId: config.defaultTenantId,
@@ -30,12 +33,30 @@ export function createSetupRouter(
     directory,
   });
 
+  function requestHost(req: Request): string {
+    const forwarded = String(req.headers['x-forwarded-host'] ?? '').split(',')[0];
+    return normalizeHost(forwarded || String(req.headers.host ?? ''));
+  }
+
+  function assertNotApex(req: Request): void {
+    if (apexHosts.size === 0) return;
+    if (isApexHost(requestHost(req), apexHosts)) {
+      throw new AppError('use_workspace_subdomain', 400);
+    }
+  }
+
   /** GET /api/setup/status — returns setup state. */
   router.get(
     '/setup/status',
-    asyncHandler(async (_req: Request, res: Response) => {
+    asyncHandler(async (req: Request, res: Response) => {
+      const host = requestHost(req);
+      const signupPortal = apexHosts.size > 0 && isApexHost(host, apexHosts);
       const status = await service.getStatus();
-      res.json(status);
+      res.json({
+        ...status,
+        signupPortal,
+        subdomainBase: subdomainBase || null,
+      });
     }),
   );
 
@@ -43,6 +64,7 @@ export function createSetupRouter(
   router.post(
     '/setup/step1',
     asyncHandler(async (req: Request, res: Response) => {
+      assertNotApex(req);
       const {
         companyName,
         tagline,
@@ -88,6 +110,7 @@ export function createSetupRouter(
   router.post(
     '/setup/step2',
     asyncHandler(async (req: Request, res: Response) => {
+      assertNotApex(req);
       const {
         authLocalEnabled,
         authMagicLinkEnabled,
@@ -122,6 +145,7 @@ export function createSetupRouter(
   router.post(
     '/setup/step3',
     asyncHandler(async (req: Request, res: Response) => {
+      assertNotApex(req);
       const { licenseToken, licenseKey, adminEmail, vertical } = req.body as {
         licenseToken?: string;
         /** @deprecated stub key — ignored on cloud; mapped to licenseToken on self-hosted */

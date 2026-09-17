@@ -30,6 +30,13 @@ export const ASSESSMENT_ROUTE_POLICIES: RoutePolicy[] = [
     requireMemberBinding: true,
   },
   {
+    method: 'POST',
+    pattern: /^\/[^/]+\/exams\/[^/]+\/marks\/import\/?$/,
+    roles: TEACHER_ADMIN,
+    scope: 'teacher_section',
+    requireMemberBinding: true,
+  },
+  {
     method: 'GET',
     pattern: /^\/[^/]+\/exams\/[^/]+\/marks\/?$/,
     roles: TEACHER_ADMIN,
@@ -38,6 +45,56 @@ export const ASSESSMENT_ROUTE_POLICIES: RoutePolicy[] = [
     method: 'POST',
     pattern: /^\/[^/]+\/exams\/[^/]+\/publish\/?$/,
     roles: ADMIN_UP,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/[^/]+\/exams\/[^/]+\/unlock\/?$/,
+    roles: ADMIN_UP,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/[^/]+\/exams\/[^/]+\/sittings\/?$/,
+    roles: ADMIN_UP,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/exams\/[^/]+\/sittings\/?$/,
+    roles: STAFF4,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/exams\/[^/]+\/paper\/?$/,
+    roles: TEACHER_ADMIN,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/[^/]+\/sittings\/[^/]+\/issue-tickets\/?$/,
+    roles: ADMIN_UP,
+  },
+  {
+    method: 'GET',
+    pattern: /^\/[^/]+\/sittings\/[^/]+\/tickets\/?$/,
+    roles: TEACHER_ADMIN,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/[^/]+\/sittings\/[^/]+\/open\/?$/,
+    roles: ADMIN_UP,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/[^/]+\/sittings\/[^/]+\/attempts\/start\/?$/,
+    roles: STAFF4,
+  },
+  {
+    method: 'PUT',
+    pattern: /^\/[^/]+\/attempts\/[^/]+\/answers\/?$/,
+    roles: STAFF4,
+  },
+  {
+    method: 'POST',
+    pattern: /^\/[^/]+\/attempts\/[^/]+\/submit\/?$/,
+    roles: STAFF4,
   },
   {
     method: 'POST',
@@ -105,6 +162,11 @@ export const ASSESSMENT_ROUTE_POLICIES: RoutePolicy[] = [
   },
   { method: 'GET', pattern: /^\/[^/]+\/report-cards\/?$/, roles: OFFICE_UP },
   { method: 'GET', pattern: /^\/[^/]+\/report-cards\/[^/]+\/?$/, roles: OFFICE_UP },
+  {
+    method: 'PATCH',
+    pattern: /^\/[^/]+\/report-cards\/[^/]+\/?$/,
+    roles: ADMIN_UP,
+  },
   {
     method: 'GET',
     pattern: /^\/[^/]+\/guardian\/students\/[^/]+\/report-cards\/?$/,

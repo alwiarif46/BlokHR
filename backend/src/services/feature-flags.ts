@@ -44,6 +44,7 @@ const FEATURE_ROUTE_MAP: Record<string, string[]> = {
   webhooks: ['/api/webhooks'],
   settings: ['/api/settings'],
   feature_flags: ['/api/features'],
+  role_access: ['/api/settings/role-access'],
   capture_admin: ['/api/capture', '/api/consent'],
   school_register: ['/api/school-attendance'],
   face_recognition: ['/api/face'],
@@ -67,6 +68,28 @@ const FEATURE_ROUTE_MAP: Record<string, string[]> = {
   file_storage: ['/api/storage'],
   analytics: ['/api/analytics'],
 };
+
+/** Keys present in FEATURE_ROUTE_MAP (API-enforceable modules). */
+export function featureRouteMapKeys(): Set<string> {
+  return new Set(Object.keys(FEATURE_ROUTE_MAP));
+}
+
+/** Longest matching route prefix wins when paths overlap (intended containment). */
+export function resolveFeatureKeyForPath(path: string): string | null {
+  let bestKey: string | null = null;
+  let bestLen = -1;
+  for (const [featureKey, prefixes] of Object.entries(FEATURE_ROUTE_MAP)) {
+    for (const prefix of prefixes) {
+      if (path === prefix || path.startsWith(prefix + '/')) {
+        if (prefix.length > bestLen) {
+          bestLen = prefix.length;
+          bestKey = featureKey;
+        }
+      }
+    }
+  }
+  return bestKey;
+}
 
 // ── Feature key to AI tool category mapping ──
 
@@ -109,24 +132,12 @@ const ADMIN_ONLY_ROUTE_PREFIXES: string[] = [
 ];
 
 /** Longest matching route prefix wins when paths overlap. */
-function resolveFeatureKeyForPath(path: string): string | null {
-  let bestKey: string | null = null;
-  let bestLen = -1;
-  for (const [featureKey, prefixes] of Object.entries(FEATURE_ROUTE_MAP)) {
-    for (const prefix of prefixes) {
-      if (path === prefix || path.startsWith(prefix + '/')) {
-        if (prefix.length > bestLen) {
-          bestLen = prefix.length;
-          bestKey = featureKey;
-        }
-      }
-    }
-  }
-  return bestKey;
+function resolveFeatureKeyForPathLocal(path: string): string | null {
+  return resolveFeatureKeyForPath(path);
 }
 
 function pathBlockedByFlags(path: string, isEnabled: (key: string) => boolean): boolean {
-  const key = resolveFeatureKeyForPath(path);
+  const key = resolveFeatureKeyForPathLocal(path);
   if (!key) return false;
   return !isEnabled(key);
 }
@@ -204,8 +215,16 @@ export class FeatureFlagService {
   /**
    * Express middleware factory: returns 403 for admin-only route prefixes when
    * the caller is not an admin. Requires db to look up admin status.
+   * Optional roleAccess: deny when matrix hides the FEATURE_ROUTE_MAP module for the caller's members.role.
    */
-  guardWithAdmin(db: DatabaseEngine): (req: Request, res: Response, next: NextFunction) => void {
+  guardWithAdmin(
+    db: DatabaseEngine,
+    roleAccess?: {
+      getEffectiveRoleCached: (tenantId: string, email: string) => string | null;
+      isPathVisibleForRole: (tenantId: string, role: string, path: string) => boolean;
+      refreshTenant?: (tenantId: string) => Promise<void>;
+    },
+  ): (req: Request, res: Response, next: NextFunction) => void {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
       const path = req.path;
 
@@ -214,20 +233,46 @@ export class FeatureFlagService {
         return;
       }
 
+      // Authenticated users may read the role-access matrix (sidebar AND-gate).
+      const isRoleAccessGet =
+        req.method === 'GET' &&
+        (path === '/settings/role-access' || path === '/api/settings/role-access');
+
       // Check admin-only route prefixes
       const isAdminRoute = ADMIN_ONLY_ROUTE_PREFIXES.some(
-        prefix => path === prefix || path.startsWith(prefix + '/'),
+        (prefix) => path === prefix || path.startsWith(prefix + '/'),
       );
-      if (isAdminRoute) {
+      if (isAdminRoute && !isRoleAccessGet) {
         const email = req.identity?.email ?? '';
         if (!email) {
           res.status(403).json({ error: 'Admin access required' });
           return;
         }
-        const admin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [getTenantId(), email]);
+        const admin = await db.get('SELECT email FROM admins WHERE tenant_id = ? AND email = ?', [
+          getTenantId(),
+          email,
+        ]);
         if (!admin) {
           res.status(403).json({ error: 'Admin access required' });
           return;
+        }
+      }
+
+      // Role → module visibility (sparse; missing = allow). Longest-prefix containment.
+      if (roleAccess) {
+        const email = (req.identity?.email ?? '').toLowerCase().trim();
+        const tid = getTenantId();
+        if (email) {
+          let role = roleAccess.getEffectiveRoleCached(tid, email);
+          if (role === null && roleAccess.refreshTenant) {
+            await roleAccess.refreshTenant(tid);
+            role = roleAccess.getEffectiveRoleCached(tid, email);
+          }
+          // No member row ⇒ fail-open (no override applies)
+          if (role && !roleAccess.isPathVisibleForRole(tid, role, path.startsWith('/api') ? path : `/api${path}`)) {
+            res.status(403).json({ error: 'module_hidden_for_role' });
+            return;
+          }
         }
       }
 

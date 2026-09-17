@@ -29,6 +29,44 @@
     </div>
 
     <!-- ══════════════════════════════════════════════════════════════
+     SCREEN: APEX SIGNUP PORTAL (create workspace → subdomain)
+     ══════════════════════════════════════════════════════════════ -->
+    <div class="screen" id="screenSignup">
+      <div class="wz-wrap" style="max-width: 440px; margin: 0 auto; padding: 48px 20px">
+        <div class="wz-card" style="padding: 28px">
+          <div class="wz-header" style="margin-bottom: 20px">
+            <div class="wz-title" style="font-size: 22px">Create your workspace</div>
+            <div class="wz-subtitle" style="margin-top: 8px">
+              Pick a unique subdomain. Your team will use it for setup and sign-in.
+            </div>
+          </div>
+          <div class="wz-fg">
+            <div class="wz-fl"><span class="req">*</span> Workspace URL</div>
+            <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap">
+              <input
+                class="wz-fi"
+                id="suSlug"
+                placeholder="acme"
+                autocomplete="off"
+                spellcheck="false"
+                style="flex: 1; min-width: 120px"
+              />
+              <span id="suSuffix" style="font-size: 13px; opacity: 0.7">.13blok.com</span>
+            </div>
+            <div class="wz-fe" id="suErr" style="display: none"></div>
+            <div id="suHint" style="font-size: 12px; margin-top: 8px; opacity: 0.65"></div>
+          </div>
+          <div class="wz-br" style="margin-top: 20px">
+            <span></span>
+            <button class="wz-btn wz-btn-p" id="suBtn" disabled>
+              <span class="btn-text">Continue &#8594;</span><span class="wz-spin"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════════
      SCREEN 2: SETUP WIZARD (loaded from modules/setup_wizard/)
      ══════════════════════════════════════════════════════════════ -->
     <div class="screen" id="screenSetup" data-wz-theme="dark">
@@ -88,8 +126,8 @@
               </div>
               <p class="wz-vwarn">This choice is permanent for this workspace and cannot be changed later.</p>
               <p class="wz-vwarn" style="margin-top: 8px">
-                This site URL is for <strong>one organization</strong>. Another company needs its own
-                subdomain (for example <code>acme.13blok.com</code>), mapped before setup.
+                Each organization uses its own subdomain (for example <code>acme.13blok.com</code>).
+                Create a new workspace from the main site if you need another company.
               </p>
               <div class="wz-br">
                 <span></span
@@ -508,36 +546,45 @@
       <div class="app-layout">
         <div class="sidebar" id="sidebar">
           <div class="sb-nav" id="sbNav">
+            <!-- Overview (no heading) -->
             <div class="sb-item" data-module="dashboard" data-flag="dashboard">
               <span class="sb-icon">&#127968;</span><span class="sb-label">Dashboard</span>
-            </div>
-            <div class="sb-item active" data-module="attendance" data-flag="attendance">
-              <span class="sb-icon">&#128197;</span><span class="sb-label">Attendance</span>
-            </div>
-            <div class="sb-item" data-module="holidays" data-flag="holidays">
-              <span class="sb-icon">&#127881;</span><span class="sb-label">Holidays</span>
-            </div>
-            <div class="sb-item" data-module="meetings" data-flag="meetings">
-              <span class="sb-icon">&#128197;</span><span class="sb-label">Meetings</span>
             </div>
             <div class="sb-item" data-module="my_prefs" data-flag="my_preferences">
               <span class="sb-icon">&#127912;</span><span class="sb-label">My Preferences</span>
             </div>
+            <!-- Attendance & Time -->
             <div class="sb-divider"></div>
-            <div class="sb-item" data-module="org_chart" data-flag="org_chart">
-              <span class="sb-icon">&#127963;</span><span class="sb-label">Org Chart</span>
+            <div class="sb-section-label">Attendance &amp; Time</div>
+            <div class="sb-item active" data-module="attendance" data-flag="attendance">
+              <span class="sb-icon">&#128197;</span><span class="sb-label">Attendance</span>
             </div>
-            <div class="sb-item" data-module="training" data-flag="training_lms">
-              <span class="sb-icon">&#127891;</span><span class="sb-label">Training</span>
+            <div class="sb-item" data-module="time_tracking" data-flag="time_tracking">
+              <span class="sb-icon">&#9201;</span><span class="sb-label">Time Tracking</span>
             </div>
-            <div class="sb-item" data-module="surveys" data-flag="surveys">
-              <span class="sb-icon">&#128202;</span><span class="sb-label">Surveys</span>
+            <div class="sb-item" data-module="overtime" data-flag="overtime">
+              <span class="sb-icon">&#128336;</span><span class="sb-label">Overtime</span>
             </div>
-            <div class="sb-item" data-module="ai_chatbot" data-flag="ai_chatbot">
-              <span class="sb-icon">&#129302;</span><span class="sb-label">AI Chatbot</span>
+            <div class="sb-item role-gated" data-module="geo_fencing" data-flag="geo_fencing" style="display: none">
+              <span class="sb-icon">&#127759;</span><span class="sb-label">Geo-Fencing</span>
             </div>
-            <div class="sb-divider role-gated" style="display: none"></div>
-            <div class="sb-section-label role-gated" style="display: none">Management</div>
+            <div
+              class="sb-item role-gated"
+              data-module="face_recognition"
+              data-flag="face_recognition"
+              style="display: none"
+            >
+              <span class="sb-icon">&#129504;</span><span class="sb-label">Face Rec</span>
+            </div>
+            <div class="sb-item role-gated" data-module="iris_scan" data-flag="iris_scan" style="display: none">
+              <span class="sb-icon">&#128065;</span><span class="sb-label">Iris Scan</span>
+            </div>
+            <div class="sb-item" data-module="holidays" data-flag="holidays">
+              <span class="sb-icon">&#127881;</span><span class="sb-label">Holidays</span>
+            </div>
+            <!-- People -->
+            <div class="sb-divider"></div>
+            <div class="sb-section-label">People</div>
             <div class="sb-item role-gated" data-module="leaves" data-flag="leaves" style="display: none">
               <span class="sb-icon">&#127796;</span><span class="sb-label">Leaves</span>
             </div>
@@ -547,7 +594,18 @@
             <div class="sb-item role-gated" data-module="profile" data-flag="profiles" style="display: none">
               <span class="sb-icon">&#128100;</span><span class="sb-label">Profiles</span>
             </div>
-            <div class="sb-divider role-gated" style="display: none"></div>
+            <div class="sb-item role-gated" data-module="timesheets" data-flag="timesheets" style="display: none">
+              <span class="sb-icon">&#128203;</span><span class="sb-label">Timesheets</span>
+            </div>
+            <div class="sb-item" data-module="org_chart" data-flag="org_chart">
+              <span class="sb-icon">&#127963;</span><span class="sb-label">Org Chart</span>
+            </div>
+            <!-- Work & Collaboration -->
+            <div class="sb-divider"></div>
+            <div class="sb-section-label">Work &amp; Collaboration</div>
+            <div class="sb-item" data-module="meetings" data-flag="meetings">
+              <span class="sb-icon">&#128197;</span><span class="sb-label">Meetings</span>
+            </div>
             <div class="sb-item role-gated" data-module="documents" data-flag="document_mgmt" style="display: none">
               <span class="sb-icon">&#128196;</span><span class="sb-label">Documents</span>
             </div>
@@ -563,11 +621,21 @@
             <div class="sb-item role-gated" data-module="expenses" data-flag="expense_mgmt" style="display: none">
               <span class="sb-icon">&#128176;</span><span class="sb-label">Expenses</span>
             </div>
-            <div class="sb-item role-gated" data-module="timesheets" data-flag="timesheets" style="display: none">
-              <span class="sb-icon">&#128203;</span><span class="sb-label">Timesheets</span>
+            <!-- Growth -->
+            <div class="sb-divider"></div>
+            <div class="sb-section-label">Growth</div>
+            <div class="sb-item" data-module="training" data-flag="training_lms">
+              <span class="sb-icon">&#127891;</span><span class="sb-label">Training</span>
             </div>
-            <div class="sb-divider role-gated" style="display: none"></div>
-            <div class="sb-section-label role-gated" style="display: none">Capture</div>
+            <div class="sb-item" data-module="surveys" data-flag="surveys">
+              <span class="sb-icon">&#128202;</span><span class="sb-label">Surveys</span>
+            </div>
+            <div class="sb-item" data-module="ai_chatbot" data-flag="ai_chatbot">
+              <span class="sb-icon">&#129302;</span><span class="sb-label">AI Chatbot</span>
+            </div>
+            <!-- School (Capture Admin folded in; no separate Capture heading) -->
+            <div class="sb-divider hidden" data-flag-group="school_vertical"></div>
+            <div class="sb-section-label hidden" data-flag-group="school_vertical">School</div>
             <div
               class="sb-item role-gated"
               data-module="school_register"
@@ -577,11 +645,6 @@
             >
               <span class="sb-icon">&#128218;</span><span class="sb-label">School Register</span>
             </div>
-            <div class="sb-item role-gated" data-module="capture_admin" data-flag="capture_admin" style="display: none">
-              <span class="sb-icon">&#128241;</span><span class="sb-label">Capture Admin</span>
-            </div>
-            <div class="sb-divider hidden" data-flag-group="school_vertical"></div>
-            <div class="sb-section-label hidden" data-flag-group="school_vertical">School</div>
             <div
               class="sb-item hidden"
               data-module="school_students"
@@ -629,12 +692,12 @@
             </div>
             <div
               class="sb-item hidden"
-              data-module="school_circulars"
-              data-flag="school_circulars"
+              data-module="school_exams"
+              data-flag="school_exams"
               data-school-module="1"
-              data-school-roles="office,school_admin"
+              data-school-roles="teacher,school_admin"
             >
-              <span class="sb-icon">&#128276;</span><span class="sb-label">Circulars</span>
+              <span class="sb-icon">&#128221;</span><span class="sb-label">Exams</span>
             </div>
             <div
               class="sb-item hidden"
@@ -656,6 +719,15 @@
             </div>
             <div
               class="sb-item hidden"
+              data-module="school_circulars"
+              data-flag="school_circulars"
+              data-school-module="1"
+              data-school-roles="office,school_admin"
+            >
+              <span class="sb-icon">&#128276;</span><span class="sb-label">Circulars</span>
+            </div>
+            <div
+              class="sb-item hidden"
               data-module="school_surveys"
               data-flag="school_parent_surveys"
               data-school-module="1"
@@ -663,6 +735,10 @@
             >
               <span class="sb-icon">&#128202;</span><span class="sb-label">Parents &amp; Guardians</span>
             </div>
+            <div class="sb-item role-gated" data-module="capture_admin" data-flag="capture_admin" style="display: none">
+              <span class="sb-icon">&#128241;</span><span class="sb-label">Capture Admin</span>
+            </div>
+            <!-- Family -->
             <div
               class="sb-divider hidden"
               data-flag="school_vertical"
@@ -684,29 +760,13 @@
             >
               <span class="sb-icon">&#128106;</span><span class="sb-label">Parent Portal</span>
             </div>
-            <div class="sb-item role-gated" data-module="iris_scan" data-flag="iris_scan" style="display: none">
-              <span class="sb-icon">&#128065;</span><span class="sb-label">Iris Scan</span>
-            </div>
-            <div
-              class="sb-item role-gated"
-              data-module="face_recognition"
-              data-flag="face_recognition"
-              style="display: none"
-            >
-              <span class="sb-icon">&#129504;</span><span class="sb-label">Face Rec</span>
-            </div>
-            <div class="sb-item" data-module="time_tracking" data-flag="time_tracking">
-              <span class="sb-icon">&#9201;</span><span class="sb-label">Time Tracking</span>
-            </div>
-            <div class="sb-item" data-module="overtime" data-flag="overtime">
-              <span class="sb-icon">&#128336;</span><span class="sb-label">Overtime</span>
-            </div>
-            <div class="sb-item role-gated" data-module="geo_fencing" data-flag="geo_fencing" style="display: none">
-              <span class="sb-icon">&#127759;</span><span class="sb-label">Geo-Fencing</span>
-            </div>
+            <!-- Insights -->
+            <div class="sb-divider role-gated" style="display: none"></div>
+            <div class="sb-section-label role-gated" style="display: none">Insights</div>
             <div class="sb-item role-gated" data-module="analytics" data-flag="analytics" style="display: none">
               <span class="sb-icon">&#128200;</span><span class="sb-label">Analytics</span>
             </div>
+            <!-- Admin -->
             <div class="sb-divider admin-gated" style="display: none"></div>
             <div class="sb-section-label admin-gated" style="display: none">Admin</div>
             <div class="sb-item admin-gated" data-module="people" data-flag="people" style="display: none">
@@ -715,11 +775,14 @@
             <div class="sb-item admin-gated" data-module="leave_policies" data-flag="leave_policies" style="display: none">
               <span class="sb-icon">&#128220;</span><span class="sb-label">Leave Policies</span>
             </div>
-            <div class="sb-item admin-gated" data-module="audit_trail" data-flag="audit_trail" style="display: none">
-              <span class="sb-icon">&#128218;</span><span class="sb-label">Audit Trail</span>
-            </div>
             <div class="sb-item admin-gated" data-module="feature_flags" data-flag="feature_flags" style="display: none">
               <span class="sb-icon">&#127988;</span><span class="sb-label">Features</span>
+            </div>
+            <div class="sb-item admin-gated" data-module="role_access" data-flag="role_access" style="display: none">
+              <span class="sb-icon">&#128275;</span><span class="sb-label">Roles &amp; Access</span>
+            </div>
+            <div class="sb-item admin-gated" data-module="audit_trail" data-flag="audit_trail" style="display: none">
+              <span class="sb-icon">&#128218;</span><span class="sb-label">Audit Trail</span>
             </div>
             <div class="sb-item admin-gated" data-module="webhooks" data-flag="webhooks" style="display: none">
               <span class="sb-icon">&#128279;</span><span class="sb-label">Webhooks</span>
@@ -838,6 +901,7 @@
         document.body.classList.toggle(
           'on-login-screen',
           id === 'screenLogin' ||
+            id === 'screenSignup' ||
             id === 'screenChangePassword' ||
             id === 'screenForgotPassword' ||
             id === 'screenResetPassword',
@@ -857,6 +921,7 @@
             }
             document.getElementById('themeBar').style.display =
             id === 'screenLogin' ||
+            id === 'screenSignup' ||
             id === 'screenChangePassword' ||
             id === 'screenForgotPassword' ||
             id === 'screenResetPassword'
@@ -1245,7 +1310,7 @@
         }
         disconnectSSE();
         clearSession();
-        _userRoles = { isAdmin: false, isGlobalManager: false, isGlobalHR: false, managerOf: [], hrOf: [] };
+        _userRoles = { isAdmin: false, isGlobalManager: false, isGlobalHR: false, managerOf: [], hrOf: [], effectiveRole: '' };
         applyRoleGates();
         showScreen('screenLogin');
         toast('Logged out', 'info');
@@ -1279,7 +1344,16 @@
       }
 
       /* ── User roles (manager/HR/admin gate) ── */
-      let _userRoles = { isAdmin: false, isGlobalManager: false, isGlobalHR: false, managerOf: [], hrOf: [] };
+      let _userRoles = {
+        isAdmin: false,
+        isGlobalManager: false,
+        isGlobalHR: false,
+        managerOf: [],
+        hrOf: [],
+        effectiveRole: '',
+      };
+      /** role → module_key → visible; missing = visible. Loaded for matrix AND-gate. */
+      let _roleAccessMatrix = {};
 
       /* FIX #5: loadUserRoles now writes is_admin to session + handles mock mode */
       async function loadUserRoles() {
@@ -1294,6 +1368,7 @@
             isGlobalHR: true,
             managerOf: [],
             hrOf: [],
+            effectiveRole: s.effectiveRole || (s.is_admin !== false ? 'admin' : 'employee'),
           };
           app.userRoles = _userRoles;
           applyRoleGates();
@@ -1303,10 +1378,13 @@
         const data = await api.get('/api/user-roles?email=' + encodeURIComponent(s.email));
         if (data && !data._error) {
           _userRoles = data;
+          if (!_userRoles.effectiveRole) _userRoles.effectiveRole = '';
           app.userRoles = _userRoles;
           /* Write admin/role status to session so settings.js can read getSession().is_admin */
           updateSession('is_admin', !!data.isAdmin);
-          updateSession('role', data.isAdmin ? 'admin' : 'employee');
+          updateSession('effectiveRole', data.effectiveRole || '');
+          /* Keep legacy binary role for older modules; prefer effectiveRole for matrix */
+          updateSession('role', data.effectiveRole || (data.isAdmin ? 'admin' : 'employee'));
           updateSession('isGlobalManager', !!data.isGlobalManager);
           updateSession('isGlobalHR', !!data.isGlobalHR);
         }
@@ -1316,7 +1394,24 @@
           updateSession('schoolRole', who.role);
           if (who.isAdmin) updateSession('is_admin', true);
         }
+        await loadRoleAccessMatrix();
         applyRoleGates();
+      }
+
+      async function loadRoleAccessMatrix() {
+        _roleAccessMatrix = {};
+        if (!_userRoles.isAdmin && !(_userRoles.effectiveRole || '')) {
+          /* Non-admins still need their own row; public GET uses auth */
+        }
+        try {
+          const data = await api.get('/api/settings/role-access');
+          if (data && !data._error && data.matrix) {
+            _roleAccessMatrix = data.matrix;
+            app.roleAccessMatrix = _roleAccessMatrix;
+          }
+        } catch (_e) {
+          /* optional — older backends */
+        }
       }
 
       function applyRoleGates() {
@@ -1343,12 +1438,30 @@
           schoolRole: schoolRole,
           isAdmin: !!(isAdmin || sess.is_admin || sess.schoolRole === 'admin'),
         });
+        /* Matrix AND-gate: hide sb-item when effectiveRole has visible=false for data-flag */
+        applyRoleAccessMatrixGates();
         /* Parent role: hide Me/Team switch and land on Parent Portal only */
         var viewSwitch = document.getElementById('viewSwitch');
         if (viewSwitch) viewSwitch.style.display = parentOnly ? 'none' : '';
         if (parentOnly && typeof navigateToModule === 'function') {
           navigateToModule('parent_hub');
         }
+      }
+
+      function applyRoleAccessMatrixGates() {
+        var role = (_userRoles.effectiveRole || (getSession() || {}).effectiveRole || '').toLowerCase();
+        if (!role) return;
+        var row = _roleAccessMatrix[role] || {};
+        document.querySelectorAll('.sb-item[data-flag]').forEach(function (el) {
+          var flag = el.getAttribute('data-flag');
+          if (!flag) return;
+          if (row[flag] === false) {
+            el.classList.add('role-access-hidden');
+            el.style.display = 'none';
+          } else {
+            el.classList.remove('role-access-hidden');
+          }
+        });
       }
 
       /* ── Settings cache — FIX #6: correct settings_json path ── */
@@ -1382,8 +1495,13 @@
       }
 
       /* ── SSE: settings-update listener ── */
-      onSSE('settings-update', () => {
+      onSSE('settings-update', (payload) => {
         loadSettings();
+        if (payload && (payload.source === 'role_access' || payload.source === 'member_role')) {
+          loadRoleAccessMatrix().then(function () {
+            applyRoleGates();
+          });
+        }
       });
 
       /* ── Clock ── */
@@ -1516,6 +1634,85 @@
       /* ══════════════════════════════════════════════════════════════
    BOOT SEQUENCE
    ══════════════════════════════════════════════════════════════ */
+      let _signupWired = false;
+      function initSignupPortal(status) {
+        const base = (status && status.subdomainBase) || '13blok.com';
+        const suffixEl = document.getElementById('suSuffix');
+        if (suffixEl) suffixEl.textContent = '.' + base;
+        const input = document.getElementById('suSlug');
+        const err = document.getElementById('suErr');
+        const hint = document.getElementById('suHint');
+        const btn = document.getElementById('suBtn');
+        if (!input || !btn) return;
+
+        function setErr(msg) {
+          if (!err) return;
+          if (msg) {
+            err.textContent = msg;
+            err.style.display = 'block';
+          } else {
+            err.textContent = '';
+            err.style.display = 'none';
+          }
+        }
+
+        async function refreshAvailability() {
+          const raw = (input.value || '').trim().toLowerCase();
+          btn.disabled = true;
+          setErr('');
+          if (hint) hint.textContent = '';
+          if (!raw) return;
+          if (raw.length < 3) {
+            setErr('Use at least 3 characters');
+            return;
+          }
+          const check = await api.get('/api/tenants/check/' + encodeURIComponent(raw));
+          if (!check || check._error) {
+            setErr((check && check.message) || 'Could not check availability');
+            return;
+          }
+          if (check.status === 'available') {
+            if (hint) hint.textContent = 'Available — ' + raw + '.' + base;
+            btn.disabled = false;
+          } else if (check.status === 'incomplete') {
+            if (hint) hint.textContent = 'Workspace exists but setup is unfinished — continue there';
+            btn.disabled = false;
+          } else if (check.status === 'taken') {
+            setErr('That workspace URL is already taken');
+          } else {
+            setErr('Invalid workspace name');
+          }
+        }
+
+        if (!_signupWired) {
+          _signupWired = true;
+          let timer = null;
+          input.addEventListener('input', () => {
+            btn.disabled = true;
+            clearTimeout(timer);
+            timer = setTimeout(refreshAvailability, 350);
+          });
+          btn.addEventListener('click', async () => {
+            const raw = (input.value || '').trim().toLowerCase();
+            if (!raw) return;
+            btn.disabled = true;
+            const claimed = await api.post('/api/tenants', { slug: raw });
+            if (claimed && !claimed._error && claimed.workspaceUrl) {
+              window.location.href = claimed.workspaceUrl;
+              return;
+            }
+            if (claimed && claimed.error === 'slug_taken') {
+              // Already claimed — send user to the subdomain to finish or log in
+              window.location.href = 'https://' + raw + '.' + base + '/';
+              return;
+            }
+            setErr((claimed && (claimed.message || claimed.error)) || 'Could not create workspace');
+            btn.disabled = false;
+          });
+        }
+        refreshAvailability();
+      }
+
       async function boot() {
         initApi();
         try {
@@ -1556,6 +1753,11 @@
             }
             if (consumeAuthDeepLinks()) return;
             showScreen('screenLogin');
+            return;
+          }
+          if (status && status.signupPortal) {
+            initSignupPortal(status);
+            showScreen('screenSignup');
             return;
           }
           if (status && !status.setupComplete) {

@@ -34,6 +34,7 @@ describe('school-roles L6 (P12-06)', () => {
       root.innerHTML = `
         <div data-module="school_roll_call" data-school-roles="teacher,school_admin"></div>
         <div data-module="school_academics" data-school-roles="teacher,school_admin"></div>
+        <div data-module="school_exams" data-school-roles="teacher,school_admin"></div>
         <div data-module="school_hpc" data-school-roles="teacher,school_admin"></div>
         <div data-module="school_students" data-school-roles="office,school_admin"></div>
         <div data-module="school_attendance_admin" data-school-roles="office,school_admin"></div>
@@ -52,7 +53,7 @@ describe('school-roles L6 (P12-06)', () => {
     const matrix = [
       {
         role: 'teacher',
-        visible: ['school_roll_call', 'school_academics', 'school_hpc'],
+        visible: ['school_roll_call', 'school_academics', 'school_exams', 'school_hpc'],
         hidden: [
           'school_students',
           'school_attendance_admin',
@@ -67,6 +68,7 @@ describe('school-roles L6 (P12-06)', () => {
         hidden: [
           'school_roll_call',
           'school_academics',
+          'school_exams',
           'school_hpc',
           'school_surveys',
           'parent_hub',
@@ -77,6 +79,7 @@ describe('school-roles L6 (P12-06)', () => {
         visible: [
           'school_roll_call',
           'school_academics',
+          'school_exams',
           'school_hpc',
           'school_students',
           'school_attendance_admin',
@@ -90,6 +93,7 @@ describe('school-roles L6 (P12-06)', () => {
         visible: [
           'school_roll_call',
           'school_academics',
+          'school_exams',
           'school_hpc',
           'school_students',
           'school_attendance_admin',
@@ -106,6 +110,7 @@ describe('school-roles L6 (P12-06)', () => {
         hidden: [
           'school_roll_call',
           'school_academics',
+          'school_exams',
           'school_hpc',
           'school_students',
           'school_attendance_admin',

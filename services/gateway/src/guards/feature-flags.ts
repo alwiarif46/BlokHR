@@ -13,7 +13,7 @@ const SERVICE_FLAG_REQUIREMENTS: Partial<Record<ServiceName, string[]>> = {
   'school-identity': ['school_vertical', 'school_students'],
   'school-attendance': ['school_vertical', 'school_roll_call', 'school_attendance_admin'],
   'school-academics': ['school_vertical', 'school_academics'],
-  'school-assessment': ['school_vertical', 'school_hpc'],
+  'school-assessment': ['school_vertical', 'school_hpc', 'school_exams'],
   'school-library': ['school_vertical', 'school_library'],
   'school-surveys': ['school_vertical', 'school_parent_surveys'],
   'school-family-ops': ['school_vertical', 'parent_hub'],
@@ -83,6 +83,7 @@ export class FeatureFlagCache {
   /**
    * School services: require school_vertical plus mapped module flags.
    * school-attendance allows roll_call OR attendance_admin.
+   * school-assessment allows school_hpc OR school_exams.
    */
   async isServiceEnabled(service: ServiceName): Promise<boolean> {
     await this.refresh();
@@ -106,6 +107,9 @@ export class FeatureFlagCache {
       return (
         this.isEnabled('school_roll_call') || this.isEnabled('school_attendance_admin')
       );
+    }
+    if (service === 'school-assessment') {
+      return this.isEnabled('school_hpc') || this.isEnabled('school_exams');
     }
     const moduleFlags = reqs.filter((key) => key !== SCHOOL_VERTICAL_FLAG);
     return moduleFlags.every((key) => this.isEnabled(key));

@@ -43,6 +43,59 @@ describe('Gateway feature flag cache', () => {
   });
 });
 
+describe('Gateway feature flag cache — school-assessment OR-gate', () => {
+  it('allows school-assessment when school_exams is on and school_hpc is off', async () => {
+    const cache = new FeatureFlagCache({
+      monolithUrl: 'http://127.0.0.1:3000',
+      fetchFn: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          features: [
+            { key: 'school_vertical', enabled: true },
+            { key: 'school_hpc', enabled: false },
+            { key: 'school_exams', enabled: true },
+          ],
+        }),
+      })) as typeof fetch,
+    });
+    expect(await cache.isServiceEnabled('school-assessment')).toBe(true);
+  });
+
+  it('allows school-assessment when school_hpc is on and school_exams is off', async () => {
+    const cache = new FeatureFlagCache({
+      monolithUrl: 'http://127.0.0.1:3000',
+      fetchFn: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          features: [
+            { key: 'school_vertical', enabled: true },
+            { key: 'school_hpc', enabled: true },
+            { key: 'school_exams', enabled: false },
+          ],
+        }),
+      })) as typeof fetch,
+    });
+    expect(await cache.isServiceEnabled('school-assessment')).toBe(true);
+  });
+
+  it('blocks school-assessment when both school_hpc and school_exams are off', async () => {
+    const cache = new FeatureFlagCache({
+      monolithUrl: 'http://127.0.0.1:3000',
+      fetchFn: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          features: [
+            { key: 'school_vertical', enabled: true },
+            { key: 'school_hpc', enabled: false },
+            { key: 'school_exams', enabled: false },
+          ],
+        }),
+      })) as typeof fetch,
+    });
+    expect(await cache.isServiceEnabled('school-assessment')).toBe(false);
+  });
+});
+
 describe('Gateway feature flag cache — school vertical off', () => {
   it('blocks all school services when master switch is off', async () => {
     const cache = new FeatureFlagCache({
@@ -56,5 +109,6 @@ describe('Gateway feature flag cache — school vertical off', () => {
     });
     expect(await cache.isServiceEnabled('school-academics')).toBe(false);
     expect(await cache.isServiceEnabled('school-timetable')).toBe(false);
+    expect(await cache.isServiceEnabled('school-assessment')).toBe(false);
   });
 });

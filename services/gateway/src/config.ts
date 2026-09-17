@@ -44,6 +44,12 @@ export interface GatewayConfig {
   tenantHostMap: string;
   /** Fallback when Host is unmapped (DEFAULT_TENANT_ID). */
   defaultTenantId: string;
+  /** Base domain for `{slug}.base` → tenant (TENANT_SUBDOMAIN_BASE). */
+  tenantSubdomainBase: string;
+  /** Comma-separated apex signup hosts (TENANT_APEX_HOSTS). */
+  tenantApexHosts: string;
+  /** Comma-separated extra reserved slugs (TENANT_RESERVED_SLUGS). */
+  tenantReservedSlugs: string;
 }
 
 function assertHttpUrl(label: string, value: string): string {
@@ -122,6 +128,9 @@ export function loadGatewayConfig(
     serviceUrls,
     tenantHostMap: env.TENANT_HOST_MAP ?? '',
     defaultTenantId: (env.DEFAULT_TENANT_ID ?? 'default').trim() || 'default',
+    tenantSubdomainBase: (env.TENANT_SUBDOMAIN_BASE ?? '').trim(),
+    tenantApexHosts: (env.TENANT_APEX_HOSTS ?? '').trim(),
+    tenantReservedSlugs: (env.TENANT_RESERVED_SLUGS ?? '').trim(),
   };
 }
 

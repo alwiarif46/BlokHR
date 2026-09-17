@@ -53,21 +53,30 @@ import type {
   ReportCard,
   ReportTemplate,
   WeakOutcomeRow,
+  CreateSittingInput,
+  ExamAttempt,
+  ExamSitting,
+  HallTicket,
+  HallTicketPrintView,
+  SeatAssignment,
 } from '../types';
 import { analyzeItems, checkPaperConformance } from './item-analysis';
 import { deriveLevelFromCircled, majorityLevel } from './hpc-levels';
 import { mapCbse9Point, mapMsbshseSsc } from './grade-maps';
+import { computeCohortRanks } from './rank';
 
 type ServiceError = {
   error: string;
   status: number;
   studentIds?: string[];
   report?: PaperConformanceReport;
+  rows?: Array<{ line: number; student_id: string; error: string }>;
 };
 
 const TERM_LABELS = new Set<ExamTermLabel>(['PT1', 'HY', 'PT2', 'Annual', 'custom']);
 const EXAM_KINDS = new Set<ExamKind>(['formative', 'summative']);
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+const ISO_DATETIME = /^\d{4}-\d{2}-\d{2}(T|\s)\d{2}:\d{2}/;
 const QUESTION_KINDS = new Set<QuestionKind>([
   'mcq',
   'vsa',
@@ -100,11 +109,101 @@ const BLOCK_TYPES = new Set<ReportBlockType>([
   'hpc_summary',
   'remarks',
   'custom_text',
+  'header',
+  'footer',
+  'signatures',
+  'health',
+  'co_scholastic',
 ]);
 const AGGREGATIONS = new Set<MarksAggregation>(['sum', 'avg', 'weighted_by_term']);
+const SEATS_PER_ROW = 8;
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+/** Row-major seat codes: A1..A8, B1..B8, ... */
+export function assignRowMajorSeatCodes(
+  count: number,
+  seatsPerRow = SEATS_PER_ROW,
+): string[] {
+  const codes: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const row = Math.floor(i / seatsPerRow);
+    const col = (i % seatsPerRow) + 1;
+    const letter =
+      row < 26
+        ? String.fromCharCode(65 + row)
+        : `R${row + 1}`;
+    codes.push(`${letter}${col}`);
+  }
+  return codes;
+}
+
+function parseSittingBound(raw: string, endOfDay: boolean): number {
+  const s = raw.trim();
+  if (ISO_DATE.test(s) && !/[T\s]\d{2}:\d{2}/.test(s)) {
+    return Date.parse(endOfDay ? `${s}T23:59:59.999Z` : `${s}T00:00:00.000Z`);
+  }
+  return Date.parse(s);
+}
+
+function sittingWindowState(
+  sitting: ExamSitting,
+  now = new Date(),
+): 'before' | 'during' | 'after' {
+  const start = parseSittingBound(sitting.startsOn, false);
+  const end = parseSittingBound(sitting.endsOn, true);
+  const t = now.getTime();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 'before';
+  if (t < start) return 'before';
+  if (t > end) return 'after';
+  return 'during';
+}
+
+function extractMcqCorrectChoice(answer: Record<string, unknown> | null): string | null {
+  if (!answer) return null;
+  const raw =
+    answer.correct ??
+    answer.choice ??
+    answer.answer ??
+    answer.key ??
+    answer.correctChoice ??
+    answer.correct_choice;
+  if (raw == null) return null;
+  return String(raw).trim().toLowerCase();
+}
+
+/** Score MCQ answers only; subjective kinds contribute nothing. */
+export function scoreMcqDraftMarks(
+  questions: Question[],
+  answers: Record<string, unknown>,
+): { draftMarks: number; scoredMcqCount: number } {
+  let draftMarks = 0;
+  let scoredMcqCount = 0;
+  for (const q of questions) {
+    if (q.kind !== 'mcq') continue;
+    scoredMcqCount += 1;
+    const expected = extractMcqCorrectChoice(q.answer);
+    if (expected == null) continue;
+    const givenRaw = answers[q.id];
+    if (givenRaw == null) continue;
+    const given =
+      typeof givenRaw === 'object' && givenRaw !== null
+        ? extractMcqCorrectChoice(givenRaw as Record<string, unknown>)
+        : String(givenRaw).trim().toLowerCase();
+    if (given != null && given === expected) {
+      draftMarks += q.marks;
+    }
+  }
+  return { draftMarks, scoredMcqCount };
+}
+
+function isMarksLocked(exam: Exam, now = new Date()): boolean {
+  if (!exam.entryClosesAt) return false;
+  const closes = Date.parse(exam.entryClosesAt);
+  if (!Number.isFinite(closes)) return false;
+  return now.getTime() > closes;
 }
 
 function medianOf(sorted: number[]): number | null {
@@ -335,6 +434,12 @@ export class AssessmentService {
       date,
       maxMarks,
       kind,
+      entryClosesAt:
+        input.entryClosesAt !== undefined
+          ? input.entryClosesAt
+            ? String(input.entryClosesAt).trim()
+            : null
+          : null,
       createdAt: '',
     });
     return { exam };
@@ -371,6 +476,7 @@ export class AssessmentService {
     let date = current.date;
     let maxMarks = current.maxMarks;
     let kind = current.kind;
+    let entryClosesAt = current.entryClosesAt;
 
     if (input.courseRef !== undefined) {
       courseRef = String(input.courseRef).trim();
@@ -406,6 +512,17 @@ export class AssessmentService {
       }
       kind = input.kind;
     }
+    if (input.entryClosesAt !== undefined) {
+      if (input.entryClosesAt === null || input.entryClosesAt === '') {
+        entryClosesAt = null;
+      } else {
+        const raw = String(input.entryClosesAt).trim();
+        if (!ISO_DATETIME.test(raw) && !ISO_DATE.test(raw)) {
+          return { error: { error: 'entry_closes_at must be an ISO datetime', status: 400 } };
+        }
+        entryClosesAt = raw;
+      }
+    }
 
     const exam = await this.repo.updateExam(tenantId, id, {
       ...current,
@@ -416,6 +533,7 @@ export class AssessmentService {
       date,
       maxMarks,
       kind,
+      entryClosesAt,
     });
     return { exam: exam! };
   }
@@ -437,6 +555,10 @@ export class AssessmentService {
     const exam = await this.repo.getExam(tenantId, examId);
     if (!exam) return { error: { error: 'exam not found', status: 404 } };
 
+    if (isMarksLocked(exam)) {
+      return { error: { error: 'marks_locked', status: 409 } };
+    }
+
     const enteredBy = String(body.entered_by ?? body.enteredBy ?? '').trim();
     if (!enteredBy) return { error: { error: 'entered_by is required', status: 400 } };
 
@@ -445,6 +567,159 @@ export class AssessmentService {
       return { error: { error: 'marks array is required', status: 400 } };
     }
 
+    const parsed = this.parseBulkMarkEntries(rawMarks, exam.maxMarks);
+    if ('error' in parsed) return { error: parsed.error };
+
+    return this.writeBulkMarks(tenantId, examId, enteredBy, parsed.entries);
+  }
+
+  /**
+   * Atomic CSV/JSON import — validate all rows, then write; zero writes on any failure.
+   */
+  async importExamMarks(
+    tenantId: string,
+    examId: string,
+    body: Record<string, unknown>,
+  ): Promise<{ marks?: Mark[]; error?: ServiceError }> {
+    const exam = await this.repo.getExam(tenantId, examId);
+    if (!exam) return { error: { error: 'exam not found', status: 404 } };
+
+    if (isMarksLocked(exam)) {
+      return { error: { error: 'marks_locked', status: 409 } };
+    }
+
+    const enteredBy = String(body.entered_by ?? body.enteredBy ?? '').trim();
+    if (!enteredBy) return { error: { error: 'entered_by is required', status: 400 } };
+
+    const rawRows = Array.isArray(body.rows)
+      ? body.rows
+      : Array.isArray(body.marks)
+        ? body.marks
+        : null;
+    if (!rawRows || rawRows.length === 0) {
+      return { error: { error: 'rows array is required', status: 400 } };
+    }
+
+    const rowErrors: Array<{ line: number; student_id: string; error: string }> = [];
+    const parsed: BulkMarksInput['marks'] = [];
+
+    for (let i = 0; i < rawRows.length; i++) {
+      const line = i + 1;
+      const row = rawRows[i] as Record<string, unknown>;
+      if (!row || typeof row !== 'object') {
+        rowErrors.push({ line, student_id: '', error: 'invalid row' });
+        continue;
+      }
+      if (row.assigned_marks !== undefined || row.assignedMarks !== undefined) {
+        rowErrors.push({
+          line,
+          student_id: String(row.student_id ?? row.studentId ?? ''),
+          error: 'setting assigned_marks directly is not allowed',
+        });
+        continue;
+      }
+      const studentId = String(row.student_id ?? row.studentId ?? '').trim();
+      if (!studentId) {
+        rowErrors.push({ line, student_id: '', error: 'student_id is required' });
+        continue;
+      }
+      const isAbsent = Boolean(row.is_absent ?? row.isAbsent ?? false);
+      const isExempt = Boolean(row.is_exempt ?? row.isExempt ?? false);
+      if (isAbsent && isExempt) {
+        rowErrors.push({
+          line,
+          student_id: studentId,
+          error: 'is_absent and is_exempt are mutually exclusive',
+        });
+        continue;
+      }
+      const hasDraft = row.draft_marks !== undefined || row.draftMarks !== undefined;
+      let draftMarks: number | null | undefined = undefined;
+      if (hasDraft) {
+        const raw = row.draft_marks ?? row.draftMarks;
+        draftMarks = raw === null || raw === '' ? null : Number(raw);
+        if (draftMarks != null && !Number.isFinite(draftMarks)) {
+          rowErrors.push({ line, student_id: studentId, error: 'draft_marks must be a number' });
+          continue;
+        }
+        if (draftMarks != null && (draftMarks < 0 || draftMarks > exam.maxMarks)) {
+          rowErrors.push({
+            line,
+            student_id: studentId,
+            error: `draft_marks must be between 0 and ${exam.maxMarks}`,
+          });
+          continue;
+        }
+      }
+      if ((isAbsent || isExempt) && draftMarks != null) {
+        rowErrors.push({
+          line,
+          student_id: studentId,
+          error: 'absent/exempt mutually exclusive with draft_marks',
+        });
+        continue;
+      }
+      if (!isAbsent && !isExempt && !hasDraft) {
+        rowErrors.push({
+          line,
+          student_id: studentId,
+          error: 'draft_marks, is_absent, or is_exempt required',
+        });
+        continue;
+      }
+      parsed.push({
+        studentId,
+        draftMarks: hasDraft ? draftMarks! : undefined,
+        isAbsent,
+        isExempt,
+      });
+    }
+
+    if (rowErrors.length > 0) {
+      return {
+        error: {
+          error: 'import_validation_failed',
+          status: 400,
+          rows: rowErrors,
+        },
+      };
+    }
+
+    return this.writeBulkMarks(tenantId, examId, enteredBy, parsed);
+  }
+
+  async unlockExamMarks(
+    tenantId: string,
+    examId: string,
+    input: { unlockedBy: string; reason: string },
+  ): Promise<{ exam?: Exam; error?: ServiceError }> {
+    const exam = await this.repo.getExam(tenantId, examId);
+    if (!exam) return { error: { error: 'exam not found', status: 404 } };
+    const unlockedBy = (input.unlockedBy || '').trim();
+    const reason = (input.reason || '').trim();
+    if (!unlockedBy) return { error: { error: 'unlocked_by is required', status: 400 } };
+    if (!reason) return { error: { error: 'reason is required', status: 400 } };
+
+    const previous = exam.entryClosesAt;
+    await this.repo.insertExamEntryUnlock({
+      id: uuidv4(),
+      tenantId,
+      examId,
+      unlockedBy,
+      reason,
+      previousClosesAt: previous,
+    });
+    const updated = await this.repo.updateExam(tenantId, examId, {
+      ...exam,
+      entryClosesAt: null,
+    });
+    return { exam: updated! };
+  }
+
+  private parseBulkMarkEntries(
+    rawMarks: unknown[],
+    maxMarks: number,
+  ): { entries: BulkMarksInput['marks'] } | { error: ServiceError } {
     const parsed: BulkMarksInput['marks'] = [];
     for (let i = 0; i < rawMarks.length; i++) {
       const row = rawMarks[i] as Record<string, unknown>;
@@ -467,9 +742,7 @@ export class AssessmentService {
           error: { error: `marks[${i}]: is_absent and is_exempt are mutually exclusive`, status: 400 },
         };
       }
-      const hasDraft =
-        row.draft_marks !== undefined ||
-        row.draftMarks !== undefined;
+      const hasDraft = row.draft_marks !== undefined || row.draftMarks !== undefined;
       let draftMarks: number | null | undefined = undefined;
       if (hasDraft) {
         const raw = row.draft_marks ?? row.draftMarks;
@@ -477,10 +750,10 @@ export class AssessmentService {
         if (draftMarks != null && !Number.isFinite(draftMarks)) {
           return { error: { error: `marks[${i}].draft_marks must be a number`, status: 400 } };
         }
-        if (draftMarks != null && (draftMarks < 0 || draftMarks > exam.maxMarks)) {
+        if (draftMarks != null && (draftMarks < 0 || draftMarks > maxMarks)) {
           return {
             error: {
-              error: `marks[${i}].draft_marks must be between 0 and ${exam.maxMarks}`,
+              error: `marks[${i}].draft_marks must be between 0 and ${maxMarks}`,
               status: 400,
             },
           };
@@ -501,7 +774,15 @@ export class AssessmentService {
         isExempt,
       });
     }
+    return { entries: parsed };
+  }
 
+  private async writeBulkMarks(
+    tenantId: string,
+    examId: string,
+    enteredBy: string,
+    parsed: BulkMarksInput['marks'],
+  ): Promise<{ marks: Mark[] }> {
     const out: Mark[] = [];
     for (const entry of parsed) {
       const existing = await this.repo.getMarkByExamStudent(
@@ -1430,6 +1711,32 @@ export class AssessmentService {
     const template = await this.repo.getReportTemplate(tenantId, templateId);
     if (!template) return { error: { error: 'template not found', status: 404 } };
 
+    const visibleFrom =
+      input.visibleFrom !== undefined
+        ? input.visibleFrom
+          ? String(input.visibleFrom).trim()
+          : null
+        : null;
+
+    // Precompute cohort ranks from published assigned marks only
+    const rankCandidates: Array<{
+      studentId: string;
+      percentage: number | null;
+      exempt: boolean;
+    }> = [];
+    for (const student of input.students) {
+      const studentId = (student.studentId || '').trim();
+      if (!studentId) continue;
+      const pct = await this.sessionPublishedPercentage(tenantId, studentId, session);
+      rankCandidates.push({
+        studentId,
+        percentage: pct.percentage,
+        exempt: pct.exempt,
+      });
+    }
+    const ranks = computeCohortRanks(rankCandidates);
+    const rankByStudent = new Map(ranks.map((r) => [r.studentId, r]));
+
     const cards: ReportCard[] = [];
     for (const student of input.students) {
       const studentId = (student.studentId || '').trim();
@@ -1477,6 +1784,44 @@ export class AssessmentService {
               data: { text: String(block.config?.text ?? '') },
             });
             break;
+          case 'header':
+            blocks.push({
+              type: 'header',
+              data: {
+                schoolName: String(block.config?.schoolName ?? block.config?.school_name ?? ''),
+                logoRef: block.config?.logoRef ?? block.config?.logo_ref ?? null,
+                ...(block.config ?? {}),
+              },
+            });
+            break;
+          case 'footer':
+            blocks.push({
+              type: 'footer',
+              data: block.config ?? {},
+            });
+            break;
+          case 'signatures':
+            blocks.push({
+              type: 'signatures',
+              data: {
+                lines:
+                  student.signatures ??
+                  (Array.isArray(block.config?.lines) ? block.config!.lines : []),
+              },
+            });
+            break;
+          case 'health':
+            blocks.push({
+              type: 'health',
+              data: student.health ?? block.config ?? {},
+            });
+            break;
+          case 'co_scholastic':
+            blocks.push({
+              type: 'co_scholastic',
+              data: student.coScholastic ?? block.config ?? {},
+            });
+            break;
           default: {
             const _exhaustive: never = block.type;
             return _exhaustive;
@@ -1484,6 +1829,7 @@ export class AssessmentService {
         }
       }
 
+      const rankInfo = rankByStudent.get(studentId);
       const payload: Record<string, unknown> = {
         studentId,
         session,
@@ -1491,6 +1837,9 @@ export class AssessmentService {
         templateLabel: template.label,
         templateVersion: template.version,
         blocks,
+        rank: rankInfo?.rank ?? null,
+        out_of: rankInfo?.outOf ?? 0,
+        percentage: rankInfo?.percentage ?? null,
       };
 
       const card = await this.repo.insertReportCard({
@@ -1503,6 +1852,7 @@ export class AssessmentService {
         payload,
         generatedAt: '',
         generatedBy,
+        visibleFrom,
       });
       cards.push(card);
 
@@ -1522,25 +1872,70 @@ export class AssessmentService {
     return { cards };
   }
 
-  async listReportCards(
+  /** Avg published pct for session; exempt-only → exempt flag */
+  private async sessionPublishedPercentage(
     tenantId: string,
-    filters: { studentId?: string; session?: string },
-  ): Promise<{ cards: ReportCard[] }> {
-    return { cards: await this.repo.listReportCards(tenantId, filters) };
+    studentId: string,
+    session: string,
+  ): Promise<{ percentage: number | null; exempt: boolean }> {
+    const rows = await this.repo.listPublishedMarksForStudentSession(
+      tenantId,
+      studentId,
+      session,
+    );
+    if (rows.length === 0) return { percentage: null, exempt: false };
+    const allExempt = rows.every((r) => r.mark.isExempt);
+    if (allExempt) return { percentage: null, exempt: true };
+    const usable = rows.filter(
+      (r) => !r.mark.isExempt && !r.mark.isAbsent && r.mark.assignedMarks != null,
+    );
+    if (usable.length === 0) return { percentage: null, exempt: false };
+    const pcts = usable.map((r) =>
+      r.exam.maxMarks > 0
+        ? round2((r.mark.assignedMarks! / r.exam.maxMarks) * 100)
+        : 0,
+    );
+    return {
+      percentage: round2(pcts.reduce((a, b) => a + b, 0) / pcts.length),
+      exempt: false,
+    };
+  }
+
+  async patchReportCardVisibleFrom(
+    tenantId: string,
+    id: string,
+    visibleFrom: string | null,
+  ): Promise<{ card?: ReportCard; error?: ServiceError }> {
+    if (visibleFrom != null && visibleFrom !== '') {
+      const raw = String(visibleFrom).trim();
+      if (!ISO_DATETIME.test(raw) && !ISO_DATE.test(raw)) {
+        return { error: { error: 'visible_from must be an ISO datetime', status: 400 } };
+      }
+      const card = await this.repo.updateReportCardVisibleFrom(tenantId, id, raw);
+      if (!card) return { error: { error: 'report card not found', status: 404 } };
+      return { card };
+    }
+    const card = await this.repo.updateReportCardVisibleFrom(tenantId, id, null);
+    if (!card) return { error: { error: 'report card not found', status: 404 } };
+    return { card };
   }
 
   /**
    * Guardian-facing published artefacts only: generated report cards + published marks.
+   * Cards require visible_from <= now.
    */
   async getGuardianPublishedReports(
     tenantId: string,
     studentId: string,
     session?: string,
   ): Promise<{ cards: ReportCard[]; marks: unknown[] }> {
-    const cards = await this.repo.listReportCards(tenantId, {
+    const nowIso = new Date().toISOString();
+    const cards = await this.repo.listGuardianVisibleReportCards(
+      tenantId,
       studentId,
       session,
-    });
+      nowIso,
+    );
     const marks = session
       ? await this.repo.listPublishedMarksForStudentSession(
           tenantId,
@@ -1557,6 +1952,13 @@ export class AssessmentService {
         termLabel: row.termLabel,
       })),
     };
+  }
+
+  async listReportCards(
+    tenantId: string,
+    filters: { studentId?: string; session?: string },
+  ): Promise<{ cards: ReportCard[] }> {
+    return { cards: await this.repo.listReportCards(tenantId, filters) };
   }
 
   async getReportCard(
@@ -1696,5 +2098,319 @@ export class AssessmentService {
     }
     outcomes.sort((a, b) => a.outcomeCode.localeCompare(b.outcomeCode));
     return { outcomes };
+  }
+
+  async createExamSitting(
+    tenantId: string,
+    examId: string,
+    input: CreateSittingInput,
+  ): Promise<{
+    sitting?: ExamSitting;
+    seats?: SeatAssignment[];
+    error?: ServiceError;
+  }> {
+    const exam = await this.repo.getExam(tenantId, examId);
+    if (!exam) return { error: { error: 'exam not found', status: 404 } };
+
+    const roomLabel = (input.roomLabel || '').trim();
+    if (!roomLabel) return { error: { error: 'room_label is required', status: 400 } };
+    const startsOn = (input.startsOn || '').trim();
+    const endsOn = (input.endsOn || '').trim();
+    if (!startsOn || !endsOn) {
+      return { error: { error: 'starts_on and ends_on are required', status: 400 } };
+    }
+    if (
+      !(ISO_DATE.test(startsOn) || ISO_DATETIME.test(startsOn)) ||
+      !(ISO_DATE.test(endsOn) || ISO_DATETIME.test(endsOn))
+    ) {
+      return { error: { error: 'invalid starts_on or ends_on', status: 400 } };
+    }
+    const startMs = parseSittingBound(startsOn, false);
+    const endMs = parseSittingBound(endsOn, true);
+    if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) {
+      return { error: { error: 'ends_on must be on or after starts_on', status: 400 } };
+    }
+
+    const rawIds = Array.isArray(input.studentIds) ? input.studentIds : [];
+    if (rawIds.length === 0) {
+      return { error: { error: 'student_ids array is required', status: 400 } };
+    }
+    const studentIds = rawIds.map((id) => String(id).trim()).filter(Boolean);
+    if (studentIds.length === 0) {
+      return { error: { error: 'student_ids array is required', status: 400 } };
+    }
+    const unique = new Set(studentIds);
+    if (unique.size !== studentIds.length) {
+      return { error: { error: 'duplicate student_id in seating list', status: 400 } };
+    }
+
+    const sitting = await this.repo.insertExamSitting({
+      id: uuidv4(),
+      tenantId,
+      examId,
+      roomLabel,
+      startsOn,
+      endsOn,
+      invigilatorMemberRef:
+        input.invigilatorMemberRef != null && String(input.invigilatorMemberRef).trim()
+          ? String(input.invigilatorMemberRef).trim()
+          : null,
+      createdAt: '',
+    });
+
+    const seatCodes = assignRowMajorSeatCodes(studentIds.length);
+    const seats: SeatAssignment[] = [];
+    for (let i = 0; i < studentIds.length; i++) {
+      const seat = await this.repo.insertSeatAssignment({
+        id: uuidv4(),
+        tenantId,
+        sittingId: sitting.id,
+        studentId: studentIds[i]!,
+        seatCode: seatCodes[i]!,
+      });
+      seats.push(seat);
+    }
+    return { sitting, seats };
+  }
+
+  async listExamSittings(
+    tenantId: string,
+    examId: string,
+  ): Promise<{ sittings?: ExamSitting[]; error?: ServiceError }> {
+    const exam = await this.repo.getExam(tenantId, examId);
+    if (!exam) return { error: { error: 'exam not found', status: 404 } };
+    return { sittings: await this.repo.listExamSittings(tenantId, examId) };
+  }
+
+  async issueHallTickets(
+    tenantId: string,
+    sittingId: string,
+  ): Promise<{ tickets?: HallTicket[]; error?: ServiceError }> {
+    const sitting = await this.repo.getExamSitting(tenantId, sittingId);
+    if (!sitting) return { error: { error: 'sitting not found', status: 404 } };
+
+    const seats = await this.repo.listSeatAssignments(tenantId, sittingId);
+    if (seats.length === 0) {
+      return { error: { error: 'no seat assignments for sitting', status: 400 } };
+    }
+
+    const tickets: HallTicket[] = [];
+    for (const seat of seats) {
+      const existing = await this.repo.getHallTicketByExamStudent(
+        tenantId,
+        sitting.examId,
+        seat.studentId,
+      );
+      if (existing) {
+        return {
+          error: {
+            error: 'ticket_already_issued',
+            status: 409,
+            studentIds: [seat.studentId],
+          },
+        };
+      }
+    }
+
+    const issuedAt = new Date().toISOString();
+    for (const seat of seats) {
+      const ticket = await this.repo.insertHallTicket({
+        id: uuidv4(),
+        tenantId,
+        examId: sitting.examId,
+        studentId: seat.studentId,
+        sittingId: sitting.id,
+        ticketCode: `HT-${uuidv4().replace(/-/g, '').slice(0, 10).toUpperCase()}`,
+        issuedAt,
+      });
+      tickets.push(ticket);
+    }
+    return { tickets };
+  }
+
+  async listHallTicketsForPrint(
+    tenantId: string,
+    sittingId: string,
+  ): Promise<{ tickets?: HallTicketPrintView[]; error?: ServiceError }> {
+    const sitting = await this.repo.getExamSitting(tenantId, sittingId);
+    if (!sitting) return { error: { error: 'sitting not found', status: 404 } };
+    const exam = await this.repo.getExam(tenantId, sitting.examId);
+    const seats = await this.repo.listSeatAssignments(tenantId, sittingId);
+    const seatByStudent = new Map(seats.map((s) => [s.studentId, s.seatCode]));
+    const tickets = await this.repo.listHallTicketsForSitting(tenantId, sittingId);
+    return {
+      tickets: tickets.map((t) => ({
+        ticketCode: t.ticketCode,
+        studentId: t.studentId,
+        examId: sitting.examId,
+        examDate: exam?.date ?? null,
+        roomLabel: sitting.roomLabel,
+        seatCode: seatByStudent.get(t.studentId) ?? null,
+        startsOn: sitting.startsOn,
+        endsOn: sitting.endsOn,
+        subjectCode: exam?.subjectCode ?? null,
+        classLabel: exam?.classLabel ?? null,
+      })),
+    };
+  }
+
+  async openExamSitting(
+    tenantId: string,
+    sittingId: string,
+  ): Promise<{ sitting?: ExamSitting; window?: string; error?: ServiceError }> {
+    const sitting = await this.repo.getExamSitting(tenantId, sittingId);
+    if (!sitting) return { error: { error: 'sitting not found', status: 404 } };
+    const window = sittingWindowState(sitting);
+    return { sitting, window };
+  }
+
+  async getPaperForExam(
+    tenantId: string,
+    examId: string,
+  ): Promise<{ paper?: Paper; error?: ServiceError }> {
+    const exam = await this.repo.getExam(tenantId, examId);
+    if (!exam) return { error: { error: 'exam not found', status: 404 } };
+    const paper = await this.repo.findPaperByExamRef(tenantId, examId);
+    if (!paper) return { error: { error: 'paper not found for exam', status: 404 } };
+    return { paper };
+  }
+
+  async startExamAttempt(
+    tenantId: string,
+    sittingId: string,
+    input: { studentId: string; paperId?: string | null },
+  ): Promise<{ attempt?: ExamAttempt; error?: ServiceError }> {
+    const sitting = await this.repo.getExamSitting(tenantId, sittingId);
+    if (!sitting) return { error: { error: 'sitting not found', status: 404 } };
+
+    const studentId = (input.studentId || '').trim();
+    if (!studentId) return { error: { error: 'student_id is required', status: 400 } };
+
+    const seats = await this.repo.listSeatAssignments(tenantId, sittingId);
+    if (!seats.some((s) => s.studentId === studentId)) {
+      return { error: { error: 'student not seated in this sitting', status: 400 } };
+    }
+
+    const window = sittingWindowState(sitting);
+    switch (window) {
+      case 'before':
+        return { error: { error: 'sitting_not_open', status: 400 } };
+      case 'after':
+        return { error: { error: 'sitting_closed', status: 400 } };
+      case 'during':
+        break;
+      default: {
+        const _exhaustive: never = window;
+        return _exhaustive;
+      }
+    }
+
+    const existing = await this.repo.getExamAttemptBySittingStudent(
+      tenantId,
+      sittingId,
+      studentId,
+    );
+    if (existing) {
+      if (existing.status === 'submitted') {
+        return { error: { error: 'attempt_already_submitted', status: 409 } };
+      }
+      return { attempt: existing };
+    }
+
+    let paperId = (input.paperId || '').trim();
+    if (!paperId) {
+      const paper = await this.repo.findPaperByExamRef(tenantId, sitting.examId);
+      if (!paper) return { error: { error: 'paper not found for exam', status: 400 } };
+      paperId = paper.id;
+    } else {
+      const paper = await this.repo.getPaper(tenantId, paperId);
+      if (!paper) return { error: { error: 'paper not found', status: 404 } };
+    }
+
+    const attempt = await this.repo.insertExamAttempt({
+      id: uuidv4(),
+      tenantId,
+      sittingId,
+      studentId,
+      paperId,
+      startedAt: new Date().toISOString(),
+      submittedAt: null,
+      answers: {},
+      status: 'in_progress',
+    });
+    return { attempt };
+  }
+
+  async saveAttemptAnswers(
+    tenantId: string,
+    attemptId: string,
+    answers: Record<string, unknown>,
+  ): Promise<{ attempt?: ExamAttempt; error?: ServiceError }> {
+    const attempt = await this.repo.getExamAttempt(tenantId, attemptId);
+    if (!attempt) return { error: { error: 'attempt not found', status: 404 } };
+    if (attempt.status === 'submitted') {
+      return { error: { error: 'attempt_already_submitted', status: 409 } };
+    }
+    const sitting = await this.repo.getExamSitting(tenantId, attempt.sittingId);
+    if (!sitting) return { error: { error: 'sitting not found', status: 404 } };
+    if (sittingWindowState(sitting) === 'after') {
+      return { error: { error: 'sitting_closed', status: 409 } };
+    }
+    if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+      return { error: { error: 'answers object is required', status: 400 } };
+    }
+    const merged = { ...attempt.answers, ...answers };
+    const updated = await this.repo.updateExamAttempt(tenantId, attemptId, {
+      ...attempt,
+      answers: merged,
+    });
+    return { attempt: updated! };
+  }
+
+  async submitExamAttempt(
+    tenantId: string,
+    attemptId: string,
+  ): Promise<{ attempt?: ExamAttempt; draftMarks?: number | null; error?: ServiceError }> {
+    const attempt = await this.repo.getExamAttempt(tenantId, attemptId);
+    if (!attempt) return { error: { error: 'attempt not found', status: 404 } };
+    if (attempt.status === 'submitted') {
+      return { error: { error: 'attempt_already_submitted', status: 409 } };
+    }
+
+    const sitting = await this.repo.getExamSitting(tenantId, attempt.sittingId);
+    if (!sitting) return { error: { error: 'sitting not found', status: 404 } };
+    if (sittingWindowState(sitting) === 'after') {
+      return { error: { error: 'sitting_closed', status: 409 } };
+    }
+
+    const paper = await this.repo.getPaper(tenantId, attempt.paperId);
+    if (!paper) return { error: { error: 'paper not found', status: 404 } };
+
+    const questions: Question[] = [];
+    for (const qid of paper.questionIds) {
+      const q = await this.repo.getQuestion(tenantId, qid);
+      if (q) questions.push(q);
+    }
+
+    const { draftMarks, scoredMcqCount } = scoreMcqDraftMarks(
+      questions,
+      attempt.answers,
+    );
+
+    const submitted = await this.repo.updateExamAttempt(tenantId, attemptId, {
+      ...attempt,
+      status: 'submitted',
+      submittedAt: new Date().toISOString(),
+    });
+
+    if (scoredMcqCount > 0) {
+      const write = await this.putExamMarks(tenantId, sitting.examId, {
+        entered_by: `attempt:${attempt.id}`,
+        marks: [{ student_id: attempt.studentId, draft_marks: draftMarks }],
+      });
+      if (write.error) return { error: write.error };
+    }
+
+    return { attempt: submitted!, draftMarks: scoredMcqCount > 0 ? draftMarks : null };
   }
 }

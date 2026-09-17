@@ -182,6 +182,12 @@ export function createAssessmentRouter(
         date: String(body.date ?? ''),
         maxMarks: Number(body.max_marks ?? body.maxMarks),
         kind: String(body.kind ?? '') as ExamKind,
+        entryClosesAt:
+          body.entry_closes_at !== undefined || body.entryClosesAt !== undefined
+            ? body.entry_closes_at === null || body.entryClosesAt === null
+              ? null
+              : String(body.entry_closes_at ?? body.entryClosesAt)
+            : undefined,
       });
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
@@ -239,6 +245,10 @@ export function createAssessmentRouter(
         input.maxMarks = Number(body.max_marks ?? body.maxMarks);
       }
       if (body.kind !== undefined) input.kind = String(body.kind) as ExamKind;
+      if (body.entry_closes_at !== undefined || body.entryClosesAt !== undefined) {
+        const raw = body.entry_closes_at ?? body.entryClosesAt;
+        input.entryClosesAt = raw === null || raw === '' ? null : String(raw);
+      }
       const result = await service.patchExam(req.params.tenantId, req.params.id, input);
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
@@ -295,6 +305,41 @@ export function createAssessmentRouter(
     }),
   );
 
+  router.post(
+    '/:tenantId/exams/:examId/marks/import',
+    asyncHandler(async (req, res) => {
+      if (timetable) {
+        const exam = await service.getExam(req.params.tenantId, req.params.examId);
+        if (exam.error) {
+          res.status(exam.error.status).json({ error: exam.error.error });
+          return;
+        }
+        const scope = await assertTeacherSectionScope(req, timetable, {
+          tenantId: req.params.tenantId,
+          sectionRef: exam.exam!.sectionRef,
+        });
+        if (!('ok' in scope)) {
+          res.status(scope.status).json({ error: scope.error });
+          return;
+        }
+      }
+      const result = await service.importExamMarks(
+        req.params.tenantId,
+        req.params.examId,
+        req.body as Record<string, unknown>,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({
+          error: result.error.error,
+          ...(result.error.rows ? { rows: result.error.rows } : {}),
+          ...(result.error.studentIds ? { student_ids: result.error.studentIds } : {}),
+        });
+        return;
+      }
+      res.json({ marks: result.marks });
+    }),
+  );
+
   router.get(
     '/:tenantId/exams/:examId/marks',
     asyncHandler(async (req, res) => {
@@ -324,6 +369,22 @@ export function createAssessmentRouter(
         return;
       }
       res.json({ marks: result.marks, count: result.count });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/exams/:examId/unlock',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await service.unlockExamMarks(req.params.tenantId, req.params.examId, {
+        unlockedBy: String(body.unlocked_by ?? body.unlockedBy ?? ''),
+        reason: String(body.reason ?? ''),
+      });
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.exam);
     }),
   );
 
@@ -864,6 +925,12 @@ export function createAssessmentRouter(
         templateId: String(body.template_id ?? body.templateId ?? ''),
         session: String(body.session ?? body.academic_session_ref ?? ''),
         generatedBy: String(body.generated_by ?? body.generatedBy ?? ''),
+        visibleFrom:
+          body.visible_from !== undefined || body.visibleFrom !== undefined
+            ? body.visible_from === null || body.visibleFrom === null
+              ? null
+              : String(body.visible_from ?? body.visibleFrom)
+            : undefined,
         students: studentsRaw.map((row) => {
           const s = row as Record<string, unknown>;
           return {
@@ -871,6 +938,15 @@ export function createAssessmentRouter(
             attendance:
               s.attendance != null ? (s.attendance as Record<string, unknown>) : null,
             remarks: s.remarks != null ? String(s.remarks) : null,
+            health:
+              s.health != null ? (s.health as Record<string, unknown>) : null,
+            coScholastic:
+              s.co_scholastic != null || s.coScholastic != null
+                ? ((s.co_scholastic ?? s.coScholastic) as Record<string, unknown>)
+                : null,
+            signatures: Array.isArray(s.signatures)
+              ? (s.signatures as Array<Record<string, unknown>>)
+              : null,
           };
         }),
       });
@@ -907,6 +983,30 @@ export function createAssessmentRouter(
     '/:tenantId/report-cards/:id',
     asyncHandler(async (req, res) => {
       const result = await service.getReportCard(req.params.tenantId, req.params.id);
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.card);
+    }),
+  );
+
+  router.patch(
+    '/:tenantId/report-cards/:id',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const raw = body.visible_from ?? body.visibleFrom;
+      const visibleFrom =
+        raw === undefined ? null : raw === null || raw === '' ? null : String(raw);
+      if (body.visible_from === undefined && body.visibleFrom === undefined) {
+        res.status(400).json({ error: 'visible_from is required' });
+        return;
+      }
+      const result = await service.patchReportCardVisibleFrom(
+        req.params.tenantId,
+        req.params.id,
+        visibleFrom,
+      );
       if (result.error) {
         res.status(result.error.status).json({ error: result.error.error });
         return;
@@ -980,6 +1080,189 @@ export function createAssessmentRouter(
         return;
       }
       res.json({ outcomes: result.outcomes });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/exams/:id/sittings',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const studentIds = Array.isArray(body.student_ids)
+        ? body.student_ids.map((x) => String(x))
+        : Array.isArray(body.studentIds)
+          ? body.studentIds.map((x) => String(x))
+          : [];
+      const result = await service.createExamSitting(
+        req.params.tenantId,
+        req.params.id,
+        {
+          roomLabel: String(body.room_label ?? body.roomLabel ?? ''),
+          startsOn: String(body.starts_on ?? body.startsOn ?? ''),
+          endsOn: String(body.ends_on ?? body.endsOn ?? ''),
+          invigilatorMemberRef:
+            body.invigilator_member_ref !== undefined ||
+            body.invigilatorMemberRef !== undefined
+              ? body.invigilator_member_ref === null ||
+                body.invigilatorMemberRef === null
+                ? null
+                : String(body.invigilator_member_ref ?? body.invigilatorMemberRef)
+              : null,
+          studentIds,
+        },
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json({ sitting: result.sitting, seats: result.seats });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/exams/:id/sittings',
+    asyncHandler(async (req, res) => {
+      const result = await service.listExamSittings(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ sittings: result.sittings });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/exams/:id/paper',
+    asyncHandler(async (req, res) => {
+      const result = await service.getPaperForExam(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.paper);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/sittings/:id/issue-tickets',
+    asyncHandler(async (req, res) => {
+      const result = await service.issueHallTickets(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({
+          error: result.error.error,
+          ...(result.error.studentIds
+            ? { student_ids: result.error.studentIds }
+            : {}),
+        });
+        return;
+      }
+      res.status(201).json({ tickets: result.tickets });
+    }),
+  );
+
+  router.get(
+    '/:tenantId/sittings/:id/tickets',
+    asyncHandler(async (req, res) => {
+      const result = await service.listHallTicketsForPrint(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ tickets: result.tickets });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/sittings/:id/open',
+    asyncHandler(async (req, res) => {
+      const result = await service.openExamSitting(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({ sitting: result.sitting, window: result.window });
+    }),
+  );
+
+  router.post(
+    '/:tenantId/sittings/:id/attempts/start',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const result = await service.startExamAttempt(
+        req.params.tenantId,
+        req.params.id,
+        {
+          studentId: String(body.student_id ?? body.studentId ?? ''),
+          paperId:
+            body.paper_id !== undefined || body.paperId !== undefined
+              ? body.paper_id === null || body.paperId === null
+                ? null
+                : String(body.paper_id ?? body.paperId)
+              : null,
+        },
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.status(201).json(result.attempt);
+    }),
+  );
+
+  router.put(
+    '/:tenantId/attempts/:id/answers',
+    asyncHandler(async (req, res) => {
+      const body = req.body as Record<string, unknown>;
+      const answers =
+        body.answers != null && typeof body.answers === 'object'
+          ? (body.answers as Record<string, unknown>)
+          : null;
+      if (!answers) {
+        res.status(400).json({ error: 'answers object is required' });
+        return;
+      }
+      const result = await service.saveAttemptAnswers(
+        req.params.tenantId,
+        req.params.id,
+        answers,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json(result.attempt);
+    }),
+  );
+
+  router.post(
+    '/:tenantId/attempts/:id/submit',
+    asyncHandler(async (req, res) => {
+      const result = await service.submitExamAttempt(
+        req.params.tenantId,
+        req.params.id,
+      );
+      if (result.error) {
+        res.status(result.error.status).json({ error: result.error.error });
+        return;
+      }
+      res.json({
+        attempt: result.attempt,
+        draft_marks: result.draftMarks,
+      });
     }),
   );
 
