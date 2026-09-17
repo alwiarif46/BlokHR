@@ -61,6 +61,21 @@ export class SetupService {
     return getTenantId(this.options.tenantId);
   }
 
+  /** Reject further wizard writes once this Host's tenant is already configured. */
+  private async assertNotComplete(): Promise<{
+    success: false;
+    error: string;
+    statusCode: number;
+  } | null> {
+    const tenantId = this.tid();
+    await ensureBrandingRow(this.db, tenantId);
+    const row = await getBrandingForTenant<BrandingRow>(this.db, tenantId);
+    if (row && row.setup_complete === 1) {
+      return { success: false, error: 'already_configured', statusCode: 409 };
+    }
+    return null;
+  }
+
   async getStatus(): Promise<{
     setupComplete: boolean;
     currentStep: number;
@@ -143,10 +158,13 @@ export class SetupService {
     cardFooterText?: string;
     emailFromName?: string;
     emailFromAddress?: string;
-  }): Promise<{ success: boolean; error?: string }> {
+  }): Promise<{ success: boolean; error?: string; statusCode?: number }> {
     if (!data.companyName) {
       return { success: false, error: 'Company name is required' };
     }
+
+    const blocked = await this.assertNotComplete();
+    if (blocked) return blocked;
 
     const tenantId = this.tid();
     await ensureBrandingRow(this.db, tenantId);
@@ -188,7 +206,10 @@ export class SetupService {
     msalClientId?: string;
     msalTenantId?: string;
     googleOAuthClientId?: string;
-  }): Promise<{ success: boolean; error?: string }> {
+  }): Promise<{ success: boolean; error?: string; statusCode?: number }> {
+    const blocked = await this.assertNotComplete();
+    if (blocked) return blocked;
+
     const localOn = data.authLocalEnabled === true;
     const magicOn = data.authMagicLinkEnabled === true;
     const hasMsal = !!data.msalClientId;
@@ -257,6 +278,9 @@ export class SetupService {
     if (!data.adminEmail) {
       return { success: false, error: 'Admin email is required' };
     }
+
+    const blocked = await this.assertNotComplete();
+    if (blocked) return blocked;
 
     const tenantId = this.tid();
     const vertical: TenantVertical =

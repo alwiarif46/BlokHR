@@ -77,7 +77,7 @@ export function createSetupRouter(
       });
 
       if (!result.success) {
-        throw new AppError(result.error ?? 'Failed to save step 1', 400);
+        throw new AppError(result.error ?? 'Failed to save step 1', result.statusCode ?? 400);
       }
 
       res.json(result);
@@ -111,7 +111,7 @@ export function createSetupRouter(
       });
 
       if (!result.success) {
-        throw new AppError(result.error ?? 'Failed to save step 2', 400);
+        throw new AppError(result.error ?? 'Failed to save step 2', result.statusCode ?? 400);
       }
 
       res.json(result);

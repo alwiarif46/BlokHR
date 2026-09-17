@@ -45,7 +45,7 @@ BlokHR resolves tenant from **request Host** (not client-chosen IDs). Set the sa
 
 | Env | Example | Purpose |
 |-----|---------|---------|
-| `TENANT_HOST_MAP` | `{"blokhr.vercel.app":"default","si.blokhr.app":"si"}` | Hostname → `tenant_id` |
+| `TENANT_HOST_MAP` | `{"www.13blok.com":"default","13blok.com":"default","blokhr.vercel.app":"default","si.blokhr.app":"si"}` | Hostname → `tenant_id` |
 | `DEFAULT_TENANT_ID` | `default` | Fallback when Host is unmapped (local/dev) |
 
 **Ops rule:** do **not** point two organizations at the same Railway backend until each has its own Host entry (or a dedicated empty backend). Migration `055_tenant_isolation` moves a completed singleton setup to tenant `si` and leaves `default` with `setup_complete=0` so `blokhr.vercel.app` can run the wizard again.
@@ -183,9 +183,35 @@ Deploy includes migrations that add `tenant_id` across operational and domain ta
 - `058_fact_tables_tenant_scope.sql` — attendance_daily, clock_events, monthly_late_counts, leave_requests, pto_balances
 - `059_domain_tables_tenant_scope.sql` — groups, role_assignments, regularizations, overtime_records, timesheets, time_entries, holidays
 - `060_pii_domain_tenant_scope.sql` — bd_meetings, documents, visitors, assets, expense_receipts, surveys, face/iris enrollments, clients/projects, chat_sessions
-- `061_rehome_default_setup_to_si.sql` — if a completed org still sits on `default`, move it to `si` and reopen the wizard on `blokhr.vercel.app`
+- `061_rehome_default_setup_to_si.sql` / `062_force_default_wizard.sql` — historical repairs for default vs `si`
+- `063_wipe_all_tenants.sql` — **factory reset**: empties all org/tenant data and reopens the wizard on `default` (one-shot via `full_tenant_wipe_v1`)
 
 Run backend migrations **before** serving traffic from this release.
+
+### Host-per-tenant checklist (required for a second company)
+
+BlokHR does **not** create a new tenant when you run the wizard twice on the same URL. Tenant = **Host**.
+
+1. DNS: add subdomain (e.g. `acme.13blok.com`) → Vercel project `13blok` (or wildcard `*.13blok.com`).
+2. Set the same JSON on **gateway** and **backend**:
+
+```json
+{
+  "www.13blok.com": "default",
+  "13blok.com": "default",
+  "blokhr.vercel.app": "default",
+  "gateway-production-5a5f.up.railway.app": "default",
+  "acme.13blok.com": "acme"
+}
+```
+
+3. Redeploy gateway + backend (map is read at process start).
+4. Open `https://acme.13blok.com` → wizard for tenant `acme` only.
+5. Smoke: `curl -sS -H "Host: acme.13blok.com" https://www.13blok.com/api/setup/status` (via gateway) should show `tenantId: "acme"`.
+
+Setup POSTs on an already-complete Host return `409 already_configured` so a second browser cannot merge another org into the same tenant.
+
+**Wipe note:** migration 063 + wipe helper delete all members/branding (except empty `default`). Snapshot the Railway volume first if you need a backup.
 
 ### Identity / tenant trust (production)
 

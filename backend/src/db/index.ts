@@ -1,9 +1,11 @@
 import type { Logger } from 'pino';
+import path from 'path';
 import type { AppConfig } from '../config';
 import type { DatabaseEngine } from './engine';
 import { SqliteEngine } from './sqlite-engine';
 import { PostgresEngine } from './postgres-engine';
 import { MigrationRunner } from './migration-runner';
+import { wipeAllTenantOrgData, wipeSidecarTenantFiles } from './wipe-tenant-org-data';
 
 export type { DatabaseEngine, DbRow } from './engine';
 
@@ -48,6 +50,20 @@ export async function createDatabase(config: AppConfig, logger: Logger): Promise
   const runner = new MigrationRunner(engine, config.migrationsDir, logger);
   const applied = await runner.run();
   logger.info({ applied }, 'Database migrations complete');
+
+  const pendingWipe = await engine.get<{ value_json: string }>(
+    'SELECT value_json FROM kv_store WHERE key = ?',
+    ['pending_full_tenant_wipe'],
+  );
+  if (pendingWipe?.value_json) {
+    const dataRoot =
+      config.dbPath && config.dbPath !== ':memory:'
+        ? path.dirname(config.dbPath)
+        : undefined;
+    wipeSidecarTenantFiles(logger, dataRoot);
+    await wipeAllTenantOrgData(engine, logger);
+    await engine.run('DELETE FROM kv_store WHERE key = ?', ['pending_full_tenant_wipe']);
+  }
 
   return engine;
 }

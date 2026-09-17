@@ -285,7 +285,7 @@ describe('Setup Wizard Module', () => {
       expect(res.body.error).toMatch(/vertical/i);
     });
 
-    it('returns 409 when vertical is changed after it was set', async () => {
+    it('returns 409 already_configured when setup is re-run after complete', async () => {
       await request(app).post('/api/setup/step3').send({
         adminEmail: 'boss@acme.com',
         vertical: 'hr',
@@ -295,7 +295,7 @@ describe('Setup Wizard Module', () => {
         vertical: 'school',
       });
       expect(res.status).toBe(409);
-      expect(res.body.error).toBe('vertical_immutable');
+      expect(res.body.error).toBe('already_configured');
     });
 
     it('rejects missing admin email', async () => {
