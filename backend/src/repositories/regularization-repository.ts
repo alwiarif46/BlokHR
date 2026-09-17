@@ -106,4 +106,16 @@ export class RegularizationRepository {
       "SELECT * FROM regularizations WHERE status IN ('pending', 'manager_approved') ORDER BY created_at DESC",
     );
   }
+
+  async getMember(email: string): Promise<{ email: string; reports_to: string } | null> {
+    return this.db.get<{ email: string; reports_to: string }>(
+      'SELECT email, reports_to FROM members WHERE email = ? AND active = 1',
+      [email],
+    );
+  }
+
+  async isAdmin(email: string): Promise<boolean> {
+    const admin = await this.db.get<{ email: string }>('SELECT email FROM admins WHERE email = ?', [email]);
+    return !!admin;
+  }
 }

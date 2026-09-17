@@ -74,60 +74,66 @@ export class RegularizationService {
   /** Approve a regularization (manager or HR tier). */
   async approve(
     id: string,
-    role: string,
-    approverEmail: string,
+    callerEmail: string,
   ): Promise<{ success: boolean; error?: string }> {
     const reg = await this.repo.getById(id);
     if (!reg) return { success: false, error: 'Regularization not found' };
 
-    if (role === 'manager') {
-      if (reg.status !== 'pending') {
-        return { success: false, error: `Cannot manager-approve with status "${reg.status}"` };
+    const isAdmin = await this.repo.isAdmin(callerEmail);
+    const member = await this.repo.getMember(reg.email);
+    const isManager = member?.reports_to === callerEmail;
+
+    if (!isAdmin && !isManager) {
+      return { success: false, error: 'Unauthorized to approve this regularization' };
+    }
+
+    if (reg.status === 'pending') {
+      if (!isManager && !isAdmin) {
+        return { success: false, error: 'Only manager or admin can approve pending requests' };
       }
-      await this.repo.update(id, {
-        status: 'manager_approved',
-        manager_approver_email: approverEmail,
-      });
-
-      this.logger.info({ regId: id, approverEmail }, 'Regularization manager-approved');
-
-      // Notify: employee gets status update, HR gets approval card
-      if (this.dispatcher) {
-        const updated = await this.repo.getById(id);
-        if (updated) {
-          this.notifyManagerApproved(updated, approverEmail).catch((err) => {
-            this.logger.error({ err, regId: id }, 'Reg manager-approve notification failed');
-          });
+      
+      // If Admin approves pending, skip manager step? The existing code assumes HR can't approve pending.
+      // But let's allow manager to approve, or admin to act as manager if needed.
+      if (isManager || isAdmin) {
+        await this.repo.update(id, {
+          status: 'manager_approved',
+          manager_approver_email: callerEmail,
+        });
+        this.logger.info({ regId: id, callerEmail }, 'Regularization manager-approved');
+        if (this.dispatcher) {
+          const updated = await this.repo.getById(id);
+          if (updated) {
+            this.notifyManagerApproved(updated, callerEmail).catch((err) => {
+              this.logger.error({ err, regId: id }, 'Reg manager-approve notification failed');
+            });
+          }
         }
       }
-    } else if (role === 'hr') {
-      if (reg.status !== 'manager_approved') {
-        return { success: false, error: `Cannot HR-approve with status "${reg.status}"` };
+    } else if (reg.status === 'manager_approved') {
+      if (!isAdmin) {
+        return { success: false, error: 'Only HR/Admin can final-approve regularizations' };
       }
       await this.repo.update(id, {
         status: 'approved',
-        hr_approver_email: approverEmail,
+        hr_approver_email: callerEmail,
       });
 
-      this.logger.info({ regId: id, approverEmail }, 'Regularization HR-approved');
-
-      // Apply the correction to attendance
+      this.logger.info({ regId: id, callerEmail }, 'Regularization HR-approved');
       await this.applyCorrection(reg);
 
-      // Notify: employee + manager get final status
       if (this.dispatcher) {
         const updated = await this.repo.getById(id);
         if (updated) {
-          this.notifyHrApproved(updated, approverEmail).catch((err) => {
+          this.notifyHrApproved(updated, callerEmail).catch((err) => {
             this.logger.error({ err, regId: id }, 'Reg HR-approve notification failed');
           });
         }
       }
     } else {
-      return { success: false, error: `Invalid role: ${role}` };
+      return { success: false, error: `Cannot approve with status "${reg.status}"` };
     }
 
-    this.eventBus?.emit('regularization.approved', { regularizationId: id, email: reg.email, date: reg.date, approverEmail });
+    this.eventBus?.emit('regularization.approved', { regularizationId: id, email: reg.email, date: reg.date, approverEmail: callerEmail });
 
     return { success: true };
   }
@@ -135,11 +141,19 @@ export class RegularizationService {
   /** Reject a regularization. */
   async reject(
     id: string,
-    approverEmail: string,
+    callerEmail: string,
     comments: string,
   ): Promise<{ success: boolean; error?: string }> {
     const reg = await this.repo.getById(id);
     if (!reg) return { success: false, error: 'Regularization not found' };
+
+    const isAdmin = await this.repo.isAdmin(callerEmail);
+    const member = await this.repo.getMember(reg.email);
+    const isManager = member?.reports_to === callerEmail;
+
+    if (!isAdmin && !isManager) {
+      return { success: false, error: 'Unauthorized to reject this regularization' };
+    }
 
     if (reg.status === 'approved' || reg.status === 'rejected') {
       return { success: false, error: `Cannot reject with status "${reg.status}"` };
@@ -150,18 +164,18 @@ export class RegularizationService {
       rejection_comments: comments,
     });
 
-    this.logger.info({ regId: id, approverEmail, comments }, 'Regularization rejected');
+    this.logger.info({ regId: id, callerEmail, comments }, 'Regularization rejected');
 
     if (this.dispatcher) {
       const updated = await this.repo.getById(id);
       if (updated) {
-        this.notifyRejected(updated, approverEmail, comments).catch((err) => {
+        this.notifyRejected(updated, callerEmail, comments).catch((err) => {
           this.logger.error({ err, regId: id }, 'Reg rejection notification failed');
         });
       }
     }
 
-    this.eventBus?.emit('regularization.rejected', { regularizationId: id, email: reg.email, date: reg.date, approverEmail, reason: comments });
+    this.eventBus?.emit('regularization.rejected', { regularizationId: id, email: reg.email, date: reg.date, approverEmail: callerEmail, reason: comments });
 
     return { success: true };
   }
