@@ -274,17 +274,6 @@ export function SqueezeCarousel({
         [count, ms, settle],
     );
 
-    const go = useCallback(
-        (to: number) => {
-            const here = open;
-            if (to === here) return;
-            const forward = wrap(to - here);
-            step(forward <= count / 2 ? forward : forward - count);
-        },
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-        [open, count, step],
-    );
-
     useEffect(() => {
         onIndexChange?.(open);
         // eslint-disable-next-line react-hooks/exhaustive-deps
