@@ -6,7 +6,10 @@ import { defineConfig } from 'vite'
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
+  define: {
+    'process.env.NODE_ENV': JSON.stringify(mode === 'development' ? 'development' : 'production'),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
@@ -42,4 +45,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
