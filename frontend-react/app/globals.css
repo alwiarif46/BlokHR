@@ -3,6 +3,23 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
+ * shell.html loads shared.css, whose unlayered `* { margin: 0; padding: 0 }`
+ * outranks every Tailwind utility because utilities sit in @layer utilities
+ * and unlayered declarations always win. That flattened all padding and
+ * margins on production while local dev looked correct. This rule is also
+ * unlayered, so it ties on origin and rolls the reset back to the layers
+ * underneath: a Tailwind utility when one applies, preflight otherwise.
+ * Keep it before any other unlayered rule in this file.
+ */
+.landing-root,
+.landing-root *,
+.landing-root *::before,
+.landing-root *::after {
+  margin: revert-layer;
+  padding: revert-layer;
+}
+
+/*
  * Landing marketing tokens — scoped to .landing-root so shell.html
  * (shared.css / body.theme-dark / :root) cannot redefine marketing paint.
  * ThemeProvider keeps .apex-root for shell isolation; tokens live here.
