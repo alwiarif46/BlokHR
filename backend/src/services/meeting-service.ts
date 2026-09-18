@@ -103,6 +103,20 @@ export class MeetingService {
     return { success: true };
   }
 
+  /** Delete a tracked meeting. Caller must be the original creator. */
+  async delete(
+    meetingId: string,
+    callerEmail: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const meeting = await this.repo.getById(meetingId);
+    if (!meeting) return { success: false, error: 'Meeting not found' };
+    if (meeting.added_by !== callerEmail) {
+      return { success: false, error: 'You can only delete meetings you created' };
+    }
+    await this.repo.delete(meetingId);
+    return { success: true };
+  }
+
   /** Get all attendance data in the frontend's expected grouped format. */
   async getAttendance(): Promise<{
     attendance: Record<

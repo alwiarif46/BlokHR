@@ -19,6 +19,7 @@ import {
  *   GET  /api/meetings                        — list all tracked meetings
  *   POST /api/meetings                        — add a meeting manually
  *   PUT  /api/meetings/:id                    — enrich/update a meeting
+ *   DELETE /api/meetings/:id                  — delete a tracked meeting (owner only)
  *   GET  /api/meetings/attendance              — get all attendance data (grouped)
  *   GET  /api/meetings/discover-all            — discover from all configured platforms
  *   POST /api/meetings/:id/sync-attendance     — pull attendance from meeting's platform API
@@ -61,12 +62,12 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
   router.post(
     '/meetings',
     asyncHandler(async (req: Request, res: Response) => {
-      const { name, joinUrl, client, purpose, addedBy } = req.body as {
+      const email = await requireAuth(req);
+      const { name, joinUrl, client, purpose } = req.body as {
         name?: string;
         joinUrl?: string;
         client?: string;
         purpose?: string;
-        addedBy?: string;
       };
 
       if (!name) throw new AppError('Meeting name is required', 400);
@@ -76,13 +77,27 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
         joinUrl: (joinUrl ?? '').trim(),
         client: (client ?? '').trim(),
         purpose: (purpose ?? '').trim(),
-        addedBy: addedBy ?? req.identity?.email ?? '',
+        addedBy: email,
       });
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to add meeting', 400);
       }
 
+      res.json(result);
+    }),
+  );
+
+  /** DELETE /api/meetings/:id — delete a tracked meeting (owner only). */
+  router.delete(
+    '/meetings/:id',
+    asyncHandler(async (req: Request, res: Response) => {
+      const email = await requireAuth(req);
+      const { id } = req.params;
+      const result = await service.delete(id, email);
+      if (!result.success) {
+        throw new AppError(result.error ?? 'Failed to delete meeting', result.error?.includes('only delete') ? 403 : 404);
+      }
       res.json(result);
     }),
   );

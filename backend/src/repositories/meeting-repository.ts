@@ -229,4 +229,10 @@ export class MeetingRepository {
       [meetingId],
     );
   }
+
+  /** Delete a tracked meeting and its attendance records by ID. */
+  async delete(id: string): Promise<void> {
+    await this.db.run('DELETE FROM tracked_meetings WHERE id = ?', [id]);
+    await this.db.run('DELETE FROM meeting_attendance WHERE meeting_id = ?', [id]);
+  }
 }

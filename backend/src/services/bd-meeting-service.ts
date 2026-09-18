@@ -3,6 +3,7 @@ import type { BdMeetingRepository, BdMeeting } from '../repositories/bd-meeting-
 import type { NotificationDispatcher } from './notification/dispatcher';
 import type { DatabaseEngine } from '../db/engine';
 import { getTenantId } from '../tenant/context';
+import { isTenantAdmin } from '../tenant/admin-access';
 import type { EventBus } from '../events';
 
 interface MemberNotifInfo {
@@ -99,6 +100,11 @@ export class BdMeetingService {
     const meeting = await this.repo.getById(meetingId);
     if (!meeting) return { success: false, error: 'BD meeting not found' };
 
+    const authorized = await this.canManage(qualifierEmail, meeting.email);
+    if (!authorized) {
+      return { success: false, error: 'Unauthorized to qualify this BD meeting' };
+    }
+
     if (meeting.status !== 'pending') {
       return { success: false, error: `Cannot qualify with status "${meeting.status}"` };
     }
@@ -131,6 +137,11 @@ export class BdMeetingService {
   ): Promise<{ success: boolean; error?: string }> {
     const meeting = await this.repo.getById(meetingId);
     if (!meeting) return { success: false, error: 'BD meeting not found' };
+
+    const authorized = await this.isAdminOrHr(approverEmail);
+    if (!authorized) {
+      return { success: false, error: 'Only Admin/HR can final-approve BD meetings' };
+    }
 
     if (meeting.status !== 'qualified' && meeting.status !== 'notified') {
       return { success: false, error: `Cannot approve with status "${meeting.status}"` };
@@ -166,6 +177,11 @@ export class BdMeetingService {
     const meeting = await this.repo.getById(meetingId);
     if (!meeting) return { success: false, error: 'BD meeting not found' };
 
+    const authorized = await this.canManage(rejectorEmail, meeting.email);
+    if (!authorized) {
+      return { success: false, error: 'Unauthorized to reject this BD meeting' };
+    }
+
     if (meeting.status === 'approved' || meeting.status === 'rejected') {
       return { success: false, error: `Cannot reject with status "${meeting.status}"` };
     }
@@ -197,6 +213,27 @@ export class BdMeetingService {
   }
 
   // ── BD department check ──
+
+  // ── Authorization & BD department check ──
+
+  public async canManage(callerEmail: string, targetEmail: string): Promise<boolean> {
+    if (callerEmail.toLowerCase().trim() === targetEmail.toLowerCase().trim()) return true;
+    if (await this.isAdminOrHr(callerEmail)) return true;
+    const targetMember = await this.db.get<{ reports_to: string }>(
+      'SELECT reports_to FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), targetEmail.toLowerCase().trim()],
+    );
+    return targetMember?.reports_to === callerEmail;
+  }
+
+  public async isAdminOrHr(email: string): Promise<boolean> {
+    if (await isTenantAdmin(this.db, email)) return true;
+    const hrRow = await this.db.get(
+      "SELECT 1 FROM role_assignments WHERE tenant_id = ? AND assignee_email = ? AND role_type = 'hr'",
+      [getTenantId(), email.toLowerCase().trim()]
+    );
+    return !!hrRow;
+  }
 
   /**
    * Determines if a member belongs to the Business Development department.
