@@ -47,7 +47,7 @@ export const STATS = [
   { value: String(MODULE_COUNT), label: 'modules in the rack' },
   { value: '6', label: 'access layers per request' },
   { value: '15', label: 'services behind one gateway' },
-  { value: '2', label: 'themes, switchable per person' },
+  { value: '4', label: 'themes, switchable per person' },
 ] as const
 
 export const RACKS = {
