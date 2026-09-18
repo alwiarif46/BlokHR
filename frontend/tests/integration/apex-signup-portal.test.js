@@ -21,6 +21,7 @@ describe('Apex signup portal (landing)', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   it('pickBootScreen returns landing when signupPortal is true even if setupComplete', () => {
@@ -35,22 +36,42 @@ describe('Apex signup portal (landing)', () => {
     expect(landing.pickBootScreen(null)).toBe('login');
   });
 
-  it('initLanding renders hero and never activates the login screen', () => {
-    landing.initLanding(document.getElementById('landingRoot'), {
-      signupPortal: true,
-      setupComplete: true,
-      subdomainBase: 'test.example',
+  it('initLanding mounts React Apex and never activates the login screen', async () => {
+    const mountApexLanding = vi.fn((root) => {
+      root.innerHTML = '<div data-apex-mounted="1">Apex</div>';
     });
-    const app = document.getElementById('landingApp');
-    expect(app).toBeTruthy();
-    expect(document.getElementById('landingHeadline').textContent).toMatch(/clicks together/i);
+    await landing.initLanding(
+      document.getElementById('landingRoot'),
+      {
+        signupPortal: true,
+        setupComplete: true,
+        subdomainBase: 'test.example',
+      },
+      {
+        loadApex: async () => ({ mountApexLanding }),
+        navigate: (u) => navigated.push(u),
+      },
+    );
+    expect(mountApexLanding).toHaveBeenCalledOnce();
+    expect(document.querySelector('[data-apex-mounted]')).toBeTruthy();
     expect(document.getElementById('screenLogin').classList.contains('active')).toBe(false);
-    expect(document.querySelector('[data-landing-open="create"]')).toBeTruthy();
-    expect(document.querySelector('[data-landing-open="login"]')).toBeTruthy();
+    expect(document.getElementById('landingApp')).toBeNull();
   });
 
-  it('slug check states render available / taken / invalid inline', async () => {
-    vi.useFakeTimers();
+  it('initLanding throws when the Apex bundle cannot mount', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await expect(
+      landing.initLanding(document.getElementById('landingRoot'), { signupPortal: true }, {
+        loadApex: async () => {
+          throw new Error('bundle missing');
+        },
+      }),
+    ).rejects.toThrow(/bundle missing/);
+    expect(errSpy).toHaveBeenCalled();
+    expect(document.getElementById('landingApp')).toBeNull();
+  });
+
+  it('slug check states resolve available / taken / invalid', async () => {
     const get = vi.fn(async (path) => {
       if (path.endsWith('/acme')) return { slug: 'acme', status: 'available' };
       if (path.endsWith('/taken-co')) return { slug: 'taken-co', status: 'taken' };
@@ -61,105 +82,39 @@ describe('Apex signup portal (landing)', () => {
     });
     const apiMock = { get, post: vi.fn() };
 
-    landing.initLanding(
-      document.getElementById('landingRoot'),
-      { signupPortal: true, subdomainBase: 'test.example' },
-      { api: apiMock, navigate: (u) => navigated.push(u) },
-    );
-
-    document.querySelector('[data-landing-open="create"]').click();
-    const input = document.getElementById('landingSlug');
-    const err = document.getElementById('landingErr');
-    const hint = document.getElementById('landingHint');
-    const btn = document.getElementById('landingSubmit');
-
-    input.value = 'acme';
-    input.dispatchEvent(new Event('input'));
-    await vi.advanceTimersByTimeAsync(400);
-    await Promise.resolve();
-    expect(hint.textContent).toMatch(/Available/i);
-    expect(hint.classList.contains('is-ok')).toBe(true);
-    expect(btn.disabled).toBe(false);
-    expect(err.hidden).toBe(true);
-
-    input.value = 'taken-co';
-    input.dispatchEvent(new Event('input'));
-    await vi.advanceTimersByTimeAsync(400);
-    await Promise.resolve();
-    expect(err.hidden).toBe(false);
-    expect(err.textContent).toMatch(/already taken/i);
-    expect(btn.disabled).toBe(true);
-
-    input.value = 'bad';
-    input.dispatchEvent(new Event('input'));
-    await vi.advanceTimersByTimeAsync(400);
-    await Promise.resolve();
-    expect(err.textContent).toMatch(/Invalid workspace name/i);
-    expect(btn.disabled).toBe(true);
+    await expect(landing.checkSlugAvailability(apiMock, 'acme')).resolves.toMatchObject({
+      state: 'available',
+      slug: 'acme',
+    });
+    await expect(landing.checkSlugAvailability(apiMock, 'taken-co')).resolves.toMatchObject({
+      state: 'taken',
+    });
+    await expect(landing.checkSlugAvailability(apiMock, 'bad')).resolves.toMatchObject({
+      state: 'invalid',
+    });
   });
 
-  it('409 on claim keeps the typed slug and shows taken inline', async () => {
-    const get = vi.fn(async () => ({ slug: 'race-co', status: 'available' }));
-    const post = vi.fn(async () => ({
-      _error: true,
-      status: 409,
-      error: 'slug_taken',
-      message: 'slug_taken',
-    }));
-    const apiMock = { get, post };
-
-    landing.initLanding(
-      document.getElementById('landingRoot'),
-      { signupPortal: true, subdomainBase: 'test.example' },
-      { api: apiMock, navigate: (u) => navigated.push(u) },
+  it('claimWorkspace keeps slug_taken on 409', async () => {
+    const claimed = await landing.claimWorkspace(
+      {
+        post: async () => ({
+          _error: true,
+          status: 409,
+          error: 'slug_taken',
+          message: 'slug_taken',
+        }),
+      },
+      'race-co',
     );
-
-    document.querySelector('[data-landing-open="create"]').click();
-    const input = document.getElementById('landingSlug');
-    const btn = document.getElementById('landingSubmit');
-    const err = document.getElementById('landingErr');
-
-    input.value = 'race-co';
-    /* Force submit enabled as if check passed */
-    btn.disabled = false;
-    await btn.click();
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(navigated).toEqual([]);
-    expect(input.value).toBe('race-co');
-    expect(err.hidden).toBe(false);
-    expect(err.textContent).toMatch(/already taken/i);
-    expect(btn.disabled).toBe(false);
+    expect(claimed.ok).toBe(false);
+    expect(claimed.error).toBe('slug_taken');
+    expect(claimed.message).toMatch(/already taken/i);
   });
 
   it('login path redirects to subdomain rather than posting credentials', async () => {
-    vi.useFakeTimers();
-    const get = vi.fn(async () => ({ slug: 'acme', status: 'taken' }));
-    const post = vi.fn();
-    const apiMock = { get, post };
-
-    landing.initLanding(
-      document.getElementById('landingRoot'),
-      { signupPortal: true, subdomainBase: 'test.example' },
-      { api: apiMock, navigate: (u) => navigated.push(u) },
-    );
-
-    document.querySelector('[data-landing-open="login"]').click();
-    const input = document.getElementById('landingSlug');
-    const btn = document.getElementById('landingSubmit');
-
-    input.value = 'acme';
-    input.dispatchEvent(new Event('input'));
-    await vi.advanceTimersByTimeAsync(400);
-    await Promise.resolve();
-    expect(btn.disabled).toBe(false);
-
-    await btn.click();
-    await Promise.resolve();
-
-    expect(post).not.toHaveBeenCalled();
-    expect(navigated).toEqual(['https://acme.test.example/']);
+    const target = landing.loginRedirectTarget('acme', 'test.example', 'taken');
+    expect(target.url).toBe('https://acme.test.example/');
+    expect(target.message).toBeNull();
   });
 
   it('login treats available as no such workspace', async () => {
