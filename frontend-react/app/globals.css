@@ -125,9 +125,30 @@
   }
 
   .apex-root .apex-nav-mobile {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
     display: flex;
-    gap: 1rem;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 0;
+    min-height: 3.5rem;
+    padding: 0.25rem 0.5rem calc(0.25rem + env(safe-area-inset-bottom));
+    background: #fff;
+    border-top: 1px solid var(--border);
     overflow-x: auto;
+  }
+
+  .apex-root.dark .apex-nav-mobile {
+    background: #000;
+  }
+
+  @media (width < 48rem) {
+    .apex-root .apex-shell-body {
+      padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+    }
   }
 
   .apex-root .apex-header-create {

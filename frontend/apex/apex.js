@@ -12475,11 +12475,11 @@ function ha({ status: e, api: t, navigate: n, children: r }) {
 								children: Bn
 							}),
 							/* @__PURE__ */ (0, P.jsx)("nav", {
-								className: "apex-nav-desktop font-mono text-[12px] tracking-[1px]",
+								className: "apex-nav-desktop font-mono text-[12px] font-bold tracking-[1px]",
 								"aria-label": "Primary",
 								children: Vn.map((e) => /* @__PURE__ */ (0, P.jsx)(kn, {
 									to: e.path,
-									className: ({ isActive: e }) => `uppercase ${e ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`,
+									className: ({ isActive: e }) => `font-bold uppercase ${e ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`,
 									children: e.label
 								}, e.id))
 							}),
@@ -12519,16 +12519,19 @@ function ha({ status: e, api: t, navigate: n, children: r }) {
 						]
 					})
 				}),
+				/* @__PURE__ */ (0, P.jsx)("div", {
+					className: "apex-shell-body",
+					children: r ?? /* @__PURE__ */ (0, P.jsx)(Bt, {})
+				}),
 				/* @__PURE__ */ (0, P.jsx)("nav", {
-					className: "apex-nav-mobile relative z-10 px-5 pb-3 font-mono text-[11px] tracking-[1px]",
+					className: "apex-nav-mobile font-mono text-[11px] font-bold tracking-[1px]",
 					"aria-label": "Primary mobile",
 					children: Vn.map((e) => /* @__PURE__ */ (0, P.jsx)(kn, {
 						to: e.path,
-						className: ({ isActive: e }) => `shrink-0 font-mono text-[11px] tracking-[1px] uppercase ${e ? "text-foreground" : "text-muted-foreground"}`,
+						className: ({ isActive: e }) => `flex min-h-11 flex-1 items-center justify-center px-1 text-center font-mono text-[11px] font-bold tracking-[1px] uppercase ${e ? "text-foreground" : "text-muted-foreground"}`,
 						children: e.label
 					}, e.id))
 				}),
-				r ?? /* @__PURE__ */ (0, P.jsx)(Bt, {}),
 				/* @__PURE__ */ (0, P.jsx)(oa, {
 					status: e,
 					mode: c,
@@ -21556,19 +21559,22 @@ var yy = [
 		label: "Locked",
 		detail: "Workspace type stays permanent",
 		shell: F.charcoal,
-		tone: "dark"
+		tone: "dark",
+		icon: "mdi:lock-outline"
 	},
 	{
 		label: "Editable",
 		detail: "Branding and auth stay flexible",
 		shell: F.mint,
-		tone: "light"
+		tone: "light",
+		icon: "mdi:pencil-outline"
 	},
 	{
 		label: "Scoped",
 		detail: "Plan limits stay on this tenant",
 		shell: F.blueSoft,
-		tone: "light"
+		tone: "light",
+		icon: "mdi:office-building-outline"
 	}
 ];
 function xy() {
@@ -21643,18 +21649,26 @@ function xy() {
 					/* @__PURE__ */ (0, P.jsx)("ul", {
 						className: "grid flex-1 grid-cols-1 gap-2 sm:grid-cols-3",
 						children: by.map((e) => /* @__PURE__ */ (0, P.jsxs)("li", {
-							className: `flex flex-col justify-between gap-2 p-3 ${e.tone === "dark" ? "text-white" : "text-[#121314]"}`,
+							className: `flex flex-col items-center justify-between gap-3 p-4 text-center ${e.tone === "dark" ? "text-white" : "text-[#121314]"}`,
 							style: {
 								background: e.shell,
 								borderRadius: F.radiusPx
 							},
-							children: [/* @__PURE__ */ (0, P.jsx)("span", {
-								className: "font-mono text-[11px] tracking-[0.1em] uppercase opacity-80",
-								children: e.label
-							}), /* @__PURE__ */ (0, P.jsx)("span", {
-								className: "text-[13px] font-semibold leading-snug",
-								children: e.detail
-							})]
+							children: [
+								/* @__PURE__ */ (0, P.jsx)("span", {
+									className: "font-mono text-[11px] tracking-[0.1em] uppercase opacity-80",
+									children: e.label
+								}),
+								/* @__PURE__ */ (0, P.jsx)(ea, {
+									icon: e.icon,
+									className: "size-14 shrink-0 opacity-90 md:size-16",
+									"aria-hidden": !0
+								}),
+								/* @__PURE__ */ (0, P.jsx)("span", {
+									className: "text-[13px] font-semibold leading-snug",
+									children: e.detail
+								})
+							]
 						}, e.label))
 					}),
 					/* @__PURE__ */ (0, P.jsx)("button", {

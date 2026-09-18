@@ -111,8 +111,12 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
           </div>
         </header>
 
+        <div className="apex-shell-body">
+          {children ?? <Outlet />}
+        </div>
+
         <nav
-          className="apex-nav-mobile relative z-10 px-5 pb-3 font-mono text-[11px] font-bold tracking-[1px]"
+          className="apex-nav-mobile font-mono text-[11px] font-bold tracking-[1px]"
           aria-label="Primary mobile"
         >
           {NAV.map((item) => (
@@ -120,7 +124,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
               key={item.id}
               to={item.path}
               className={({ isActive }) =>
-                `shrink-0 font-mono text-[11px] font-bold tracking-[1px] uppercase ${
+                `flex min-h-11 flex-1 items-center justify-center px-1 text-center font-mono text-[11px] font-bold tracking-[1px] uppercase ${
                   isActive ? 'text-foreground' : 'text-muted-foreground'
                 }`
               }
@@ -129,8 +133,6 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
             </NavLink>
           ))}
         </nav>
-
-        {children ?? <Outlet />}
 
         <SignupPanel
           status={status}
