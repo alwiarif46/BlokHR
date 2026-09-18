@@ -214,6 +214,8 @@ export async function tryMountReactApex(root, status, deps) {
           window.location.href = url;
         },
     });
+    const themeBar = document.getElementById('themeBar');
+    if (themeBar) themeBar.style.display = 'none';
     return true;
   } catch (_err) {
     return false;
