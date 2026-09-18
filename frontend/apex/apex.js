@@ -18348,25 +18348,21 @@ function zg() {
 	return null;
 }
 function Bg() {
-	return typeof window > "u" ? "light" : window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+	return typeof document > "u" ? !1 : !!document.getElementById("root") && !document.getElementById("screenLanding");
 }
 function Vg(e) {
+	if (!Bg()) return;
 	let t = document.documentElement;
-	t.classList.toggle("dark", e === "dark"), t.dataset.theme = e;
+	t.classList.toggle("dark", e === "dark"), t.dataset.theme = e, t.style.backgroundColor = e === "dark" ? "#0a0b0d" : "#fbfaff", t.style.colorScheme = e;
 }
 function Hg({ children: e }) {
-	let [t, n] = (0, _.useState)(() => zg() ?? Bg());
+	let [t, n] = (0, _.useState)(() => zg() ?? "light");
 	(0, _.useEffect)(() => {
 		Vg(t);
 		try {
 			localStorage.setItem(Rg, t);
 		} catch {}
-	}, [t]), (0, _.useEffect)(() => {
-		let e = window.matchMedia("(prefers-color-scheme: dark)"), t = () => {
-			zg() || n(Bg());
-		};
-		return e.addEventListener("change", t), () => e.removeEventListener("change", t);
-	}, []);
+	}, [t]);
 	let r = (0, _.useCallback)((e) => {
 		n(e);
 	}, []), i = (0, _.useCallback)(() => {
@@ -18382,7 +18378,11 @@ function Hg({ children: e }) {
 	]);
 	return /* @__PURE__ */ (0, $.jsx)(Lg.Provider, {
 		value: a,
-		children: e
+		children: /* @__PURE__ */ (0, $.jsx)("div", {
+			className: `apex-root min-h-screen${t === "dark" ? " dark" : ""}`,
+			"data-theme": t,
+			children: e
+		})
 	});
 }
 function Ug() {
@@ -18431,7 +18431,7 @@ function Kg({ status: e, api: t, navigate: n, children: r }) {
 							children: ji
 						}),
 						/* @__PURE__ */ (0, $.jsx)("nav", {
-							className: "hidden items-center gap-5 lg:flex",
+							className: "hidden items-center gap-5 md:flex",
 							"aria-label": "Primary",
 							children: Mi.map((e) => /* @__PURE__ */ (0, $.jsx)(jn, {
 								to: e.path,
@@ -18475,7 +18475,7 @@ function Kg({ status: e, api: t, navigate: n, children: r }) {
 					]
 				}),
 				/* @__PURE__ */ (0, $.jsx)("nav", {
-					className: "relative z-10 flex gap-4 overflow-x-auto px-5 pb-3 lg:hidden",
+					className: "relative z-10 flex gap-4 overflow-x-auto px-5 pb-3 md:hidden",
 					"aria-label": "Primary mobile",
 					children: Mi.map((e) => /* @__PURE__ */ (0, $.jsx)(jn, {
 						to: e.path,

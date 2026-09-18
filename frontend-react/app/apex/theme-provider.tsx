@@ -32,38 +32,32 @@ function readStoredTheme(): ThemeMode | null {
   return null
 }
 
-function systemTheme(): ThemeMode {
-  if (typeof window === 'undefined') return 'light'
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+/** Vite standalone has #root and no shell landing screen. */
+function isStandaloneVite(): boolean {
+  if (typeof document === 'undefined') return false
+  return !!document.getElementById('root') && !document.getElementById('screenLanding')
 }
 
-function applyDomTheme(mode: ThemeMode) {
+function syncDocumentElement(mode: ThemeMode) {
+  if (!isStandaloneVite()) return
   const root = document.documentElement
   root.classList.toggle('dark', mode === 'dark')
   root.dataset.theme = mode
+  root.style.backgroundColor = mode === 'dark' ? '#0a0b0d' : '#fbfaff'
+  root.style.colorScheme = mode
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<ThemeMode>(() => readStoredTheme() ?? systemTheme())
+  const [theme, setThemeState] = useState<ThemeMode>(() => readStoredTheme() ?? 'light')
 
   useEffect(() => {
-    applyDomTheme(theme)
+    syncDocumentElement(theme)
     try {
       localStorage.setItem(STORAGE_KEY, theme)
     } catch {
       /* ignore */
     }
   }, [theme])
-
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const onChange = () => {
-      if (readStoredTheme()) return
-      setThemeState(systemTheme())
-    }
-    mq.addEventListener('change', onChange)
-    return () => mq.removeEventListener('change', onChange)
-  }, [])
 
   const setTheme = useCallback((mode: ThemeMode) => {
     setThemeState(mode)
@@ -78,7 +72,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [theme, setTheme, toggleTheme],
   )
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  return (
+    <ThemeContext.Provider value={value}>
+      <div
+        className={`apex-root min-h-screen${theme === 'dark' ? ' dark' : ''}`}
+        data-theme={theme}
+      >
+        {children}
+      </div>
+    </ThemeContext.Provider>
+  )
 }
 
 export function useTheme() {

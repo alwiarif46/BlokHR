@@ -62,7 +62,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
             {BRAND}
           </NavLink>
 
-          <nav className="hidden items-center gap-5 lg:flex" aria-label="Primary">
+          <nav className="hidden items-center gap-5 md:flex" aria-label="Primary">
             {NAV.map((item) => (
               <NavLink
                 key={item.id}
@@ -110,7 +110,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
         </header>
 
         <nav
-          className="relative z-10 flex gap-4 overflow-x-auto px-5 pb-3 lg:hidden"
+          className="relative z-10 flex gap-4 overflow-x-auto px-5 pb-3 md:hidden"
           aria-label="Primary mobile"
         >
           {NAV.map((item) => (

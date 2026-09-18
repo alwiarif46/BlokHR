@@ -2,15 +2,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Design.html light / dark — Apex marketing tokens */
-:root {
+/*
+ * Apex marketing tokens — scoped to .apex-root so shell.html
+ * (shared.css / body.theme-dark) cannot redefine marketing paint.
+ */
+.apex-root {
   --background: #fbfaff;
   --foreground: #14213d;
   --card: #ffffff;
   --card-foreground: #14213d;
   --popover: #ffffff;
   --popover-foreground: #14213d;
-  --primary: #6d3aed;
+  /* Assembly mock: black CTAs on light, not purple */
+  --primary: #121314;
   --primary-foreground: #ffffff;
   --secondary: #efe9ff;
   --secondary-foreground: #14213d;
@@ -21,11 +25,12 @@
   --destructive: #e8467c;
   --border: #ddd6f5;
   --input: #ddd6f5;
-  --ring: #6d3aed;
+  --ring: #121314;
   --radius: 0.75rem;
+  color-scheme: light;
 }
 
-.dark {
+.apex-root.dark {
   --background: #0a0b0d;
   --foreground: #edf0f5;
   --card: #121416;
@@ -44,6 +49,7 @@
   --border: rgba(255, 255, 255, 0.12);
   --input: rgba(255, 255, 255, 0.14);
   --ring: #00e59a;
+  color-scheme: dark;
 }
 
 @theme inline {
@@ -75,15 +81,15 @@
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
-
-  html,
-  body,
-  #root {
+  .apex-root {
     @apply min-h-full bg-background text-foreground antialiased;
     font-family: var(--font-sans);
+  }
+
+  .apex-root *,
+  .apex-root *::before,
+  .apex-root *::after {
+    @apply border-border;
   }
 
   body {
