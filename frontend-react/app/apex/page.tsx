@@ -14,7 +14,9 @@ export interface ApexPageProps {
 export function ApexPage(props: ApexPageProps) {
   return (
     <ThemeProvider>
-      <ApexRouter {...props} />
+      <div className="landing-root min-h-screen">
+        <ApexRouter {...props} />
+      </div>
     </ThemeProvider>
   )
 }

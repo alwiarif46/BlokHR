@@ -3,10 +3,11 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Apex marketing tokens — scoped to .apex-root so shell.html
- * (shared.css / body.theme-dark) cannot redefine marketing paint.
+ * Landing marketing tokens — scoped to .landing-root so shell.html
+ * (shared.css / body.theme-dark / :root) cannot redefine marketing paint.
+ * ThemeProvider keeps .apex-root for shell isolation; tokens live here.
  */
-.apex-root {
+.landing-root {
   --background: #fbfaff;
   --foreground: #14213d;
   --card: #ffffff;
@@ -30,7 +31,9 @@
   color-scheme: light;
 }
 
-.apex-root.dark {
+.apex-root.dark .landing-root,
+.dark .landing-root,
+.landing-root.dark {
   --background: #0a0b0d;
   --foreground: #edf0f5;
   --card: #121416;
@@ -81,14 +84,14 @@
 }
 
 @layer base {
-  .apex-root {
+  .landing-root {
     @apply min-h-full bg-background text-foreground antialiased;
     font-family: var(--font-sans);
   }
 
-  .apex-root *,
-  .apex-root *::before,
-  .apex-root *::after {
+  .landing-root *,
+  .landing-root *::before,
+  .landing-root *::after {
     @apply border-border;
   }
 
