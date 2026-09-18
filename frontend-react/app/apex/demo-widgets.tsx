@@ -724,7 +724,7 @@ function renderWidgetContent(
         />
       )
     case 'access-layer':
-      return (
+  return (
         <ContentTile
           shell={shell}
           eyebrow={`Layer ${widget.stepN}`}
@@ -734,7 +734,7 @@ function renderWidgetContent(
         />
       )
     case 'access-role':
-      return (
+          return (
         <ContentTile
           shell={shell}
           eyebrow="Role"
@@ -754,7 +754,7 @@ function renderWidgetContent(
         />
       )
     case 'overview-stat':
-      return (
+  return (
         <ContentTile
           shell={shell}
           title={widget.label ?? ''}
@@ -763,7 +763,7 @@ function renderWidgetContent(
         />
       )
     case 'marketing-cta':
-      return (
+  return (
         <MarketingCta
           title={widget.label ?? ''}
           detail={widget.detail}
@@ -932,7 +932,7 @@ export function DemoBoard({
           />
           {arranging ? 'Done' : 'Arrange'}
         </button>
-      </div>
+          </div>
       <div data-live={live ? '1' : '0'}>
         <DraggableWidgetGrid
           key={items.map((w) => w.id).join('|')}
@@ -953,6 +953,6 @@ export function DemoBoard({
           radius={radius}
         />
       </div>
-    </section>
+      </section>
   )
 }

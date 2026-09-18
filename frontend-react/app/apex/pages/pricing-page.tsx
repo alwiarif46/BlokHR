@@ -1,22 +1,29 @@
 'use client'
 
-import { PRICING_WIDGETS } from '@/app/apex/demo-widgets'
 import { PAGE_COPY } from '@/app/apex/marketing-copy'
-import { MarketingPage } from '@/app/apex/marketing-page'
+import { PageFrame } from '@/app/apex/page-frame'
+import { PageHero } from '@/app/apex/page-hero'
+import { PageFaqSection } from '@/app/apex/sections/page-faq'
+import { PricingPaths } from '@/app/apex/sections/pricing-paths'
+import { ProofBand } from '@/app/apex/sections/proof-band'
 
 export function PricingPage() {
   const copy = PAGE_COPY.pricing
+
   return (
-    <MarketingPage
-      eyebrow={copy.eyebrow}
-      title={copy.title}
-      lede={copy.lede}
-      bullets={copy.bullets}
-      stripLabel={copy.stripLabel}
-      meta={copy.meta}
-      aside={copy.aside}
-      widgets={PRICING_WIDGETS}
-      boardTitle="Pricing board"
-    />
+    <PageFrame>
+      <PageHero
+        eyebrow={copy.eyebrow}
+        title={copy.title}
+        lede={copy.lede}
+        bullets={copy.bullets}
+        meta={copy.meta}
+        audience={copy.audience}
+        aside={copy.aside}
+      />
+      <PricingPaths />
+      <PageFaqSection faqs={copy.faqs} />
+      <ProofBand />
+    </PageFrame>
   )
 }

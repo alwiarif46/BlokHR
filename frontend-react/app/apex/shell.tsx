@@ -63,13 +63,13 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
             {BRAND}
           </NavLink>
 
-          <nav className="apex-nav-desktop font-mono text-[12px] tracking-[1px]" aria-label="Primary">
+          <nav className="apex-nav-desktop font-mono text-[12px] font-bold tracking-[1px]" aria-label="Primary">
             {NAV.map((item) => (
               <NavLink
                 key={item.id}
                 to={item.path}
                 className={({ isActive }) =>
-                  `uppercase ${
+                  `font-bold uppercase ${
                     isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`
                 }
@@ -112,7 +112,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
         </header>
 
         <nav
-          className="apex-nav-mobile relative z-10 px-5 pb-3 font-mono text-[11px] tracking-[1px]"
+          className="apex-nav-mobile relative z-10 px-5 pb-3 font-mono text-[11px] font-bold tracking-[1px]"
           aria-label="Primary mobile"
         >
           {NAV.map((item) => (
@@ -120,7 +120,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
               key={item.id}
               to={item.path}
               className={({ isActive }) =>
-                `shrink-0 font-mono text-[11px] tracking-[1px] uppercase ${
+                `shrink-0 font-mono text-[11px] font-bold tracking-[1px] uppercase ${
                   isActive ? 'text-foreground' : 'text-muted-foreground'
                 }`
               }

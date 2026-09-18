@@ -1,22 +1,29 @@
 'use client'
 
-import { ACCESS_WIDGETS } from '@/app/apex/demo-widgets'
 import { PAGE_COPY } from '@/app/apex/marketing-copy'
-import { MarketingPage } from '@/app/apex/marketing-page'
+import { PageFrame } from '@/app/apex/page-frame'
+import { PageHero } from '@/app/apex/page-hero'
+import { AccessLayers } from '@/app/apex/sections/access-layers'
+import { PageFaqSection } from '@/app/apex/sections/page-faq'
+import { ProofBand } from '@/app/apex/sections/proof-band'
 
 export function AccessPage() {
   const copy = PAGE_COPY.access
+
   return (
-    <MarketingPage
-      eyebrow={copy.eyebrow}
-      title={copy.title}
-      lede={copy.lede}
-      bullets={copy.bullets}
-      stripLabel={copy.stripLabel}
-      meta={copy.meta}
-      aside={copy.aside}
-      widgets={ACCESS_WIDGETS}
-      boardTitle="Access board"
-    />
+    <PageFrame>
+      <PageHero
+        eyebrow={copy.eyebrow}
+        title={copy.title}
+        lede={copy.lede}
+        bullets={copy.bullets}
+        meta={copy.meta}
+        audience={copy.audience}
+        aside={copy.aside}
+      />
+      <AccessLayers showIntro={false} />
+      <PageFaqSection faqs={copy.faqs} />
+      <ProofBand />
+    </PageFrame>
   )
 }

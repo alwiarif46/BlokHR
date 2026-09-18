@@ -6,26 +6,33 @@ import { MOSAIC } from '@/app/apex/mosaic-theme'
 const STEP_SHELLS = [MOSAIC.gold, MOSAIC.blueSoft, MOSAIC.coral, MOSAIC.charcoal] as const
 
 /** Setup steps: heading column beside a 2x2 tile grid. */
-export function SetupSteps() {
+export function SetupSteps({ showIntro = true }: { showIntro?: boolean }) {
   const copy = PAGE_COPY.setup
 
   return (
     <section
-      aria-labelledby="setup-steps-title"
-      className="mt-16 grid gap-8 md:mt-20 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)] md:items-start md:gap-10"
+      aria-labelledby={showIntro ? 'setup-steps-title' : undefined}
+      aria-label={showIntro ? undefined : 'Setup steps'}
+      className={`grid gap-8 md:items-start md:gap-10 ${
+        showIntro
+          ? 'mt-16 md:mt-20 md:grid-cols-[minmax(0,280px)_minmax(0,1fr)]'
+          : 'mt-10 md:mt-12'
+      }`}
     >
-      <div>
-        <p className="mb-2 font-mono text-[12px] tracking-[0.14em] text-muted-foreground uppercase">
-          {copy.eyebrow}
-        </p>
-        <h2
-          id="setup-steps-title"
-          className="mb-3 text-[28px] font-extrabold tracking-[-1px] md:text-[32px]"
-        >
-          {copy.title}
-        </h2>
-        <p className="max-w-[28em] text-[14px] leading-[1.65] text-muted-foreground">{copy.lede}</p>
-      </div>
+      {showIntro ? (
+        <div>
+          <p className="mb-2 font-mono text-[12px] tracking-[0.14em] text-muted-foreground uppercase">
+            {copy.eyebrow}
+          </p>
+          <h2
+            id="setup-steps-title"
+            className="mb-3 text-[28px] font-extrabold tracking-[-1px] md:text-[32px]"
+          >
+            {copy.title}
+          </h2>
+          <p className="max-w-[28em] text-[14px] leading-[1.65] text-muted-foreground">{copy.lede}</p>
+        </div>
+      ) : null}
       <ul className="grid grid-cols-2 gap-3">
         {SETUP_STEPS.map((step, i) => {
           const shell = STEP_SHELLS[i] ?? MOSAIC.gold

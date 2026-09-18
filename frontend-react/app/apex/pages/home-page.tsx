@@ -2,36 +2,17 @@
 
 import { DemoBoard, DESKTOP_BOARD_COLUMNS, HOME_WIDGETS, LOCK_DESKTOP_BOARD_COLUMNS } from '@/app/apex/demo-widgets'
 import { HeroMosaic } from '@/app/apex/hero-mosaic'
-import { HERO, HOME_STRIP_LABEL, MODULE_COUNT, PROOF_BAND } from '@/app/apex/marketing-copy'
+import { HERO, HOME_STRIP_LABEL, MODULE_COUNT } from '@/app/apex/marketing-copy'
 import { MOSAIC } from '@/app/apex/mosaic-theme'
 import { AccessLayers } from '@/app/apex/sections/access-layers'
 import { Footer } from '@/app/apex/sections/footer'
 import { ModuleCarousel } from '@/app/apex/sections/module-carousel'
+import { ProofBand } from '@/app/apex/sections/proof-band'
 import { Racks } from '@/app/apex/sections/racks'
 import { SetupSteps } from '@/app/apex/sections/setup-steps'
 import { StatsBand } from '@/app/apex/sections/stats-band'
 import { useApex } from '@/app/apex/shell'
 import { useIsDesktop } from '@/app/apex/use-viewport'
-
-function ProofBand() {
-  return (
-    <section
-      aria-label="Customer proof"
-      className="mt-16 border-t border-border pt-10 md:mt-20"
-    >
-      <ul className="grid gap-4 sm:grid-cols-3">
-        {PROOF_BAND.map((slot) => (
-          <li
-            key={slot}
-            className="rounded-[14px] border border-[#121314]/12 px-4 py-5 font-mono text-[13px] leading-relaxed text-muted-foreground"
-          >
-            {slot}
-          </li>
-        ))}
-      </ul>
-    </section>
-  )
-}
 
 export function HomePage() {
   const isDesktop = useIsDesktop()

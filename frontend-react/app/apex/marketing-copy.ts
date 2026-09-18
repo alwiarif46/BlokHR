@@ -111,6 +111,8 @@ export const ACCESS = {
   ],
 } as const
 
+export type PageFaq = { q: string; a: string }
+
 export const PAGE_COPY = {
   modules: {
     eyebrow: 'Admin › Features',
@@ -124,8 +126,23 @@ export const PAGE_COPY = {
       'Core, campus, and add-ons share the same spine.',
     ],
     meta: 'Admin › Features · drag any tile',
+    audience: 'For admins who decide what the workspace runs.',
     aside:
       'Drag tiles on the board to see how the rack feels. Off modules stay grey until you turn them on. Your real workspace keeps the same switch model: one flag per module, scoped to your tenant.',
+    faqs: [
+      {
+        q: 'What does Off actually do?',
+        a: 'Off removes the module from the sidebar and returns 404 from its own API. On restores it on the next load.',
+      },
+      {
+        q: 'Do core and campus share one product?',
+        a: 'Yes. Core, campus, and add-ons sit on the same spine. You pick Workforce or Campus once at setup, then switch modules on that tenant.',
+      },
+      {
+        q: 'Is the board the real Admin Features screen?',
+        a: 'It is the same switch model. Your live workspace keeps flags per module, scoped to your tenant only.',
+      },
+    ] satisfies PageFaq[],
   },
   setup: {
     eyebrow: 'Onboarding',
@@ -139,8 +156,23 @@ export const PAGE_COPY = {
       'Start a trial or paste a licence token.',
     ],
     meta: 'No card to start · four steps to first login',
+    audience: 'For the person creating the first workspace.',
     aside:
       'Workspace type is locked after create so HR and campus data never mix by accident. Branding and auth stay editable. Plan and entitlements stay on the tenant you just opened.',
+    faqs: [
+      {
+        q: 'Can I change Workforce to Campus later?',
+        a: 'No. Type is permanent for that workspace so HR and campus data never mix by accident.',
+      },
+      {
+        q: 'What stays editable after create?',
+        a: 'Branding and auth stay editable. Plan and entitlements stay on the tenant you opened.',
+      },
+      {
+        q: 'Which sign-in options are supported?',
+        a: 'Password, magic link, Microsoft, Google, or SAML, wired in setup step three.',
+      },
+    ] satisfies PageFaq[],
   },
   access: {
     eyebrow: 'Security model',
@@ -154,8 +186,23 @@ export const PAGE_COPY = {
       'Screens hide controls; APIs enforce them.',
     ],
     meta: 'Six layers · named roles · per-tenant isolation',
+    audience: 'For security reviewers and school or HR admins.',
     aside:
-      'A teacher sees her sections. An admin sees the tenant with audit. Parents and guardians only get what you release. The board is a map of the checks, not a shortcut around them.',
+      'A teacher sees her sections. An admin sees the tenant with audit. Parents and guardians only get what you release. The layers are the gate; the UI is never the boundary.',
+    faqs: [
+      {
+        q: 'Is hiding a button enough?',
+        a: 'No. Screens hide controls last. Tenant, flags, identity, role, and row ownership already ran.',
+      },
+      {
+        q: 'What does a teacher see?',
+        a: ACCESS.lead,
+      },
+      {
+        q: 'How are parents and guardians limited?',
+        a: 'Parents and guardians only get what you release. Named roles sit on the same six-layer path.',
+      },
+    ] satisfies PageFaq[],
   },
   campus: {
     eyebrow: 'BlokSchool',
@@ -169,8 +216,23 @@ export const PAGE_COPY = {
       'Parents sign into a portal that only shows released data.',
     ],
     meta: 'BlokSchool · same spine as BlokHR',
+    audience: 'For schools that need campus ops without a second product.',
     aside:
-      'Campus and workforce share one product spine. You pick Campus once at setup, then switch on the school modules you run this term. Staff attendance can still sit beside roll call when you need both.',
+      'You pick Campus once at setup, then switch on the school modules you run this term. Staff attendance can still sit beside roll call when you need both.',
+    faqs: [
+      {
+        q: 'Is BlokSchool a separate product?',
+        a: 'No. Campus modules share one spine with workforce. You choose Campus once at setup.',
+      },
+      {
+        q: 'When do parents see marks?',
+        a: 'Report cards publish when marks lock. The parent portal only shows released data.',
+      },
+      {
+        q: 'Must every campus module be on?',
+        a: 'No. Library, transport, and other campus modules wait until you switch them on.',
+      },
+    ] satisfies PageFaq[],
   },
   workforce: {
     eyebrow: 'BlokHR',
@@ -184,8 +246,23 @@ export const PAGE_COPY = {
       'Geo-fence and kiosk share the same capture path.',
     ],
     meta: 'BlokHR · same spine as BlokSchool',
+    audience: 'For HR and ops teams that grow module by module.',
     aside:
       'Start with clock-in and leaves. Add overtime, capture, or payroll when operations are ready. You do not rebuild the workspace; you flip switches on the same tenant spine.',
+    faqs: [
+      {
+        q: 'What runs from day one?',
+        a: 'Clock-in and leaves. Overtime and payroll stay off until you are ready.',
+      },
+      {
+        q: 'How do biometrics fit?',
+        a: 'Face and iris bolt on as add-ons. Geo-fence and kiosk share the same capture path.',
+      },
+      {
+        q: 'Do I rebuild when I add modules?',
+        a: 'No. You flip switches on the same tenant spine. Core and add-ons stay one product.',
+      },
+    ] satisfies PageFaq[],
   },
   pricing: {
     eyebrow: 'Plans',
@@ -199,8 +276,56 @@ export const PAGE_COPY = {
       'Commercial terms live outside this board.',
     ],
     meta: 'Trial or licence · entitlements per tenant',
+    audience: 'For buyers choosing how to open a workspace.',
     aside:
       'This page does not list dollars. Trial unlocks a workspace so you can configure modules. A licence token from your commercial team binds plan limits to that tenant only.',
+    faqs: [
+      {
+        q: 'Where are the prices?',
+        a: 'There is no public dollar list here. Commercial terms live with your commercial team.',
+      },
+      {
+        q: 'How does a trial start?',
+        a: 'From setup step four, with no card required. Trial unlocks a workspace so you can configure modules.',
+      },
+      {
+        q: 'What does a licence token do?',
+        a: 'It is issued per tenant and binds plan limits and entitlements to that workspace only.',
+      },
+    ] satisfies PageFaq[],
+  },
+} as const
+
+/** Pricing path cards (no dollar amounts). */
+export const PRICING_PATHS = [
+  {
+    id: 'trial',
+    title: 'Start a trial',
+    body: 'No card required from setup step four. Configure modules on a live tenant spine.',
+    cta: 'Create your workspace',
+    mode: 'create' as const,
+    shell: 'dark' as const,
+  },
+  {
+    id: 'licence',
+    title: 'Paste a licence',
+    body: 'Token issued per tenant by your commercial team. Entitlements stay scoped to that workspace.',
+    cta: 'I already have one',
+    mode: 'login' as const,
+    shell: 'blue' as const,
+  },
+] as const
+
+/** Workforce split: core on day one vs add-ons later. */
+export const WORKFORCE_SPLIT = {
+  title: 'Grow into the rack',
+  core: {
+    title: 'On from day one',
+    items: ['Clock-in', 'Leaves'],
+  },
+  addOns: {
+    title: 'Add when ready',
+    items: ['Overtime', 'Payroll', 'Face capture', 'Iris'],
   },
 } as const
 

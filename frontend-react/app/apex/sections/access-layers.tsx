@@ -13,26 +13,31 @@ const LAYER_SHELLS = [
 ] as const
 
 /** Access layers on a dark band, plus role chips (guardian highlighted). */
-export function AccessLayers() {
-  const copy = PAGE_COPY.access
-
+export function AccessLayers({ showIntro = true }: { showIntro?: boolean }) {
   return (
     <section
-      aria-labelledby="access-layers-title"
+      aria-labelledby={showIntro ? 'access-layers-title' : undefined}
+      aria-label={showIntro ? undefined : ACCESS.title}
       className="mt-16 -mx-5 px-5 py-12 md:mt-20 md:-mx-8 md:rounded-[14px] md:px-8 md:py-14"
       style={{ background: MOSAIC.darkFace }}
     >
-      <p className="mb-2 font-mono text-[12px] tracking-[0.14em] text-white/55 uppercase">
-        {copy.eyebrow}
-      </p>
-      <h2
-        id="access-layers-title"
-        className="mb-3 text-[28px] font-extrabold tracking-[-1px] text-white md:text-[32px]"
-      >
-        {ACCESS.title}
-      </h2>
-      <p className="mb-2 max-w-[40em] text-[15px] font-semibold text-white">{ACCESS.lead}</p>
-      <p className="mb-8 max-w-[46em] text-[14px] leading-[1.65] text-white/75">{ACCESS.body}</p>
+      {showIntro ? (
+        <>
+          <p className="mb-2 font-mono text-[12px] tracking-[0.14em] text-white/55 uppercase">
+            {PAGE_COPY.access.eyebrow}
+          </p>
+          <h2
+            id="access-layers-title"
+            className="mb-3 text-[28px] font-extrabold tracking-[-1px] text-white md:text-[32px]"
+          >
+            {ACCESS.title}
+          </h2>
+          <p className="mb-2 max-w-[40em] text-[15px] font-semibold text-white">{ACCESS.lead}</p>
+          <p className="mb-8 max-w-[46em] text-[14px] leading-[1.65] text-white/75">{ACCESS.body}</p>
+        </>
+      ) : (
+        <p className="mb-8 max-w-[40em] text-[15px] font-semibold text-white">{ACCESS.lead}</p>
+      )}
 
       <ul className="mb-8 grid grid-cols-2 gap-3 md:grid-cols-3">
         {ACCESS.layers.map((layer, i) => {
