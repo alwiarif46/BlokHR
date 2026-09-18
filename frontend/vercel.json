@@ -18,7 +18,7 @@
       "destination": "/guardian.html"
     },
     {
-      "source": "/((?!shared/|modules/|assets/|tests/).*)",
+      "source": "/((?!shared/|modules/|assets/|tests/|apex/).*)",
       "destination": "/shell.html"
     }
   ],

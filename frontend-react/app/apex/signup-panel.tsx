@@ -164,7 +164,7 @@ export function SignupPanel({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex items-end justify-center bg-background/70 p-5 md:items-center"
+      className="fixed inset-0 z-[60] flex items-end justify-center bg-background/70 p-5 md:items-center"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose()
       }}
