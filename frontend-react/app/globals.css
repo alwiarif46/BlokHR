@@ -92,6 +92,43 @@
     @apply border-border;
   }
 
+  /*
+   * Do not use Tailwind `hidden` here — shell shared.css defines
+   * `.hidden { display: none !important }` which beats md:/sm: utilities.
+   */
+  .apex-root .apex-nav-desktop {
+    display: none;
+    align-items: center;
+    gap: 1.25rem;
+  }
+
+  .apex-root .apex-nav-mobile {
+    display: flex;
+    gap: 1rem;
+    overflow-x: auto;
+  }
+
+  .apex-root .apex-header-create {
+    display: none;
+    align-items: center;
+  }
+
+  @media (width >= 40rem) {
+    .apex-root .apex-header-create {
+      display: inline-flex;
+    }
+  }
+
+  @media (width >= 48rem) {
+    .apex-root .apex-nav-desktop {
+      display: flex;
+    }
+
+    .apex-root .apex-nav-mobile {
+      display: none;
+    }
+  }
+
   body {
     margin: 0;
   }

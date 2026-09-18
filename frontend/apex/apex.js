@@ -18431,11 +18431,11 @@ function Kg({ status: e, api: t, navigate: n, children: r }) {
 							children: ji
 						}),
 						/* @__PURE__ */ (0, $.jsx)("nav", {
-							className: "hidden items-center gap-5 md:flex",
+							className: "apex-nav-desktop font-mono text-[12px] tracking-[1px]",
 							"aria-label": "Primary",
 							children: Mi.map((e) => /* @__PURE__ */ (0, $.jsx)(jn, {
 								to: e.path,
-								className: ({ isActive: e }) => `font-mono text-[12px] tracking-[1px] uppercase ${e ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`,
+								className: ({ isActive: e }) => `uppercase ${e ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`,
 								children: e.label
 							}, e.id))
 						}),
@@ -18464,7 +18464,7 @@ function Kg({ status: e, api: t, navigate: n, children: r }) {
 								/* @__PURE__ */ (0, $.jsxs)("button", {
 									type: "button",
 									onClick: () => u("create"),
-									className: "hidden min-h-11 items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2 font-mono text-[12px] tracking-[1px] text-primary-foreground uppercase sm:inline-flex",
+									className: "apex-header-create min-h-11 gap-1.5 rounded-[10px] bg-primary px-4 py-2 font-mono text-[12px] tracking-[1px] text-primary-foreground uppercase",
 									children: [/* @__PURE__ */ (0, $.jsx)(Ai, {
 										icon: "mdi:plus-box-outline",
 										className: "size-3.5"
@@ -18475,7 +18475,7 @@ function Kg({ status: e, api: t, navigate: n, children: r }) {
 					]
 				}),
 				/* @__PURE__ */ (0, $.jsx)("nav", {
-					className: "relative z-10 flex gap-4 overflow-x-auto px-5 pb-3 md:hidden",
+					className: "apex-nav-mobile relative z-10 px-5 pb-3 font-mono text-[11px] tracking-[1px]",
 					"aria-label": "Primary mobile",
 					children: Mi.map((e) => /* @__PURE__ */ (0, $.jsx)(jn, {
 						to: e.path,

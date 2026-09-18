@@ -62,13 +62,13 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
             {BRAND}
           </NavLink>
 
-          <nav className="hidden items-center gap-5 md:flex" aria-label="Primary">
+          <nav className="apex-nav-desktop font-mono text-[12px] tracking-[1px]" aria-label="Primary">
             {NAV.map((item) => (
               <NavLink
                 key={item.id}
                 to={item.path}
                 className={({ isActive }) =>
-                  `font-mono text-[12px] tracking-[1px] uppercase ${
+                  `uppercase ${
                     isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`
                 }
@@ -101,7 +101,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
             <button
               type="button"
               onClick={() => openSignup('create')}
-              className="hidden min-h-11 items-center gap-1.5 rounded-[10px] bg-primary px-4 py-2 font-mono text-[12px] tracking-[1px] text-primary-foreground uppercase sm:inline-flex"
+              className="apex-header-create min-h-11 gap-1.5 rounded-[10px] bg-primary px-4 py-2 font-mono text-[12px] tracking-[1px] text-primary-foreground uppercase"
             >
               <Icon icon="mdi:plus-box-outline" className="size-3.5" />
               Create workspace
@@ -110,7 +110,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
         </header>
 
         <nav
-          className="relative z-10 flex gap-4 overflow-x-auto px-5 pb-3 md:hidden"
+          className="apex-nav-mobile relative z-10 px-5 pb-3 font-mono text-[11px] tracking-[1px]"
           aria-label="Primary mobile"
         >
           {NAV.map((item) => (
