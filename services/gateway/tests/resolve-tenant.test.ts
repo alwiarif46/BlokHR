@@ -82,17 +82,17 @@ describe('gateway resolveTenantId subdomain', () => {
     ).toBe('www.13blok.com');
   });
 
-  it('resolvePublicHost prefers X-Blok-Client-Host over everything', () => {
+  it('ignores spoofed X-Blok-Client-Host on a rewrite Host', () => {
     expect(
       resolvePublicHost({
         host: 'gateway-production-5a5f.up.railway.app',
         'x-forwarded-host': 'gateway-production-5a5f.up.railway.app',
         'x-blok-client-host': 'www.13blok.com',
       }),
-    ).toBe('www.13blok.com');
+    ).toBe('gateway-production-5a5f.up.railway.app');
   });
 
-  it('resolveTenantId maps subdomain via X-Blok-Client-Host', () => {
+  it('does not map a tenant from X-Blok-Client-Host alone', () => {
     expect(
       resolveTenantId({
         headers: {
@@ -102,6 +102,22 @@ describe('gateway resolveTenantId subdomain', () => {
         subdomainBase: '13blok.com',
         reservedSlugs: reserved,
         apexHosts,
+        fallback: 'default',
+      }),
+    ).toBe('default');
+  });
+
+  it('maps subdomain from browser Origin behind a rewrite', () => {
+    expect(
+      resolveTenantId({
+        headers: {
+          host: 'gateway-production-5a5f.up.railway.app',
+          origin: 'https://acme.13blok.com',
+        },
+        subdomainBase: '13blok.com',
+        reservedSlugs: reserved,
+        apexHosts,
+        fallback: 'default',
       }),
     ).toBe('acme');
   });

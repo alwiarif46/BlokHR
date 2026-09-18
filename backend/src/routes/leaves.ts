@@ -44,9 +44,8 @@ export function createLeaveRouter(
   router.post(
     '/leave-submit',
     asyncHandler(async (req: Request, res: Response) => {
-      const { personName, personEmail, leaveType, kind, startDate, endDate, reason } = req.body as {
+      const { personName, leaveType, kind, startDate, endDate, reason } = req.body as {
         personName?: string;
-        personEmail?: string;
         leaveType?: string;
         kind?: string;
         startDate?: string;
@@ -54,12 +53,10 @@ export function createLeaveRouter(
         reason?: string;
       };
 
-      // Prefer authenticated identity — do not trust a spoofed applicant email from the body.
-      const identityEmail = (req.identity?.email ?? '').toLowerCase().trim();
-      const applicantEmail = identityEmail || (personEmail ?? '').toLowerCase().trim();
+      const applicantEmail = await requireCaller(req);
 
-      if (!applicantEmail || !leaveType || !startDate || !endDate) {
-        throw new AppError('personEmail, leaveType, startDate, and endDate are required', 400);
+      if (!leaveType || !startDate || !endDate) {
+        throw new AppError('leaveType, startDate, and endDate are required', 400);
       }
 
       const result = await service.submit({
@@ -104,17 +101,13 @@ export function createLeaveRouter(
   router.post(
     '/leave-approve',
     asyncHandler(async (req: Request, res: Response) => {
-      const { leaveId, approverEmail } = req.body as {
+      const { leaveId } = req.body as {
         leaveId?: string;
-        approverEmail?: string;
       };
 
       if (!leaveId) throw new AppError('leaveId is required', 400);
 
-      const result = await service.managerApprove(
-        leaveId,
-        approverEmail ?? req.identity?.email ?? '',
-      );
+      const result = await service.managerApprove(leaveId, await requireCaller(req));
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to approve leave', 400);
@@ -127,14 +120,13 @@ export function createLeaveRouter(
   router.post(
     '/leave-hr-approve',
     asyncHandler(async (req: Request, res: Response) => {
-      const { leaveId, approverEmail } = req.body as {
+      const { leaveId } = req.body as {
         leaveId?: string;
-        approverEmail?: string;
       };
 
       if (!leaveId) throw new AppError('leaveId is required', 400);
 
-      const result = await service.hrApprove(leaveId, approverEmail ?? req.identity?.email ?? '');
+      const result = await service.hrApprove(leaveId, await requireCaller(req));
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to HR-approve leave', 400);
@@ -147,19 +139,14 @@ export function createLeaveRouter(
   router.post(
     '/leave-reject',
     asyncHandler(async (req: Request, res: Response) => {
-      const { leaveId, approverEmail, reason } = req.body as {
+      const { leaveId, reason } = req.body as {
         leaveId?: string;
-        approverEmail?: string;
         reason?: string;
       };
 
       if (!leaveId) throw new AppError('leaveId is required', 400);
 
-      const result = await service.reject(
-        leaveId,
-        approverEmail ?? req.identity?.email ?? '',
-        reason ?? '',
-      );
+      const result = await service.reject(leaveId, await requireCaller(req), reason ?? '');
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to reject leave', 400);
@@ -172,14 +159,17 @@ export function createLeaveRouter(
   router.post(
     '/leave-delete',
     asyncHandler(async (req: Request, res: Response) => {
-      const { leaveId, cancelledBy } = req.body as {
+      const { leaveId } = req.body as {
         leaveId?: string;
-        cancelledBy?: string;
       };
 
       if (!leaveId) throw new AppError('leaveId is required', 400);
 
-      const result = await service.deleteOrCancel(leaveId, cancelledBy);
+      const caller = await requireCaller(req);
+      const result = await service.deleteOrCancel(
+        leaveId,
+        (await isCallerAdmin(caller)) ? undefined : caller,
+      );
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to delete leave', 400);

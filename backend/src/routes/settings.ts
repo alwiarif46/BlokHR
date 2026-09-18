@@ -119,11 +119,20 @@ export function createSettingsRouter(
   router.put(
     '/members/:id',
     asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = (req.identity?.email ?? '').toLowerCase().trim();
+      if (!callerEmail) throw new AppError('Authentication required', 401);
+
       const { id } = req.params;
       const fields = req.body as Record<string, unknown>;
 
       if (!fields || typeof fields !== 'object') {
         throw new AppError('Request body must be a JSON object', 400);
+      }
+
+      const isAdmin = await isTenantAdmin(db, callerEmail);
+      const target = id.toLowerCase().trim();
+      if (!isAdmin && target !== callerEmail) {
+        throw new AppError('Forbidden', 403);
       }
 
       const result = await service.updateMember(id, fields);

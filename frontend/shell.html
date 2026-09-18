@@ -14,7 +14,7 @@
     <link rel="stylesheet" href="modules/setup_wizard/setup_wizard.css" />
     <link rel="stylesheet" href="modules/landing/landing.css" />
   </head>
-  <body class="theme-chromium">
+  <body class="theme-dark">
     <!-- Background Layer -->
     <div class="bg-layer" id="bgLayer"></div>
     <div class="bg-dim" id="bgDim"></div>
@@ -496,10 +496,8 @@
           <span class="sync-label" id="syncLabel">OFFLINE</span>
         </div>
         <div class="hdr-themes" id="hdrThemes">
-          <button class="ht-btn active" data-theme="chromium" title="Chromium"></button>
-          <button class="ht-btn" data-theme="neural" title="Neural"></button>
-          <button class="ht-btn" data-theme="holodeck" title="Holodeck"></button>
-          <button class="ht-btn" data-theme="clean" title="Clean"></button>
+          <button class="ht-btn active" data-theme="dark" title="Dark"></button>
+          <button class="ht-btn" data-theme="light" title="Light"></button>
         </div>
         <div class="hdr-bell" id="hdrBell">
           <span>&#128276;</span>
@@ -792,10 +790,8 @@
 
     <!-- Theme bar (login/changePassword screens only) -->
     <div class="login-theme-bar" id="themeBar" style="display: none">
-      <button class="lt-btn active" data-theme="chromium">Chromium</button>
-      <button class="lt-btn" data-theme="neural">Neural</button>
-      <button class="lt-btn" data-theme="holodeck">Holodeck</button>
-      <button class="lt-btn" data-theme="clean">Clean</button>
+      <button class="lt-btn active" data-theme="dark">Dark</button>
+      <button class="lt-btn" data-theme="light">Light</button>
     </div>
 
     <!-- Boot script — loads shared infrastructure, then boots -->
@@ -1280,6 +1276,11 @@
           /* queue optional if module unavailable */
         }
         disconnectSSE();
+        try {
+          await api('/api/auth/logout', { method: 'POST' });
+        } catch (_logoutErr) {
+          /* cookie clear is best-effort */
+        }
         clearSession();
         _userRoles = { isAdmin: false, isGlobalManager: false, isGlobalHR: false, managerOf: [], hrOf: [], effectiveRole: '' };
         applyRoleGates();

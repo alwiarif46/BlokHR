@@ -35,6 +35,7 @@ import {
   type StaffIntrospectFn,
 } from './guards/staff-introspect';
 import { isPublicSvcPath } from './guards/public-paths';
+import { isPublicApiPath } from './guards/public-api-paths';
 import { resolveHrCompatRewrite } from './guards/hr-compat';
 import { createFeatureFlagCache, type FeatureFlagCache } from './guards/feature-flags';
 import {
@@ -56,6 +57,8 @@ type BlokProxyRequest = Request & {
   _blokHostTenant?: string;
   /** Original browser Host (X-Forwarded-Host / Origin / Host) for upstreams. */
   _blokPublicHost?: string;
+  /** Public device paths must not receive the internal service secret. */
+  _blokSkipInternal?: boolean;
 };
 
 export interface GatewayAppOptions {
@@ -84,7 +87,9 @@ function buildProxyHooks(
       const extra: Record<string, string> = {};
       if (hostTenant) extra['X-Blok-Tenant'] = hostTenant;
       Object.assign(extra, blokReq._blokExtraHeaders || {});
-      applyProxyHeaderHygiene(proxyReq, internalSecret, extra);
+      applyProxyHeaderHygiene(proxyReq, internalSecret, extra, {
+        injectInternal: !blokReq._blokSkipInternal,
+      });
       /* Preserve browser Host for monolith apex / subdomain checks (changeOrigin
          otherwise leaves Host as the Railway upstream and drops signupPortal). */
       if (blokReq._blokPublicHost) {
@@ -133,7 +138,22 @@ export function createGatewayApp(options: GatewayAppOptions): {
 } {
   const { config, logger } = options;
   const app = express();
-  app.use(cors());
+  const corsOrigin =
+    config.corsOrigins === '*'
+      ? true
+      : config.corsOrigins.split(',').map((s) => s.trim()).filter(Boolean);
+  app.use(
+    cors({
+      origin: corsOrigin,
+      credentials: true,
+    }),
+  );
+  app.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    next();
+  });
 
   const hostMap = parseTenantHostMap(config.tenantHostMap);
   const apexHosts = parseHostList(config.tenantApexHosts);
@@ -427,6 +447,7 @@ export function createGatewayApp(options: GatewayAppOptions): {
         return;
       }
       const pReq = req as BlokProxyRequest;
+      pReq._blokSkipInternal = true;
       pReq._blokExtraHeaders = {
         ...(pReq._blokExtraHeaders || {}),
         'X-Blok-Tenant': hostTenant,
@@ -595,6 +616,47 @@ export function createGatewayApp(options: GatewayAppOptions): {
     sReq._blokExtraHeaders = staffBlokHeaders(result);
     req.url = match.upstreamPath;
     proxy(req, res, next);
+  });
+
+  /**
+   * Staff introspect for monolith /api/* except an explicit public allowlist.
+   * Matches /svc/* fail-closed behavior.
+   */
+  app.use('/api', async (req: Request, res: Response, next: NextFunction) => {
+    const pathname = (req.originalUrl || req.url || '').split('?')[0] || '';
+    const fullPath = pathname.startsWith('/api')
+      ? pathname
+      : `/api${pathname === '/' ? '' : pathname}`;
+
+    if (isPublicApiPath(req.method, fullPath)) {
+      next();
+      return;
+    }
+
+    const token = parseBearer(
+      typeof req.headers.authorization === 'string' ? req.headers.authorization : undefined,
+    );
+    if (!token) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const result = await safeStaffIntrospect(staffIntrospectCache, token, logger);
+    if (result === 'down') {
+      res.status(503).json({ error: 'introspect_unavailable' });
+      return;
+    }
+    if (!result.active) {
+      res.status(401).json({ error: 'unauthorized' });
+      return;
+    }
+
+    const sReq = req as BlokProxyRequest;
+    sReq._blokExtraHeaders = {
+      ...(sReq._blokExtraHeaders || {}),
+      ...staffBlokHeaders(result),
+    };
+    next();
   });
 
   const monolithProxy = createProxyMiddleware({

@@ -8,11 +8,17 @@ import {
   MultiAuthService,
   FORGOT_PASSWORD_PUBLIC_MESSAGE,
   type AuthMailSender,
+  type AuthResult,
 } from '../services/multi-auth-service';
 import { SettingsRepository } from '../repositories/settings-repository';
 import { SettingsService } from '../services/settings-service';
 import { requireInternalMatch, resolveInternalSecret } from '../internal-auth';
 import { EmailAdapter } from '../services/notification/email-adapter';
+import {
+  buildClearedSessionCookie,
+  buildSessionCookie,
+  readSessionCookie,
+} from '../auth/session-cookie';
 
 /**
  * Multi-provider auth routes:
@@ -90,6 +96,14 @@ export function createMultiAuthRouter(
     publicBaseUrl,
   );
   const internalSecret = resolveInternalSecret();
+  const nodeEnv = options.config?.nodeEnv ?? 'development';
+
+  function sendAuthResult(res: Response, result: AuthResult): void {
+    if (result.sessionToken) {
+      res.append('Set-Cookie', buildSessionCookie(result.sessionToken, nodeEnv));
+    }
+    res.json(result);
+  }
 
   /** GET /api/auth/providers — list enabled auth providers for login screen. */
   router.get(
@@ -110,7 +124,7 @@ export function createMultiAuthRouter(
 
       const result = await authService.authenticateLocal(email.toLowerCase().trim(), password);
       if (!result.success) throw new AppError(result.error ?? 'Authentication failed', 401);
-      res.json(result);
+      sendAuthResult(res, result);
     }),
   );
 
@@ -256,7 +270,7 @@ export function createMultiAuthRouter(
 
       const result = await authService.verifyMagicLink(token);
       if (!result.success) throw new AppError(result.error ?? 'Invalid link', 401);
-      res.json(result);
+      sendAuthResult(res, result);
     }),
   );
 
@@ -269,7 +283,7 @@ export function createMultiAuthRouter(
 
       const result = await authService.authenticateMsal(ssoToken);
       if (!result.success) throw new AppError(result.error ?? 'SSO failed', 401);
-      res.json(result);
+      sendAuthResult(res, result);
     }),
   );
 
@@ -282,7 +296,7 @@ export function createMultiAuthRouter(
 
       const result = await authService.authenticateGoogle(idToken);
       if (!result.success) throw new AppError(result.error ?? 'Google auth failed', 401);
-      res.json(result);
+      sendAuthResult(res, result);
     }),
   );
 
@@ -306,7 +320,7 @@ export function createMultiAuthRouter(
 
       const result = await authService.authenticateOidcToken(idToken);
       if (!result.success) throw new AppError(result.error ?? 'OIDC auth failed', 401);
-      res.json(result);
+      sendAuthResult(res, result);
     }),
   );
 
@@ -320,16 +334,14 @@ export function createMultiAuthRouter(
     }),
   );
 
-  /** POST /api/auth/saml/callback — process SAML assertion. */
+  /** POST /api/auth/saml/callback — signed SAMLResponse only (JSON email is rejected). */
   router.post(
     '/auth/saml/callback',
     asyncHandler(async (req: Request, res: Response) => {
-      const { email, name } = req.body as { email?: string; name?: string };
-      if (!email) throw new AppError('email is required in SAML assertion', 400);
-
-      const result = await authService.authenticateSaml({ email, name });
+      const body = req.body as { email?: string; name?: string; SAMLResponse?: string };
+      const result = await authService.authenticateSaml(body);
       if (!result.success) throw new AppError(result.error ?? 'SAML auth failed', 401);
-      res.json(result);
+      sendAuthResult(res, result);
     }),
   );
 
@@ -343,7 +355,23 @@ export function createMultiAuthRouter(
 
       const result = await authService.authenticateLdap(email.toLowerCase().trim(), password);
       if (!result.success) throw new AppError(result.error ?? 'LDAP auth failed', 401);
-      res.json(result);
+      sendAuthResult(res, result);
+    }),
+  );
+
+  /** POST /api/auth/logout — revoke server session and clear httpOnly cookie. */
+  router.post(
+    '/auth/logout',
+    asyncHandler(async (req: Request, res: Response) => {
+      const headerAuth =
+        typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
+      const bearer = /^Bearer\s+(.+)$/i.exec(headerAuth.trim())?.[1]?.trim() ?? '';
+      const token =
+        bearer ||
+        readSessionCookie(typeof req.headers.cookie === 'string' ? req.headers.cookie : undefined);
+      if (token) await authService.revokeSession(token);
+      res.append('Set-Cookie', buildClearedSessionCookie(nodeEnv));
+      res.json({ success: true });
     }),
   );
 

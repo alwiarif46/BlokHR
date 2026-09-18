@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import type { DatabaseEngine } from '../../src/db/engine';
-import { createTestApp, seedMember } from '../helpers/setup';
+import { createTestApp, seedMember, seedAdmin } from '../helpers/setup';
 
 describe('Settings & Roles Module', () => {
   let app: Express;
@@ -28,6 +28,7 @@ describe('Settings & Roles Module', () => {
       groupShiftStart: '09:00',
       groupShiftEnd: '18:00',
     });
+    await seedAdmin(db, 'admin@shaavir.com');
   });
 
   afterEach(async () => {
@@ -38,7 +39,7 @@ describe('Settings & Roles Module', () => {
 
   describe('GET /api/settings', () => {
     it('returns the full settings bundle', async () => {
-      const res = await request(app).get('/api/settings').set('X-User-Email', 'alice@shaavir.com');
+      const res = await request(app).get('/api/settings').set('X-User-Email', 'admin@shaavir.com');
       expect(res.status).toBe(200);
       expect(res.body.groups).toBeDefined();
       expect(res.body.members).toBeDefined();
@@ -51,7 +52,7 @@ describe('Settings & Roles Module', () => {
     });
 
     it('returns groups with camelCase field names', async () => {
-      const res = await request(app).get('/api/settings').set('X-User-Email', 'alice@shaavir.com');
+      const res = await request(app).get('/api/settings').set('X-User-Email', 'admin@shaavir.com');
       const eng = res.body.groups.find((g: Record<string, unknown>) => g.id === 'engineering');
       expect(eng).toBeDefined();
       expect(eng.name).toBe('Engineering');
@@ -60,7 +61,7 @@ describe('Settings & Roles Module', () => {
     });
 
     it('returns members with camelCase field names', async () => {
-      const res = await request(app).get('/api/settings').set('X-User-Email', 'alice@shaavir.com');
+      const res = await request(app).get('/api/settings').set('X-User-Email', 'admin@shaavir.com');
       const alice = res.body.members.find(
         (m: Record<string, unknown>) => m.email === 'alice@shaavir.com',
       );
@@ -71,7 +72,7 @@ describe('Settings & Roles Module', () => {
     });
 
     it('returns seeded member types', async () => {
-      const res = await request(app).get('/api/settings').set('X-User-Email', 'alice@shaavir.com');
+      const res = await request(app).get('/api/settings').set('X-User-Email', 'admin@shaavir.com');
       const types = res.body.memberTypes;
       expect(types.length).toBeGreaterThanOrEqual(1);
       const fte = types.find((t: Record<string, unknown>) => t.id === 'fte');
@@ -80,13 +81,13 @@ describe('Settings & Roles Module', () => {
     });
 
     it('returns late rules with defaults', async () => {
-      const res = await request(app).get('/api/settings').set('X-User-Email', 'alice@shaavir.com');
+      const res = await request(app).get('/api/settings').set('X-User-Email', 'admin@shaavir.com');
       expect(res.body.lateRules.graceMinutes).toBe(15);
       expect(res.body.lateRules.latesToDeduction).toBe(4);
     });
 
     it('returns system settings with defaults', async () => {
-      const res = await request(app).get('/api/settings').set('X-User-Email', 'alice@shaavir.com');
+      const res = await request(app).get('/api/settings').set('X-User-Email', 'admin@shaavir.com');
       expect(res.body.systemSettings.logicalDayChangeTime).toBe('06:00');
     });
   });
@@ -104,7 +105,7 @@ describe('Settings & Roles Module', () => {
 
       const settings = await request(app)
         .get('/api/settings')
-        .set('X-User-Email', 'alice@shaavir.com');
+        .set('X-User-Email', 'admin@shaavir.com');
       const alice = settings.body.members.find(
         (m: Record<string, unknown>) => m.email === 'alice@shaavir.com',
       );
@@ -137,7 +138,7 @@ describe('Settings & Roles Module', () => {
 
       const settings = await request(app)
         .get('/api/settings')
-        .set('X-User-Email', 'alice@shaavir.com');
+        .set('X-User-Email', 'admin@shaavir.com');
       const alice = settings.body.members.find(
         (m: Record<string, unknown>) => m.email === 'alice@shaavir.com',
       );

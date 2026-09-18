@@ -266,10 +266,17 @@ export class ProfileService {
           continue;
         }
       } else if (EMPLOYEE_EDITABLE_FIELDS.has(key)) {
+        if (!isSelf && !isAdmin) {
+          rejectedFields.push(key);
+          continue;
+        }
         if (isSelf && isLocked && !isAdmin) {
           rejectedFields.push(key);
           continue;
         }
+      } else {
+        rejectedFields.push(key);
+        continue;
       }
 
       filteredFields[key] = val;

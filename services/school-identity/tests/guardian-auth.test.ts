@@ -58,10 +58,23 @@ describe('school-identity guardian-auth (P9-01)', () => {
     return res.body as { id: string; phone: string };
   }
 
+  it('rejects set-password without internal secret', async () => {
+    const g = await createGuardian('t1');
+    const set = await request(app)
+      .post('/api/identity/guardian-auth/set-password')
+      .send({
+        tenant_id: 't1',
+        guardian_id: g.id,
+        password: 'secret123',
+      });
+    expect(set.status).toBe(401);
+  });
+
   it('set-password + login happy path; raw token not stored', async () => {
     const g = await createGuardian('t1');
     const set = await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({
         tenant_id: 't1',
         guardian_id: g.id,
@@ -71,7 +84,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
 
     const login = await request(app)
       .post('/api/identity/guardian-auth/login')
-      .send({ phone: g.phone, password: 'secret123' });
+      .send({ phone: g.phone, password: 'secret123', tenant_id: 't1' });
     expect(login.status).toBe(200);
     expect(login.body.token).toMatch(/^[a-f0-9]{96}$/);
     expect(login.body.tenant_id).toBe('t1');
@@ -88,6 +101,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
     const g = await createGuardian('t1');
     await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({
         tenant_id: 't1',
         guardian_id: g.id,
@@ -97,24 +111,24 @@ describe('school-identity guardian-auth (P9-01)', () => {
     for (let i = 0; i < LOCKOUT_ATTEMPTS - 1; i++) {
       const bad = await request(app)
         .post('/api/identity/guardian-auth/login')
-        .send({ phone: g.phone, password: 'wrongpass' });
+        .send({ phone: g.phone, password: 'wrongpass', tenant_id: 't1' });
       expect(bad.status).toBe(401);
     }
 
     const locked = await request(app)
       .post('/api/identity/guardian-auth/login')
-      .send({ phone: g.phone, password: 'wrongpass' });
+      .send({ phone: g.phone, password: 'wrongpass', tenant_id: 't1' });
     expect(locked.status).toBe(423);
 
     const stillLocked = await request(app)
       .post('/api/identity/guardian-auth/login')
-      .send({ phone: g.phone, password: 'secret123' });
+      .send({ phone: g.phone, password: 'secret123', tenant_id: 't1' });
     expect(stillLocked.status).toBe(423);
 
     nowMs += 16 * 60 * 1000;
     const unlocked = await request(app)
       .post('/api/identity/guardian-auth/login')
-      .send({ phone: g.phone, password: 'secret123' });
+      .send({ phone: g.phone, password: 'secret123', tenant_id: 't1' });
     expect(unlocked.status).toBe(200);
     expect(unlocked.body.token).toBeTruthy();
   });
@@ -127,9 +141,11 @@ describe('school-identity guardian-auth (P9-01)', () => {
     });
     await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({ tenant_id: 't1', guardian_id: a.id, password: 'secret123' });
     await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({ tenant_id: 't2', guardian_id: b.id, password: 'secret456' });
 
     const login = await request(app)
@@ -143,6 +159,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
     const g = await createGuardian('t1');
     await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({
         tenant_id: 't1',
         guardian_id: g.id,
@@ -150,7 +167,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
       });
     const login = await request(app)
       .post('/api/identity/guardian-auth/login')
-      .send({ phone: g.phone, password: 'secret123' });
+      .send({ phone: g.phone, password: 'secret123', tenant_id: 't1' });
     const token = login.body.token as string;
 
     const valid = await request(app)
@@ -179,7 +196,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
 
     const login2 = await request(app)
       .post('/api/identity/guardian-auth/login')
-      .send({ phone: g.phone, password: 'secret123' });
+      .send({ phone: g.phone, password: 'secret123', tenant_id: 't1' });
     const token2 = login2.body.token as string;
     nowMs += 31 * 24 * 60 * 60 * 1000;
     const expired = await request(app)
@@ -192,6 +209,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
     const g = await createGuardian('t1');
     await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({
         tenant_id: 't1',
         guardian_id: g.id,
@@ -199,7 +217,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
       });
     const login = await request(app)
       .post('/api/identity/guardian-auth/login')
-      .send({ phone: g.phone, password: 'secret123' });
+      .send({ phone: g.phone, password: 'secret123', tenant_id: 't1' });
     const token = login.body.token as string;
 
     const out = await request(app)
@@ -217,6 +235,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
     const g = await createGuardian('t1');
     const cross = await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({
         tenant_id: 't2',
         guardian_id: g.id,
@@ -226,6 +245,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
 
     const ok = await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({
         tenant_id: 't1',
         guardian_id: g.id,
@@ -235,6 +255,7 @@ describe('school-identity guardian-auth (P9-01)', () => {
 
     const short = await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({
         tenant_id: 't1',
         guardian_id: g.id,

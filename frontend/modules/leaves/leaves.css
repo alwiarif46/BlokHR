@@ -8,9 +8,9 @@
 
 /* ── Wrapper ── */
 .lv-wrap {
-  padding: 20px 24px 60px;
+  padding: 16px 24px 24px;
   height: 100%;
-  overflow-y: auto;
+  overflow-x: auto; overflow-y: auto;
 }
 
 /* ── Toolbar ── */
@@ -44,13 +44,7 @@
 }
 .lv-tab.active {
   background: var(--accent);
-  color: #000;
-}
-.theme-clean .lv-tab.active {
-  color: var(--ink-on-accent, #00112b);
-}
-.theme-clean .lv-tabs {
-  border-radius: 10px;
+  color: var(--ink-on-accent, var(--bg0));
 }
 .lv-spacer {
   flex: 1;
@@ -64,17 +58,13 @@
   border: 1px solid var(--accent);
   border-radius: var(--r);
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
   cursor: pointer;
   font-family: inherit;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-}
-.theme-clean .lv-btn {
-  color: var(--ink-on-accent, #00112b);
-  border-radius: 10px;
 }
 .lv-btn:hover {
   transform: translateY(-1px);
@@ -105,10 +95,6 @@
 .lv-search::placeholder {
   color: var(--tx3);
 }
-.theme-clean .lv-search {
-  background: var(--bg3);
-  border-radius: 10px;
-}
 
 /* ── Balance cards ── */
 .lv-balances {
@@ -126,10 +112,6 @@
   transition: all 0.3s ease;
   position: relative;
   overflow: hidden;
-}
-.theme-clean .lv-bal {
-  border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 .lv-bal:hover {
   border-color: var(--accent);
@@ -167,7 +149,7 @@
 /* ── Leave card grid ── */
 .lv-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(0, 1fr));
   gap: 12px;
 }
 .lv-card {
@@ -181,20 +163,6 @@
 .lv-card:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
-}
-.theme-chromium .lv-card {
-  background: linear-gradient(170deg, var(--bg2), var(--bg1));
-  border-color: var(--metal1, var(--bd));
-}
-.theme-neural .lv-card {
-  border-radius: 0;
-}
-.theme-holodeck .lv-card {
-  border-radius: var(--r); background: var(--surface, var(--bg2));
-}
-.theme-clean .lv-card {
-  border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 /* ── Card header ── */
@@ -218,11 +186,6 @@
   color: var(--accent);
   flex-shrink: 0;
 }
-.theme-clean .lv-card-av {
-  background: var(--accent);
-  color: var(--ink-on-accent, #00112b);
-  border: none;
-}
 .lv-card-name {
   font-size: 13px;
   font-weight: 700;
@@ -241,9 +204,6 @@
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-.theme-clean .lv-card-badge {
-  border-radius: 6px;
 }
 .lv-card-badge.pending {
   background: rgba(251, 191, 36, 0.1);
@@ -324,9 +284,6 @@
   font-family: inherit;
   transition: all 0.2s ease;
 }
-.theme-clean .lv-card-actions button {
-  border-radius: 8px;
-}
 .lv-card-actions button:hover {
   border-color: var(--accent);
   color: var(--accent);
@@ -367,10 +324,6 @@
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5);
   animation: modalIn 0.35s var(--ease);
 }
-.theme-clean .lv-modal-box {
-  border-radius: 20px;
-  box-shadow: 0 16px 60px rgba(0, 0, 0, 0.08);
-}
 .lv-modal-title {
   font-size: 16px;
   font-weight: 800;
@@ -405,11 +358,6 @@
   outline: none;
   transition: all 0.25s ease;
 }
-.theme-clean .lv-field input,
-.theme-clean .lv-field select,
-.theme-clean .lv-field textarea {
-  border-radius: 10px;
-}
 .lv-field input:focus,
 .lv-field select:focus,
 .lv-field textarea:focus {
@@ -433,7 +381,7 @@
 /* ── Empty state ── */
 .lv-empty {
   text-align: center;
-  padding: 60px 20px;
+  padding: 16px;
   color: var(--tx3);
 }
 .lv-empty-icon {
@@ -444,4 +392,70 @@
 .lv-empty-text {
   font-size: 13px;
   font-weight: 600;
+}
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+}
+
+/* module-mobile-extra */
+
+@media (max-width: 768px) {
+  .lv-search { width: 100% !important; max-width: 100%; }
+  .lv-toolbar { flex-wrap: wrap; }
+  .lv-modal-box { width: calc(100vw - 16px) !important; max-width: calc(100vw - 16px) !important; padding: 16px; }
 }

@@ -7,6 +7,7 @@ import type { Logger } from 'pino';
 import type { AppConfig } from './config';
 import type { DatabaseEngine } from './db/engine';
 import { resolveInternalSecret } from './internal-auth';
+import { readSessionCookie } from './auth/session-cookie';
 import { runWithTenant } from './tenant/context';
 import {
   parseHostList,
@@ -102,11 +103,14 @@ export function createApp(
     next();
   });
 
-  // ── 3. CORS ──
+  // ── 3. CORS — reflect-all only outside production; credentials need an allowlist ──
+  const corsAllowlist =
+    config.corsOrigins === '*'
+      ? true
+      : config.corsOrigins.split(',').map((s) => s.trim()).filter(Boolean);
   app.use(
     cors({
-      origin:
-        config.corsOrigins === '*' ? true : config.corsOrigins.split(',').map((s) => s.trim()),
+      origin: corsAllowlist,
       credentials: true,
     }),
   );
@@ -116,6 +120,7 @@ export function createApp(
     helmet({
       contentSecurityPolicy: false, // frontend is served from same origin
       crossOriginEmbedderPolicy: false,
+      hsts: config.nodeEnv === 'production' ? { maxAge: 15552000, includeSubDomains: true } : false,
     }),
   );
 
@@ -177,7 +182,11 @@ export function createApp(
     void (async () => {
       req.identity = null;
 
-      const token = parseBearer(req.headers.authorization);
+      const token =
+        parseBearer(req.headers.authorization) ||
+        readSessionCookie(
+          typeof req.headers.cookie === 'string' ? req.headers.cookie : undefined,
+        );
       if (token && db) {
         try {
           const row = await db.get<{

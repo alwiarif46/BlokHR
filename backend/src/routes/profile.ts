@@ -249,7 +249,16 @@ export function createProfileRouter(
   router.get(
     '/profile/:id/status',
     asyncHandler(async (req: Request, res: Response) => {
+      const callerEmail = await requireCallerEmail(req);
       const { id } = req.params;
+      const member = await service.resolveMember(id);
+      if (!member) {
+        throw new AppError('Member not found', 404);
+      }
+      const isSelf = callerEmail.toLowerCase() === member.email.toLowerCase();
+      if (!isSelf && !(await isCallerAdmin(callerEmail))) {
+        throw new AppError('Forbidden', 403);
+      }
       const status = await service.getProfileStatus(id);
 
       if (!status.found) {
@@ -267,6 +276,7 @@ export function createProfileRouter(
   router.post(
     '/profile/validate',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireCallerEmail(req);
       const fields = req.body as {
         name?: string;
         phone?: string;

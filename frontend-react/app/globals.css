@@ -1,0 +1,103 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:is(.dark *));
+
+/* Design.html light / dark — Apex marketing tokens */
+:root {
+  --background: #fbfaff;
+  --foreground: #14213d;
+  --card: #ffffff;
+  --card-foreground: #14213d;
+  --popover: #ffffff;
+  --popover-foreground: #14213d;
+  --primary: #6d3aed;
+  --primary-foreground: #ffffff;
+  --secondary: #efe9ff;
+  --secondary-foreground: #14213d;
+  --muted: #efe9ff;
+  --muted-foreground: #5c6780;
+  --accent: #efe9ff;
+  --accent-foreground: #14213d;
+  --destructive: #e8467c;
+  --border: #ddd6f5;
+  --input: #ddd6f5;
+  --ring: #6d3aed;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: #0a0b0d;
+  --foreground: #edf0f5;
+  --card: #121416;
+  --card-foreground: #edf0f5;
+  --popover: #121416;
+  --popover-foreground: #edf0f5;
+  --primary: #00e59a;
+  --primary-foreground: #0c0d0f;
+  --secondary: #16181b;
+  --secondary-foreground: #edf0f5;
+  --muted: #16181b;
+  --muted-foreground: #a8b0be;
+  --accent: #16181b;
+  --accent-foreground: #edf0f5;
+  --destructive: #ff6b9d;
+  --border: rgba(255, 255, 255, 0.12);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #00e59a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    @apply min-h-full bg-background text-foreground antialiased;
+    font-family: var(--font-sans);
+  }
+
+  body {
+    margin: 0;
+  }
+}
+
+@utility sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}

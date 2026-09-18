@@ -125,61 +125,10 @@
 }
 .ct-btn.active {
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
 }
 .ct-btn:hover:not(.active) {
   color: var(--tx2);
-}
-
-/* ── Theme toolbar overrides ── */
-.theme-chromium .toolbar {
-  background: var(--bg1);
-  border-bottom: 1px solid var(--bd);
-}
-.theme-neural .toolbar {
-  background: var(--header-bg, var(--bg2));
-  border-bottom: 1px solid var(--header-border, var(--bd));
-}
-.theme-holodeck .toolbar {
-  background: var(--header-bg, var(--bg2));
-  border-bottom: 1px solid var(--header-border, var(--bd));
-}
-.theme-clean .toolbar {
-  background: var(--bg2);
-  border-bottom: 1px solid var(--bd);
-}
-.theme-clean .tb-title {
-  font-size: 16px;
-  font-weight: 900;
-  letter-spacing: -0.3px;
-}
-.theme-clean .tb-title::before {
-  display: none;
-}
-.theme-clean .spill {
-  border-radius: 16px;
-  background: transparent;
-  border: 1.5px solid var(--bd);
-}
-.theme-clean .tb-search {
-  background: var(--bg3);
-  border-radius: 10px;
-  padding: 8px 14px;
-  font-size: 12px;
-  width: 200px;
-}
-.theme-clean .col-toggle {
-  border-radius: 10px;
-}
-.theme-clean .ct-btn {
-  border-radius: 0;
-}
-.theme-clean .ct-btn.active {
-  color: var(--ink-on-accent, #00112b);
-}
-.theme-neural .ct-btn.active,
-.theme-holodeck .ct-btn.active {
-  color: #ffffff;
 }
 
 /* ── Employee grid ── */
@@ -187,7 +136,7 @@
   display: grid;
   grid-template-columns: repeat(var(--cols, 3), 1fr);
   gap: 12px;
-  padding: 16px 24px 60px;
+  padding: 16px 24px 24px;
 }
 
 /* ── Employee card ── */
@@ -328,227 +277,6 @@
   border-left: 3px solid var(--status-absent);
 }
 
-/* ── THEME: Chromium cards ── */
-.theme-chromium .ec {
-  background: linear-gradient(170deg, var(--bg2) 0%, var(--bg1) 35%, var(--bg2) 65%, var(--bg3) 100%);
-  border: 1px solid var(--metal1, var(--bd));
-  border-radius: var(--r);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.03);
-}
-.theme-chromium .ec::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: linear-gradient(90deg, var(--metal1, var(--bd)), var(--bd2), var(--metal1, var(--bd)));
-  transition: all 0.3s;
-}
-.theme-chromium .ec:hover::after {
-  background: linear-gradient(90deg, var(--bd2), var(--accent), var(--bd2));
-}
-.theme-chromium .ec:hover {
-  transform: translateY(-3px);
-  border-color: var(--bd2);
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
-}
-.theme-chromium .av {
-  clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-  background: linear-gradient(145deg, var(--bd2), var(--bg3));
-}
-.theme-chromium .en {
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  font-size: 12px;
-}
-.theme-chromium .sb {
-  font-size: 8px;
-  letter-spacing: 0.5px;
-  padding: 2px 8px;
-  border: 1px solid transparent;
-}
-.theme-chromium .sb.st-in {
-  border-color: rgba(59, 130, 246, 0.2);
-}
-.theme-chromium .sb.st-break {
-  border-color: rgba(245, 158, 11, 0.2);
-}
-.theme-chromium .sb.st-out {
-  border-color: rgba(107, 114, 128, 0.2);
-}
-.theme-chromium .sb.st-absent {
-  border-color: rgba(239, 68, 68, 0.2);
-}
-
-/* ── THEME: Neural cards ── */
-.theme-neural .ec {
-  background: var(--bg2);
-  border: 1px solid var(--bd);
-  border-radius: 0;
-  position: relative;
-  clip-path: polygon(
-    8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px),
-    calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px
-  );
-}
-.theme-neural .ec::after {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  clip-path: polygon(
-    8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px),
-    calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px
-  );
-  background: var(--bd);
-  z-index: -1;
-  transition: background 0.3s;
-}
-.theme-neural .ec:hover::after {
-  background: var(--accent);
-}
-.theme-neural .ec:hover {
-  background: var(--bg3);
-}
-.theme-neural .av {
-  border-radius: 50%;
-  border: 2px solid var(--bd2);
-  background: var(--bg3);
-}
-.theme-neural .ec:hover .av {
-  border-color: var(--accent);
-  box-shadow: 0 0 10px var(--accent-glow);
-}
-.theme-neural .sb {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
-  font-weight: 600;
-  letter-spacing: 1px;
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.theme-neural .sb::before {
-  content: '';
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-}
-.theme-neural .sb.st-in::before {
-  background: var(--status-in);
-  box-shadow: 0 0 4px var(--status-in);
-}
-.theme-neural .sb.st-break::before {
-  background: var(--status-break);
-}
-.theme-neural .sb.st-out::before {
-  background: var(--status-out);
-}
-.theme-neural .sb.st-absent::before {
-  background: var(--status-absent);
-  box-shadow: 0 0 4px var(--status-absent);
-}
-.theme-neural .tmr {
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--accent);
-  letter-spacing: 2px;
-  text-shadow: 0 0 4px var(--accent-glow);
-}
-
-/* ── THEME: Holodeck cards ── */
-.theme-holodeck .ec {
-  background: var(--surface, var(--bg2));
-  border: 1px solid var(--surface-border, var(--bd));
-  border-radius: var(--r);
-}
-.theme-holodeck .ec:hover {
-  background: var(--bg3);
-  border-color: var(--bd2);
-  transform: translateY(-2px);
-}
-.theme-holodeck .av {
-  border-radius: 50%;
-  background: var(--bg3);
-  border: 1px solid var(--bd2);
-}
-.theme-holodeck .ec:hover .av {
-  border-color: var(--accent);
-  box-shadow: 0 0 8px var(--accent-glow);
-}
-.theme-holodeck .sb {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 8px;
-  font-weight: 700;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  padding: 2px 8px;
-  border: 1px solid transparent;
-}
-.theme-holodeck .sb.st-in {
-  border-color: rgba(56, 189, 248, 0.15);
-}
-.theme-holodeck .sb.st-break {
-  border-color: rgba(251, 191, 36, 0.15);
-}
-.theme-holodeck .sb.st-absent {
-  border-color: rgba(248, 113, 113, 0.15);
-}
-.theme-holodeck .tmr {
-  font-family: 'JetBrains Mono', monospace;
-  letter-spacing: 2px;
-  text-shadow: 0 0 4px var(--accent-glow);
-}
-
-/* ── THEME: Clean cards ── */
-.theme-clean .ec {
-  background: var(--bg2);
-  border: 1px solid var(--bd);
-  border-radius: var(--r);
-  transition: all 0.25s ease;
-}
-.theme-clean .ec:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
-  border-color: var(--accent);
-}
-.theme-clean .av {
-  border-radius: 50%;
-  background: var(--accent);
-}
-.theme-clean .av .av-i {
-  color: var(--ink-on-accent, #00112b);
-}
-.theme-clean .sb {
-  border-radius: 8px;
-  font-size: 9px;
-  padding: 3px 8px;
-  font-family: 'JetBrains Mono', monospace;
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  color: var(--accent);
-}
-.theme-clean .en {
-  letter-spacing: -0.2px;
-}
-.theme-clean .tmr {
-  font-family: 'JetBrains Mono', monospace;
-  color: var(--accent);
-}
-
-/* ── Theme skeleton overrides ── */
-.theme-chromium .skel {
-  border-radius: var(--r);
-}
-.theme-neural .skel {
-  border-radius: 0;
-  clip-path: polygon(
-    8px 0, calc(100% - 8px) 0, 100% 8px, 100% calc(100% - 8px),
-    calc(100% - 8px) 100%, 8px 100%, 0 calc(100% - 8px), 0 8px
-  );
-}
-.theme-holodeck .skel {
-  border-radius: 0;
-}
-
 /* ── Empty state ── */
 .grid-empty {
   grid-column: 1 / -1;
@@ -556,7 +284,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 60px 20px;
+  padding: 16px;
   color: var(--tx3);
   gap: 8px;
 }
@@ -652,4 +380,71 @@
   .drawer-panel {
     width: 100%;
   }
+}
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+}
+
+/* module-mobile-extra */
+
+@media (max-width: 768px) {
+  .toolbar { padding: 10px 16px; flex-wrap: wrap; }
+  .main-area { flex-direction: column; }
+  .emp-grid { grid-template-columns: 1fr !important; }
+  .stat-row { flex-wrap: wrap; }
 }

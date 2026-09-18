@@ -96,13 +96,22 @@ export class GuardianAuthService {
     if (!phone || !password) {
       return { error: { error: 'phone and password are required', status: 400 } };
     }
-    if (!tenantHint) {
-      return { error: { error: 'tenant_required', status: 400 } };
-    }
 
-    const matches = await this.authRepo.listCredentialsByPhone(phone, tenantHint);
+    const matches = await this.authRepo.listCredentialsByPhone(
+      phone,
+      tenantHint || undefined,
+    );
     if (matches.length === 0) {
       return { error: { error: 'invalid credentials', status: 401 } };
+    }
+    if (!tenantHint && matches.length > 1) {
+      return {
+        error: { error: 'ambiguous_phone', status: 409 },
+        tenants: matches.map((m) => ({
+          tenantId: m.tenantId,
+          guardianId: m.guardianId,
+        })),
+      };
     }
 
     const cred = matches[0]!;

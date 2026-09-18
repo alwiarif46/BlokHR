@@ -29,7 +29,7 @@ describe('guardian_portal (app shell)', () => {
   beforeEach(async () => {
     vi.resetModules();
     localStorage.clear();
-    document.body.className = 'theme-chromium guardian-body';
+    document.body.className = 'theme-dark guardian-body';
     document.body.innerHTML = '<div id="toasts"></div><div id="guardianRoot"></div>';
 
     guardianGet = vi.fn(async (p) => {
@@ -449,12 +449,12 @@ describe('guardian_portal (app shell)', () => {
     }
   });
 
-  it('renders four theme buttons from shared catalog', async () => {
+  it('renders two theme buttons from shared catalog', async () => {
     await loginAsParent();
     const { getValidThemes } = await import('../../shared/themes.js');
     const buttons = [...document.querySelectorAll('#gpHdrThemes [data-theme]')];
     expect(buttons.map((b) => b.getAttribute('data-theme'))).toEqual(getValidThemes());
-    expect(buttons).toHaveLength(4);
+    expect(buttons).toHaveLength(2);
   });
 
   it('mobile nav shows primary destinations only; desktop has all routes', async () => {
@@ -485,7 +485,7 @@ describe('guardian_portal (app shell)', () => {
     expect(document.querySelector('.login-card')).toBeTruthy();
     expect(document.getElementById('gpMain').innerHTML.trim()).toBe('');
     expect(localStorage.getItem('guardian_session')).toBeNull();
-    expect(document.body.classList.contains('theme-chromium')).toBe(true);
+    expect(document.body.classList.contains('theme-dark')).toBe(true);
     expect(document.body.classList.contains('on-login-screen')).toBe(true);
   });
 
@@ -508,7 +508,7 @@ describe('guardian_portal (app shell)', () => {
     guardianGet.mockImplementation(async (p) => {
       if (p === '/guardian/me/profile') {
         return {
-          accessibility: { large_text: true, theme: 'neural' },
+          accessibility: { large_text: true, theme: 'light' },
           preferredLanguage: 'en',
         };
       }
@@ -534,7 +534,7 @@ describe('guardian_portal (app shell)', () => {
       return {};
     });
     guardianPatch.mockResolvedValue({
-      accessibility: { large_text: true, theme: 'holodeck' },
+      accessibility: { large_text: true, theme: 'light' },
     });
 
     document.getElementById('gpPhone').value = '9876543210';
@@ -544,38 +544,38 @@ describe('guardian_portal (app shell)', () => {
     );
     await vi.waitFor(() => expect(document.getElementById('gpApp').hidden).toBe(false));
     await vi.waitFor(() => {
-      expect(document.body.classList.contains('theme-neural')).toBe(true);
+      expect(document.body.classList.contains('theme-light')).toBe(true);
       expect(document.body.classList.contains('guardian-body')).toBe(true);
     });
 
-    document.querySelector('#gpHdrThemes [data-theme="holodeck"]').click();
+    document.querySelector('#gpHdrThemes [data-theme="dark"]').click();
     await vi.waitFor(() => {
       expect(guardianPatch).toHaveBeenCalledWith(
         '/guardian/me/profile',
         expect.objectContaining({
           accessibility: expect.objectContaining({
             large_text: true,
-            theme: 'holodeck',
+            theme: 'dark',
           }),
         }),
       );
-      expect(document.body.classList.contains('theme-holodeck')).toBe(true);
+      expect(document.body.classList.contains('theme-dark')).toBe(true);
     });
   });
 
   it('reverts theme when profile PATCH fails', async () => {
     await loginAsParent();
-    expect(document.body.classList.contains('theme-chromium')).toBe(true);
+    expect(document.body.classList.contains('theme-dark')).toBe(true);
     guardianPatch.mockResolvedValueOnce({
       _error: true,
       status: 500,
       message: 'save failed',
     });
-    document.querySelector('#gpHdrThemes [data-theme="clean"]').click();
+    document.querySelector('#gpHdrThemes [data-theme="light"]').click();
     await vi.waitFor(() => {
       expect(guardianPatch).toHaveBeenCalled();
-      expect(document.body.classList.contains('theme-chromium')).toBe(true);
-      expect(document.body.classList.contains('theme-clean')).toBe(false);
+      expect(document.body.classList.contains('theme-dark')).toBe(true);
+      expect(document.body.classList.contains('theme-light')).toBe(false);
     });
   });
 });
@@ -593,7 +593,7 @@ describe('guardian_portal zero-child and expired session', () => {
   beforeEach(async () => {
     vi.resetModules();
     localStorage.clear();
-    document.body.className = 'theme-chromium guardian-body';
+    document.body.className = 'theme-dark guardian-body';
     document.body.innerHTML = '<div id="toasts"></div><div id="guardianRoot"></div>';
 
     guardianGet = vi.fn(async (p) => {

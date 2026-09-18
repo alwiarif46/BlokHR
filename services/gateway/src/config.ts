@@ -50,6 +50,8 @@ export interface GatewayConfig {
   tenantApexHosts: string;
   /** Comma-separated extra reserved slugs (TENANT_RESERVED_SLUGS). */
   tenantReservedSlugs: string;
+  /** Comma-separated browser origins. Production forbids `*`. */
+  corsOrigins: string;
 }
 
 function assertHttpUrl(label: string, value: string): string {
@@ -118,6 +120,12 @@ export function loadGatewayConfig(
     env.DIRECTORY_URL ?? monolithUrl,
   );
 
+  const nodeEnv = env.NODE_ENV ?? 'development';
+  const corsOrigins = (env.CORS_ORIGINS ?? (nodeEnv === 'production' ? '' : '*')).trim();
+  if (nodeEnv === 'production' && (!corsOrigins || corsOrigins === '*')) {
+    throw new Error('CORS_ORIGINS must be an explicit allowlist in production');
+  }
+
   return {
     port,
     monolithUrl,
@@ -131,6 +139,7 @@ export function loadGatewayConfig(
     tenantSubdomainBase: (env.TENANT_SUBDOMAIN_BASE ?? '').trim(),
     tenantApexHosts: (env.TENANT_APEX_HOSTS ?? '').trim(),
     tenantReservedSlugs: (env.TENANT_RESERVED_SLUGS ?? '').trim(),
+    corsOrigins,
   };
 }
 

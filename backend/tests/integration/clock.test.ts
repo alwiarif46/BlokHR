@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import type { DatabaseEngine } from '../../src/db/engine';
-import { createTestApp, seedMember } from '../helpers/setup';
+import { createTestApp, seedMember, seedAdmin } from '../helpers/setup';
 
 describe('POST /api/clock', () => {
   let app: Express;
@@ -212,6 +212,7 @@ describe('POST /api/clock', () => {
   // ── Admin clock-out for another user ──
 
   it('allows admin to clock out another user (source=admin)', async () => {
+    await seedAdmin(db, 'admin@shaavir.com');
     await request(app)
       .post('/api/clock')
       .send({ action: 'in', email: 'alice@shaavir.com', name: 'Alice' })
@@ -220,8 +221,23 @@ describe('POST /api/clock', () => {
     const res = await request(app)
       .post('/api/clock')
       .send({ action: 'out', email: 'alice@shaavir.com', name: 'Alice' })
-      .set('X-User-Email', 'admin@shaavir.com'); // different user = admin
+      .set('X-User-Email', 'admin@shaavir.com');
     expect(res.body.success).toBe(true);
+  });
+
+  it('rejects unauthenticated clock', async () => {
+    const res = await request(app)
+      .post('/api/clock')
+      .send({ action: 'in', email: 'alice@shaavir.com', name: 'Alice' });
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects non-admin clocking another employee', async () => {
+    const res = await request(app)
+      .post('/api/clock')
+      .send({ action: 'out', email: 'alice@shaavir.com', name: 'Alice' })
+      .set('X-User-Email', 'eve@shaavir.com');
+    expect(res.status).toBe(403);
   });
 
   // ── Full cycle ──
@@ -272,18 +288,24 @@ describe('GET /api/attendance', () => {
   });
 
   it('rejects missing date parameter', async () => {
-    const res = await request(app).get('/api/attendance');
+    const res = await request(app)
+      .get('/api/attendance')
+      .set('X-User-Email', 'alice@shaavir.com');
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/date query parameter/);
   });
 
   it('rejects invalid date format', async () => {
-    const res = await request(app).get('/api/attendance?date=2024-1-5');
+    const res = await request(app)
+      .get('/api/attendance?date=2024-1-5')
+      .set('X-User-Email', 'alice@shaavir.com');
     expect(res.status).toBe(400);
   });
 
   it('returns empty people array for a date with no records', async () => {
-    const res = await request(app).get('/api/attendance?date=2020-01-01');
+    const res = await request(app)
+      .get('/api/attendance?date=2020-01-01')
+      .set('X-User-Email', 'alice@shaavir.com');
     expect(res.status).toBe(200);
     expect(res.body.people).toEqual([]);
     expect(res.body.dayChangeTime).toBeTruthy();
@@ -299,7 +321,9 @@ describe('GET /api/attendance', () => {
     // Get logical date — we need to query whatever date the clock service used
     // Since shift is 00:00-23:59, the logical date should be today
     const today = new Date().toISOString().split('T')[0];
-    const res = await request(app).get(`/api/attendance?date=${today}`);
+    const res = await request(app)
+      .get(`/api/attendance?date=${today}`)
+      .set('X-User-Email', 'alice@shaavir.com');
 
     // Might be today or yesterday depending on dayChangeTime — check both
     if (res.body.people.length === 0) {
@@ -307,7 +331,9 @@ describe('GET /api/attendance', () => {
       const d = new Date();
       d.setDate(d.getDate() - 1);
       const yesterday = d.toISOString().split('T')[0];
-      const res2 = await request(app).get(`/api/attendance?date=${yesterday}`);
+      const res2 = await request(app)
+        .get(`/api/attendance?date=${yesterday}`)
+        .set('X-User-Email', 'alice@shaavir.com');
       expect(res2.body.people.length).toBeGreaterThanOrEqual(0);
       // Either way, the structure should be valid
       return;
@@ -324,7 +350,9 @@ describe('GET /api/attendance', () => {
   });
 
   it('returns dayChangeTime in response', async () => {
-    const res = await request(app).get('/api/attendance?date=2024-01-01');
+    const res = await request(app)
+      .get('/api/attendance?date=2024-01-01')
+      .set('X-User-Email', 'alice@shaavir.com');
     expect(res.body.dayChangeTime).toBe('06:00');
   });
 
@@ -342,7 +370,9 @@ describe('GET /api/attendance', () => {
     await clock('out');
 
     const today = new Date().toISOString().split('T')[0];
-    const res = await request(app).get(`/api/attendance?date=${today}`);
+    const res = await request(app)
+      .get(`/api/attendance?date=${today}`)
+      .set('X-User-Email', 'alice@shaavir.com');
 
     if (res.body.people.length > 0) {
       const alice = res.body.people[0];
@@ -360,7 +390,9 @@ describe('GET /api/attendance', () => {
       .set('X-User-Email', 'alice@shaavir.com');
 
     const today = new Date().toISOString().split('T')[0];
-    const res = await request(app).get(`/api/attendance?date=${today}`);
+    const res = await request(app)
+      .get(`/api/attendance?date=${today}`)
+      .set('X-User-Email', 'alice@shaavir.com');
 
     if (res.body.people.length > 0) {
       expect(typeof res.body.people[0].monthlyLateCount).toBe('number');

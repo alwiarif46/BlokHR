@@ -10,6 +10,21 @@ function asyncHandler(
   };
 }
 
+/** When gateway/monolith set X-Blok-Tenant, path tenant must match. */
+function enforcePathTenant(req: Request, res: Response, next: NextFunction): void {
+  const pathTenant = String(req.params.tenantId ?? '')
+    .trim()
+    .toLowerCase();
+  const headerTenant = String(req.headers['x-blok-tenant'] ?? '')
+    .trim()
+    .toLowerCase();
+  if (headerTenant && pathTenant && headerTenant !== pathTenant) {
+    res.status(403).json({ error: 'tenant_mismatch' });
+    return;
+  }
+  next();
+}
+
 export function createEntitlementsRouter(service: EntitlementsService): Router {
   const router = Router();
 
@@ -19,6 +34,28 @@ export function createEntitlementsRouter(service: EntitlementsService): Router {
       res.json({ status: 'ok', service: 'entitlements' });
     },
   );
+
+  router.post(
+    '/licenses/issue',
+    asyncHandler(async (req, res) => {
+      const claims = req.body as SignedLicenseClaims;
+      if (!claims?.tenantId || !claims.plan || !claims.validFrom || !claims.validTo) {
+        res.status(400).json({ error: 'Invalid license claims' });
+        return;
+      }
+      if (typeof claims.seatLimit !== 'number') {
+        res.status(400).json({ error: 'seatLimit is required' });
+        return;
+      }
+      const token = service.issueSignedLicense({
+        ...claims,
+        modules: claims.modules ?? [],
+      });
+      res.status(201).json({ licenseToken: token, claims });
+    }),
+  );
+
+  router.use('/:tenantId', enforcePathTenant);
 
   router.get(
     '/:tenantId',
@@ -87,26 +124,6 @@ export function createEntitlementsRouter(service: EntitlementsService): Router {
         return;
       }
       res.json(result.entitlement);
-    }),
-  );
-
-  router.post(
-    '/licenses/issue',
-    asyncHandler(async (req, res) => {
-      const claims = req.body as SignedLicenseClaims;
-      if (!claims?.tenantId || !claims.plan || !claims.validFrom || !claims.validTo) {
-        res.status(400).json({ error: 'Invalid license claims' });
-        return;
-      }
-      if (typeof claims.seatLimit !== 'number') {
-        res.status(400).json({ error: 'seatLimit is required' });
-        return;
-      }
-      const token = service.issueSignedLicense({
-        ...claims,
-        modules: claims.modules ?? [],
-      });
-      res.status(201).json({ licenseToken: token, claims });
     }),
   );
 

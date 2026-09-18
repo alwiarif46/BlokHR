@@ -159,7 +159,7 @@ export async function api(path, opts) {
     headers['X-Blok-Client-Host'] = location.host;
   }
 
-  const fetchOpts = Object.assign({}, opts || {}, { headers: headers });
+  const fetchOpts = Object.assign({}, opts || {}, { headers: headers, credentials: 'include' });
 
   /* Auto-stringify object bodies */
   if (
@@ -484,7 +484,7 @@ export async function guardianApi(path, opts) {
     headers['Authorization'] = 'Bearer ' + session.token;
   }
 
-  const fetchOpts = Object.assign({}, opts || {}, { headers: headers });
+  const fetchOpts = Object.assign({}, opts || {}, { headers: headers, credentials: 'include' });
   if (
     fetchOpts.body &&
     typeof fetchOpts.body === 'object' &&

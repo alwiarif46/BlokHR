@@ -71,7 +71,7 @@ export function applyPrefsToDOM(prefs) {
   if (!prefs) return;
 
   /* 1. Theme */
-  setTheme(prefs.theme || 'chromium');
+  setTheme(prefs.theme || 'dark');
 
   /* 2. Colour overrides — clear first so null fields reset to theme defaults */
   clearColourOverrides();
@@ -96,7 +96,7 @@ export function applyPrefsToDOM(prefs) {
  */
 function getDefaults() {
   return {
-    theme: 'chromium',
+    theme: 'dark',
     dark_mode: 'system',
     color_accent: null,
     color_status_in: null,

@@ -1,0 +1,38 @@
+---
+description: NON-NEGOTIABLE pre-change gate — every frontend/backend change must pass commercial multi-tenant quality review before implementation
+alwaysApply: true
+---
+
+# Commercial Multi-Tenant Change Gate (NON-NEGOTIABLE)
+
+BlokHR is a **commercial multi-tenant SaaS product**. This gate runs **before every change** — frontend, backend, services, config, migrations, tests, copy, and design. No exceptions for demos, spikes, “quick fixes,” or local-only hacks unless the user explicitly overrides after you stop and challenge them.
+
+## Mandatory pre-change checklist
+
+Before writing or editing any file, answer all of these. If any answer is **no** or **unclear**, **STOP**. Do not implement. Review the request, state the failure, and propose a tenant-safe, sellable alternative. Wait for approval.
+
+1. **Multi-tenant safe** — Does this keep data, auth, config, billing, and feature flags isolated per tenant? No shared secrets, no cross-tenant reads, no single-tenant hardcoding.
+2. **Commercial product fit** — Would this still make sense for many paying tenants, plans, and admins — not one customer, one session, or one screenshot?
+3. **Look and feel** — Does this make the product look and feel like a polished commercial SaaS (clear hierarchy, consistent tokens/patterns, professional UX)? Reject amateur, demo-toy, or theme-breaking UI.
+4. **Supportable** — Can ops sell, onboard, bill, audit, and upgrade this without manual DB edits or irreversible hacks?
+5. **Security & roles** — Does this preserve auth, RBAC, audit expectations, and PII boundaries?
+
+## Hard fail (never ship without redesign)
+
+- Cross-tenant data leakage or missing `tenant_id` scoping
+- Global/hardcoded branding, copy, rules, or feature behavior for one company
+- UI that looks unfinished, inconsistent, or weaker than the existing product surface
+- Skipping entitlements, feature flags, or plan gates that a paid product needs
+- Growing the monolith when a service boundary owns the domain
+- Secrets, tokens, or privileged actions exposed to the client
+
+## Required behavior when the check fails
+
+1. **Conflict** — one sentence: what fails the gate
+2. **Risk** — customer, security, brand, or ops impact
+3. **Alternative** — a commercial multi-tenant-safe approach that preserves intent
+4. **Ask** — do not proceed until the user approves the alternative or explicitly overrides
+
+## Required behavior when the check passes
+
+State briefly (internally or in the first step) that the change cleared the commercial multi-tenant gate, then implement. Never skip the gate because the change is “small.”

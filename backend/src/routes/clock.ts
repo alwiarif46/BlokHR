@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { isTenantAdmin } from '../tenant/admin-access';
 import { AppError, asyncHandler } from '../app';
 import { ClockRepository } from '../repositories/clock-repository';
 import { ClockService, type RosterPort } from '../services/clock-service';
@@ -39,11 +40,19 @@ export function createClockRouter(
         throw new AppError('email is required', 400);
       }
 
+      const caller = (req.identity?.email ?? '').toLowerCase().trim();
+      if (!caller) {
+        throw new AppError('Authentication required', 401);
+      }
+
       const cleanEmail = email.toLowerCase().trim();
       const cleanName = (name || email).trim();
+      const isSelf = caller === cleanEmail;
+      if (!isSelf && !(await isTenantAdmin(db, caller))) {
+        throw new AppError('Admin access required to clock another employee', 403);
+      }
 
-      // Determine source: if the requesting user is different from target, it's admin
-      const source = req.identity && req.identity.email !== cleanEmail ? 'admin' : 'manual';
+      const source = isSelf ? 'manual' : 'admin';
 
       const result = await service.clock(action, cleanEmail, cleanName, source);
 
@@ -67,6 +76,11 @@ export function createClockRouter(
   router.get(
     '/attendance',
     asyncHandler(async (req: Request, res: Response) => {
+      const caller = (req.identity?.email ?? '').toLowerCase().trim();
+      if (!caller) {
+        throw new AppError('Authentication required', 401);
+      }
+
       const date = req.query.date as string | undefined;
       if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
         throw new AppError('date query parameter required in YYYY-MM-DD format', 400);

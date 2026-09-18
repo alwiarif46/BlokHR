@@ -68,8 +68,27 @@ describe('loadConfig', () => {
 
   it('defaults NODE_ENV to production', () => {
     delete process.env.NODE_ENV;
+    process.env.ACTION_LINK_SECRET = 'prod-action-secret';
+    process.env.LICENSE_SIGNING_SECRET = 'prod-license-signing-secret';
+    process.env.CORS_ORIGINS = 'https://app.blokhr.com';
     const config = loadConfig();
     expect(config.nodeEnv).toBe('production');
+  });
+
+  it('throws in production without ACTION_LINK_SECRET', () => {
+    process.env.NODE_ENV = 'production';
+    delete process.env.ACTION_LINK_SECRET;
+    process.env.LICENSE_SIGNING_SECRET = 'prod-license-signing-secret';
+    process.env.CORS_ORIGINS = 'https://app.blokhr.com';
+    expect(() => loadConfig()).toThrow(/ACTION_LINK_SECRET/);
+  });
+
+  it('throws in production when LICENSE_SIGNING_SECRET is the dev default', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ACTION_LINK_SECRET = 'prod-action-secret';
+    process.env.CORS_ORIGINS = 'https://app.blokhr.com';
+    delete process.env.LICENSE_SIGNING_SECRET;
+    expect(() => loadConfig()).toThrow(/LICENSE_SIGNING_SECRET/);
   });
 
   it('defaults LOG_LEVEL to info', () => {
@@ -78,10 +97,19 @@ describe('loadConfig', () => {
     expect(config.logLevel).toBe('info');
   });
 
-  it('defaults CORS_ORIGINS to *', () => {
+  it('defaults CORS_ORIGINS to * outside production', () => {
+    process.env.NODE_ENV = 'test';
     delete process.env.CORS_ORIGINS;
     const config = loadConfig();
     expect(config.corsOrigins).toBe('*');
+  });
+
+  it('throws in production when CORS_ORIGINS is a wildcard', () => {
+    process.env.NODE_ENV = 'production';
+    process.env.ACTION_LINK_SECRET = 'prod-action-secret';
+    process.env.LICENSE_SIGNING_SECRET = 'prod-license-signing-secret';
+    process.env.CORS_ORIGINS = '*';
+    expect(() => loadConfig()).toThrow(/CORS_ORIGINS/);
   });
 
   it('defaults AZURE_BLOB_CONTAINER to shaavir-files', () => {
@@ -154,6 +182,28 @@ describe('loadConfig', () => {
   // ── Optional vars: undefined when not set ──
 
   it('returns undefined for optional vars when not set', () => {
+    delete process.env.SMTP_HOST;
+    delete process.env.SMTP_USER;
+    delete process.env.SMTP_PASS;
+    delete process.env.SMTP_FROM;
+    delete process.env.AZURE_BOT_APP_ID;
+    delete process.env.AZURE_BOT_APP_PASSWORD;
+    delete process.env.SLACK_BOT_TOKEN;
+    delete process.env.SLACK_SIGNING_SECRET;
+    delete process.env.GOOGLE_CHAT_SERVICE_ACCOUNT_JSON;
+    delete process.env.CLICKUP_API_TOKEN;
+    delete process.env.DISCORD_BOT_TOKEN;
+    delete process.env.DISCORD_APP_ID;
+    delete process.env.WHATSAPP_PHONE_ID;
+    delete process.env.WHATSAPP_TOKEN;
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    delete process.env.LLM_API_KEY;
+    delete process.env.LLM_BASE_URL;
+    delete process.env.LLM_MODEL;
+    delete process.env.AZURE_FACE_ENDPOINT;
+    delete process.env.AZURE_FACE_KEY;
+    delete process.env.SERVER_BASE_URL;
+    delete process.env.ACTION_LINK_SECRET;
     const config = loadConfig();
     expect(config.azureBotAppId).toBeUndefined();
     expect(config.azureBotAppPassword).toBeUndefined();

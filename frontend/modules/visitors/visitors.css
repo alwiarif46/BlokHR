@@ -2,7 +2,7 @@
  * modules/visitors/visitors.css
  * Visitor Management module. All colours use CSS custom properties.
  */
-.vis-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
+.vis-wrap { padding: 16px 24px 24px; height: 100%; overflow-x: auto; overflow-y: auto; }
 .vis-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .vis-spacer { flex: 1; }
 .vis-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -12,46 +12,35 @@
   font-family: inherit; transition: all 0.2s ease;
 }
 .vis-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-.theme-clean .vis-tab { border-radius: 10px; }
-.vis-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
-.theme-clean .vis-btn { color: var(--ink-on-accent, #00112b); border-radius: 10px; }
+.vis-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: var(--ink-on-accent, var(--bg0)); cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
 .vis-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 .vis-btn.ghost { background: transparent; color: var(--accent); }
 .vis-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .vis-stat { flex: 1; min-width: 100px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
-.theme-clean .vis-stat { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .vis-stat:hover { border-color: var(--accent); }
 .vis-stat-num { font-size: 24px; font-weight: 900; color: var(--tx); }
 .vis-stat-label { font-size: 9px; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-weight: 600; }
 .vis-filters { display: flex; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
 .vis-filters .vis-field { margin-bottom: 0; min-width: 140px; flex: 0 1 180px; }
-.vis-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.vis-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(0, 1fr)); gap: 12px; }
 .vis-card { background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 16px; transition: all 0.3s ease; animation: cardIn 0.4s var(--ease) both; }
 .vis-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-.theme-chromium .vis-card { background: linear-gradient(170deg, var(--bg2), var(--bg1)); }
-.theme-neural .vis-card { border-radius: 0; }
-.theme-holodeck .vis-card { border-radius: var(--r); background: var(--surface, var(--bg2)); }
-.theme-clean .vis-card { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .vis-card-title { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
 .vis-card-sub { font-size: 10px; color: var(--tx3); }
 .vis-card-badge { font-size: 8px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; display: inline-block; margin-top: 6px; }
-.theme-clean .vis-card-badge { border-radius: 6px; }
 .vis-card-actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
 .vis-card-actions button { padding: 4px 10px; font-size: 10px; font-weight: 600; border: 1px solid var(--bd); border-radius: 4px; background: var(--bg3); color: var(--tx2); cursor: pointer; font-family: inherit; transition: all 0.2s ease; }
-.theme-clean .vis-card-actions button { border-radius: 8px; }
 .vis-card-actions button:hover { border-color: var(--accent); color: var(--accent); }
 .vis-card-actions button.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
 .vis-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .vis-modal.open { display: flex; }
 .vis-modal-box { background: var(--surface, var(--bg2)); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
 .vis-modal-box.wide { width: 720px; }
-.theme-clean .vis-modal-box { border-radius: 20px; }
 .vis-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
 .vis-row { display: flex; gap: 12px; }
 .vis-field { margin-bottom: 14px; }
 .vis-field label { display: block; font-size: 10px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
 .vis-field input, .vis-field select, .vis-field textarea { width: 100%; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r); padding: 10px 12px; color: var(--tx); font-family: inherit; font-size: 12px; outline: none; transition: all 0.25s ease; }
-.theme-clean .vis-field input, .theme-clean .vis-field select, .theme-clean .vis-field textarea { border-radius: 10px; }
 .vis-field input:focus, .vis-field select:focus, .vis-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 .vis-field input[readonly] { opacity: 0.7; }
 .vis-form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
@@ -70,7 +59,7 @@
 .vis-badge-title { font-size: 11px; font-weight: 800; letter-spacing: 2px; color: var(--accent); margin-bottom: 10px; }
 .vis-badge-name { font-size: 22px; font-weight: 900; color: var(--tx); margin-bottom: 8px; }
 .vis-badge-meta { font-size: 12px; color: var(--tx2); margin-top: 4px; }
-.vis-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
+.vis-empty { text-align: center; padding: 16px; color: var(--tx3); }
 .vis-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }
 .vis-empty-text { font-size: 13px; font-weight: 600; }
 @media (max-width: 700px) {
@@ -82,7 +71,65 @@
   #visBadgePrint, #visBadgePrint * { visibility: visible !important; }
   #visBadgePrint {
     position: absolute; left: 50%; top: 40px; transform: translateX(-50%);
-    width: 320px; border: 2px solid #000; background: #fff; color: #000; padding: 24px;
+    width: 320px; border: 2px solid #000; background: #fff; color: var(--ink-on-accent, var(--bg0)); padding: 24px;
   }
   .vis-modal { background: transparent; backdrop-filter: none; }
+}
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
 }

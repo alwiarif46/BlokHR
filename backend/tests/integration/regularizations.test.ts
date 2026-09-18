@@ -70,8 +70,8 @@ describe('Regularization Module', () => {
       const res = await request(app)
         .post('/api/regularizations')
         .send({ date: '2026-03-20', reason: 'test' });
-      expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/email/i);
+      expect(res.status).toBe(401);
+      expect(res.body.error).toMatch(/Authentication required/i);
     });
 
     it('uses identity email when body email is omitted', async () => {

@@ -156,12 +156,10 @@ function candidateHosts(
       }
     })(),
   );
-  /* Frontend api.js sends the browser's location.host; survives Vercel→Railway rewrites. */
-  const clientHost = normalizeHost(firstHeader(headers, 'x-blok-client-host'));
-  /* Railway often sets XFHost equal to Host; prefer browser Origin/Referer then. */
+  /* Do not read X-Blok-Client-Host: any client can set it and switch tenants.
+   * Vercel→Railway rewrites are covered by Origin / Referer / X-Forwarded-Host. */
   const usefulForwarded = forwarded && forwarded !== host ? forwarded : '';
   const ordered = [
-    clientHost,
     usefulForwarded,
     originHost,
     refererHost,

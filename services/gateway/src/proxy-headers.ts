@@ -33,9 +33,12 @@ export function applyProxyHeaderHygiene(
   proxyReq: ClientRequest,
   secret: string,
   extraBlokHeaders?: Record<string, string>,
+  opts: { injectInternal?: boolean } = {},
 ): void {
   stripInboundBlokHeaders(proxyReq);
-  injectInternalSecret(proxyReq, secret);
+  if (opts.injectInternal !== false) {
+    injectInternalSecret(proxyReq, secret);
+  }
   if (extraBlokHeaders) {
     for (const [key, value] of Object.entries(extraBlokHeaders)) {
       proxyReq.setHeader(key, value);

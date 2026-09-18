@@ -112,3 +112,16 @@ describe('Gateway feature flag cache — school vertical off', () => {
     expect(await cache.isServiceEnabled('school-assessment')).toBe(false);
   });
 });
+
+describe('Gateway feature flag cache — invalid payload', () => {
+  it('fails open when the flags document has no features array', async () => {
+    const cache = new FeatureFlagCache({
+      monolithUrl: 'http://127.0.0.1:3000',
+      fetchFn: vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ method: 'GET', path: '/api/features' }),
+      })) as typeof fetch,
+    });
+    expect(await cache.isServiceEnabled('school-identity')).toBe(true);
+  });
+});

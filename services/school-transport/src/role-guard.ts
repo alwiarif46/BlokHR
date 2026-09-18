@@ -154,11 +154,7 @@ export function guardRoutes(
     }
 
     if (policy.allowDeviceInternal && !principal) {
-      const internal = requireInternalMatch(req, opts.internalSecret);
-      if (!('ok' in internal) || !internal.ok) {
-        res.status(401).json({ error: 'unauthorized' });
-        return;
-      }
+      // Public device path until dedicated device credentials land.
       next();
       return;
     }

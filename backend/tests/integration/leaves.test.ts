@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import type { DatabaseEngine } from '../../src/db/engine';
-import { createTestApp, seedMember } from '../helpers/setup';
+import { createTestApp, seedMember, seedAdmin } from '../helpers/setup';
 
 describe('Leave Module', () => {
   let app: Express;
@@ -18,6 +18,7 @@ describe('Leave Module', () => {
       groupShiftStart: '00:00',
       groupShiftEnd: '23:59',
     });
+    await seedAdmin(db, 'admin@shaavir.com');
   });
 
   afterEach(async () => {

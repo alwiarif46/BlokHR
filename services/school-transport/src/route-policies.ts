@@ -5,8 +5,8 @@ const OFFICE_UP: RoutePolicy['roles'] = ['office', 'school_admin', 'admin'];
 
 /**
  * school-transport deny-by-default (P12-04).
- * Boarding + pings are device/internal-only: AIS140/devices have no staff
- * bearer — gateway PUBLIC_PATHS injects secret only (no X-Blok-Principal).
+ * Boarding + pings are public device paths (no staff bearer). Gateway
+ * PUBLIC_PATHS skip X-Blok-Internal; device API keys are a standing gap.
  */
 export const TRANSPORT_ROUTE_POLICIES: RoutePolicy[] = [
   { method: 'POST', pattern: /^\/[^/]+\/vehicles\/?$/, roles: ADMIN_UP },
@@ -67,7 +67,7 @@ export const TRANSPORT_ROUTE_POLICIES: RoutePolicy[] = [
     method: 'POST',
     pattern: /^\/[^/]+\/boarding\/?$/,
     roles: [],
-    internalOnly: true,
+    allowDeviceInternal: true,
   },
   { method: 'POST', pattern: /^\/[^/]+\/sweep-missed\/?$/, roles: OFFICE_UP },
   {
@@ -84,7 +84,7 @@ export const TRANSPORT_ROUTE_POLICIES: RoutePolicy[] = [
     method: 'POST',
     pattern: /^\/[^/]+\/pings\/?$/,
     roles: [],
-    internalOnly: true,
+    allowDeviceInternal: true,
   },
   {
     method: 'GET',

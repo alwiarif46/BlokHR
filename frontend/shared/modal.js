@@ -1,81 +1,34 @@
 /**
- * shared/modal.js — Theme-Aware Overlays
+ * shared/modal.js — Detail + CRUD overlays
  *
- * The monolith implements 4 different detail view patterns depending on theme:
- *
- *  | Theme     | Pattern       | Container                          |
- *  |-----------|---------------|------------------------------------|
- *  | Chromium  | Modal overlay | #modalOverlay + #modalBox centered |
- *  | Neural    | Split panel   | #splitPanel sidebar alongside grid |
- *  | Holodeck  | Inline expand | Card expands in-place within grid  |
- *  | Clean     | Drawer        | #drawerPanel slides from right     |
- *
- * Responsibilities:
- *  - Detect current theme
- *  - Open appropriate container with content
- *  - Close/dismiss handling (click outside, ESC key, close button)
- *  - Generic modal for CRUD forms (always uses overlay pattern)
+ * One detail pattern for both themes: centered modal (#modalOverlay + #modalBox).
+ * CRUD forms always use #crudModalOverlay.
  */
-
-import { getTheme } from './themes.js';
 
 let _detailOpen = false;
 let _expandedCard = null;
 let _escHandler = null;
 
 /**
- * Open a detail view using the theme-appropriate pattern.
+ * Open a detail view in the shared centered modal.
  *
  * @param {string} html         — rendered HTML content to show
  * @param {{ email?: string, cardSelector?: string }} [opts]
  */
 export function openDetail(html, opts) {
-  const theme = getTheme();
   _detailOpen = true;
   const email = (opts && opts.email) || '';
 
-  if (theme === 'chromium') {
-    const box = document.getElementById('modalBox');
-    const overlay = document.getElementById('modalOverlay');
-    if (box) box.innerHTML = html;
-    if (overlay) overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
-  } else if (theme === 'neural') {
-    const inner = document.getElementById('splitInner');
-    const panel = document.getElementById('splitPanel');
-    if (inner) inner.innerHTML = html;
-    if (panel) panel.classList.add('open');
-    if (email) {
-      document.querySelectorAll('.ec').forEach(function (c) {
-        c.classList.toggle('selected', c.dataset.email === email);
-      });
-    }
-  } else if (theme === 'holodeck') {
-    closeDetail();
-    _detailOpen = true;
-    const sel =
-      opts && opts.cardSelector ? opts.cardSelector : '.ec[data-email="' + CSS.escape(email) + '"]';
-    const card = document.querySelector(sel);
-    if (card) {
-      _expandedCard = card;
-      card.classList.add('expanded');
-      const ed = document.createElement('div');
-      ed.className = 'expand-detail';
-      ed.innerHTML =
-        '<button class="expand-close" data-action="close-detail">&#10005;</button>' + html;
-      card.appendChild(ed);
-      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  } else {
-    /* clean — drawer */
-    const drawer = document.getElementById('drawerPanel');
-    const overlay = document.getElementById('drawerOverlay');
-    if (drawer) {
-      drawer.innerHTML = html;
-      drawer.classList.add('open');
-    }
-    if (overlay) overlay.classList.add('open');
-    document.body.style.overflow = 'hidden';
+  const box = document.getElementById('modalBox');
+  const overlay = document.getElementById('modalOverlay');
+  if (box) box.innerHTML = html;
+  if (overlay) overlay.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  if (email) {
+    document.querySelectorAll('.ec').forEach(function (c) {
+      c.classList.toggle('selected', c.dataset.email === email);
+    });
   }
 
   _bindEsc();

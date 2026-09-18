@@ -7,7 +7,7 @@
 import { toast } from '../../shared/toast.js';
 import { registerModule } from '../../shared/router.js';
 import { loadPrefs, savePrefs, getPrefs } from '../../shared/prefs.js';
-import { setTheme, getValidThemes, getThemeLabel } from '../../shared/themes.js';
+import { setTheme, getValidThemes, getThemeLabel, normalizeTheme } from '../../shared/themes.js';
 
 let _container = null;
 
@@ -155,7 +155,7 @@ function _syncThemeButtons(active) {
 
 function _fillForm(prefs) {
   if (!_container || !prefs) return;
-  _syncThemeButtons(prefs.theme || 'chromium');
+  _syncThemeButtons(normalizeTheme(prefs.theme || 'dark'));
 
   COLOR_FIELDS.forEach(function (f) {
     const hex = _hexOrEmpty(prefs[f.key]);

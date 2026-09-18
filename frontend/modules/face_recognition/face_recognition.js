@@ -6,10 +6,12 @@ import { navigateToModule, registerModule } from '../../shared/router.js';
 
 export function renderFaceRecognitionPage(container) {
   container.innerHTML =
-    '<div class="fr-deprecated">' +
-    '<h2 class="fr-deprecated-title">Face Recognition moved</h2>' +
+    '<div class="fr-wrap">' +
+    '<div class="fr-card">' +
+    '<h2 class="fr-card-title">Face Recognition moved</h2>' +
     '<p>On-device face templates are managed in <strong>Capture Admin</strong>. The Azure Face API path is deprecated and frozen.</p>' +
-    '<button type="button" class="fr-deprecated-btn" id="frOpenCapture">Open Capture Admin</button>' +
+    '<button type="button" class="fr-card-btn" id="frOpenCapture">Open Capture Admin</button>' +
+    '</div>' +
     '</div>';
 
   const btn = container.querySelector('#frOpenCapture');
@@ -18,10 +20,6 @@ export function renderFaceRecognitionPage(container) {
       navigateToModule('capture_admin');
     });
   }
-  // Auto-open the real module; keep a brief message if navigation is slow.
-  setTimeout(function () {
-    navigateToModule('capture_admin');
-  }, 50);
 }
 
 registerModule('face_recognition', renderFaceRecognitionPage);

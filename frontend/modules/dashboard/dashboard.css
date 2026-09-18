@@ -10,13 +10,12 @@
 .dash-tab { padding: 10px 18px; font-size: 11px; font-weight: 700; background: none; border: none; border-bottom: 2px solid transparent; color: var(--tx3); cursor: pointer; font-family: inherit; transition: all 0.2s; white-space: nowrap; text-transform: uppercase; letter-spacing: 0.5px; }
 .dash-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .dash-tab:hover:not(.active) { color: var(--tx2); }
-#dashTabContent { min-height: 300px; }
+#dashTabContent { min-height: 0; }
 
 /* Dashboard grid */
-.my { padding: 16px 20px 60px; overflow-y: auto; height: calc(100vh - 54px); }
+.my { padding: 16px 24px 24px; overflow-y: auto; height: calc(100vh - 54px); }
 .my-hi { font-size: 11px; color: var(--tx3); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 3px; }
 .my-name { font-size: 24px; font-weight: 900; color: var(--tx); line-height: 1.2; margin-bottom: 2px; transition: color 0.4s ease !important; }
-.theme-chromium .my-name, .theme-neural .my-name, .theme-holodeck .my-name { letter-spacing: 1px; text-transform: uppercase; font-size: 20px; }
 .my-dept { font-size: 12px; color: var(--tx2); margin-bottom: 16px; }
 .my-g { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
 @media (max-width: 900px) { .my-g { grid-template-columns: 1fr 1fr; } }
@@ -24,7 +23,6 @@
 
 /* Module card */
 .mc { background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 16px; position: relative; overflow: hidden; transition: all 0.3s ease !important; }
-.theme-clean .mc { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .mc:hover { border-color: var(--accent); }
 .mc-t { font-size: 8px; font-weight: 700; color: var(--accent); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; display: flex; align-items: center; gap: 5px; }
 .mc-t .ic { font-size: 12px; }
@@ -44,13 +42,10 @@
 .ck-st { font-size: 18px; font-weight: 800; color: var(--tx); margin-bottom: 2px; }
 .ck-since { font-size: 11px; color: var(--tx2); }
 .ck-timer { font-size: 28px; font-weight: 900; color: var(--accent); letter-spacing: 3px; margin-top: 4px; font-variant-numeric: tabular-nums; transition: color 0.4s ease !important; }
-.theme-clean .ck-timer { letter-spacing: 0; }
 .ck-actions { display: flex; gap: 6px; margin-top: 10px; }
 .ck-ab { padding: 6px 14px; border-radius: 4px; font-size: 10px; font-weight: 700; cursor: pointer; border: 1px solid var(--bd); background: var(--bg3); color: var(--tx2); transition: all 0.2s ease !important; text-transform: uppercase; letter-spacing: 0.5px; font-family: inherit; }
-.theme-clean .ck-ab { border-radius: 10px; text-transform: none; letter-spacing: 0; }
 .ck-ab:hover { border-color: var(--accent); color: var(--accent); }
-.ck-ab.primary { background: var(--accent); color: #000; border-color: var(--accent); }
-.theme-clean .ck-ab.primary { color: var(--ink-on-accent, #00112b); }
+.ck-ab.primary { background: var(--accent); color: var(--ink-on-accent, var(--bg0)); border-color: var(--accent); }
 .ck-ab.primary:hover { opacity: 0.9; }
 .ck-ab.danger { border-color: rgba(239, 68, 68, 0.3); color: var(--status-absent); }
 .ck-ab.danger:hover { background: rgba(239, 68, 68, 0.1); }
@@ -68,7 +63,6 @@
 /* Week row */
 .week-row { display: flex; gap: 6px; }
 .week-day { flex: 1; text-align: center; padding: 10px 4px; border-radius: var(--r); background: var(--bg3); border: 1px solid var(--bd); transition: all 0.2s ease !important; }
-.theme-clean .week-day { border-radius: 12px; }
 .week-day.today { border-color: var(--accent); box-shadow: 0 0 8px var(--accent-glow); }
 .week-day-name { font-size: 9px; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; font-weight: 600; }
 .week-day-hrs { font-size: 16px; font-weight: 800; color: var(--tx); font-variant-numeric: tabular-nums; }
@@ -78,10 +72,67 @@
 .leave-bars { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
 @media (max-width: 600px) { .leave-bars { grid-template-columns: 1fr 1fr; } }
 .lb { background: var(--bg2); border: 1px solid var(--bd); border-radius: 6px; padding: 10px; text-align: center; transition: all 0.3s ease !important; }
-.theme-clean .lb { border-radius: 12px; }
 .lb:hover { border-color: var(--accent); }
 .lb-label { font-size: 8px; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px; font-weight: 700; }
 .lb-track { height: 5px; background: var(--bg0); border-radius: 3px; overflow: hidden; margin-bottom: 4px; }
 .lb-fill { height: 100%; border-radius: 3px; transition: width 0.5s ease; }
 .lb-nums { font-size: 14px; font-weight: 700; color: var(--tx); font-variant-numeric: tabular-nums; }
 .lb-nums span { font-size: 10px; color: var(--tx3); }
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+}

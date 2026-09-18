@@ -92,12 +92,17 @@ export class GuardianAuthRepository {
 
   async listCredentialsByPhone(
     phone: string,
-    tenantId: string,
+    tenantId?: string,
   ): Promise<GuardianCredential[]> {
-    const rows = await this.db.all<CredRow>(
-      `SELECT * FROM guardian_credentials WHERE phone = ? AND tenant_id = ?`,
-      [phone, tenantId],
-    );
+    const rows = tenantId
+      ? await this.db.all<CredRow>(
+          `SELECT * FROM guardian_credentials WHERE phone = ? AND tenant_id = ?`,
+          [phone, tenantId],
+        )
+      : await this.db.all<CredRow>(
+          `SELECT * FROM guardian_credentials WHERE phone = ?`,
+          [phone],
+        );
     return rows.map(mapCred);
   }
 

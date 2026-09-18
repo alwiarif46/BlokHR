@@ -1,13 +1,13 @@
 /**
  * modules/school_students/school_students.css
  * Students roster, filters, stats, detail panels, modal.
- * Colours: CSS custom properties only (4 themes).
+ * Colours: CSS custom properties only (2 themes).
  */
 
 .ss-wrap {
-  padding: 20px 24px 60px;
+  padding: 16px 24px 24px;
   height: 100%;
-  overflow-y: auto;
+  overflow-x: auto; overflow-y: auto;
 }
 
 .ss-toolbar {
@@ -55,16 +55,6 @@
   color: var(--tx-on-accent, #000);
   cursor: pointer;
   font-family: inherit;
-}
-
-.theme-neural .ss-btn,
-.theme-holodeck .ss-btn,
-.theme-clean .ss-btn {
-  color: var(--ink-on-accent, #00112b);
-}
-
-.theme-clean .ss-btn {
-  border-radius: 10px;
 }
 
 .ss-btn.ghost {
@@ -219,10 +209,6 @@
   padding: 24px;
 }
 
-.theme-chromium .ss-modal {
-  background: color-mix(in srgb, var(--bg0) 55%, transparent);
-}
-
 .ss-modal.open {
   display: flex;
 }
@@ -236,10 +222,6 @@
   border-radius: var(--r);
   padding: 20px 22px;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.12);
-}
-
-.theme-clean .ss-modal-box {
-  border-radius: 14px;
 }
 
 .ss-modal-title {
@@ -360,4 +342,68 @@
   .ss-wrap {
     padding: 14px 12px 48px;
   }
+}
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+}
+
+/* module-mobile-extra */
+
+@media (max-width: 768px) {
+  .ss-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
 }

@@ -9,9 +9,9 @@
 
 /* ── Full-page admin settings (not the slide-in overlay) ── */
 .set-wrap {
-  padding: 20px 24px 60px;
+  padding: 16px 24px 24px;
   height: 100%;
-  overflow-y: auto;
+  overflow-x: auto; overflow-y: auto;
   max-width: 900px;
   margin: 0 auto;
 }
@@ -34,14 +34,10 @@
   border: 1px solid var(--accent);
   border-radius: var(--r);
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
   cursor: pointer;
   font-family: inherit;
   transition: all 0.2s ease;
-}
-.theme-clean .set-save-all {
-  color: var(--ink-on-accent, #00112b);
-  border-radius: 10px;
 }
 .set-save-all:hover {
   transform: translateY(-1px);
@@ -56,10 +52,6 @@
   margin-bottom: 10px;
   overflow: hidden;
   transition: all 0.3s ease;
-}
-.theme-clean .set-section {
-  border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 .set-section:hover {
   border-color: var(--accent);
@@ -139,9 +131,6 @@
   outline: none;
   transition: all 0.25s ease;
 }
-.theme-clean .set-input {
-  border-radius: 10px;
-}
 .set-input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
@@ -176,9 +165,6 @@
   outline: none;
   cursor: pointer;
   transition: all 0.25s ease;
-}
-.theme-clean .set-select {
-  border-radius: 10px;
 }
 .set-select:focus {
   border-color: var(--accent);
@@ -249,9 +235,6 @@
   resize: vertical;
   transition: all 0.25s ease;
 }
-.theme-clean .set-textarea {
-  border-radius: 10px;
-}
 .set-textarea:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-dim);
@@ -316,16 +299,12 @@
   border: 1px solid var(--accent);
   border-radius: var(--r);
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
   cursor: pointer;
   font-family: inherit;
   transition: all 0.2s ease;
   display: block;
   width: 100%;
-}
-.theme-clean .set-section-save {
-  color: var(--ink-on-accent, #00112b);
-  border-radius: 10px;
 }
 .set-section-save:hover {
   opacity: 0.9;
@@ -357,9 +336,6 @@
   margin-bottom: 8px;
   position: relative;
   overflow: hidden;
-}
-.theme-clean .set-upload-zone {
-  border-radius: 12px;
 }
 .set-upload-zone:hover {
   border-color: var(--accent);
@@ -400,9 +376,6 @@
   cursor: pointer;
   transition: all 0.2s ease;
 }
-.theme-clean .set-checkbox-item {
-  border-radius: 8px;
-}
 .set-checkbox-item:hover {
   border-color: var(--accent);
 }
@@ -438,5 +411,63 @@
   .set-field-row {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }
 }

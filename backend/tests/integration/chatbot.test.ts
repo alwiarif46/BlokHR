@@ -20,6 +20,10 @@ describe('AI Agent / Chatbot Module', () => {
     return { 'X-User-Email': email };
   }
 
+  function webhookAuth() {
+    return { 'X-Chat-Webhook-Secret': 'test-action-secret-32chars-long!' };
+  }
+
   beforeEach(async () => {
     const setup = await createTestApp();
     app = setup.app;
@@ -304,6 +308,7 @@ describe('AI Agent / Chatbot Module', () => {
     it('handles Leena AI webhook with direct tool call', async () => {
       const res = await request(app)
         .post('/api/chat/external/leena-ai')
+        .set(webhookAuth())
         .send({
           user_email: EMAIL,
           intent: 'my_shift',
@@ -318,6 +323,7 @@ describe('AI Agent / Chatbot Module', () => {
     it('handles Darwinbox webhook', async () => {
       const res = await request(app)
         .post('/api/chat/external/darwinbox')
+        .set(webhookAuth())
         .send({
           email: EMAIL,
           action_type: 'my_department',
@@ -330,6 +336,7 @@ describe('AI Agent / Chatbot Module', () => {
     it('handles Copilot webhook', async () => {
       const res = await request(app)
         .post('/api/chat/external/copilot')
+        .set(webhookAuth())
         .send({
           from: { email: EMAIL },
           value: { action: 'upcoming_holidays' },
@@ -344,6 +351,7 @@ describe('AI Agent / Chatbot Module', () => {
 
       const res = await request(app)
         .post('/api/chat/external/phia')
+        .set(webhookAuth())
         .send({
           email: EMAIL,
           message: 'What is my shift?',
@@ -356,6 +364,7 @@ describe('AI Agent / Chatbot Module', () => {
     it('rejects unsupported provider', async () => {
       const res = await request(app)
         .post('/api/chat/external/unknown-provider')
+        .set(webhookAuth())
         .send({ email: EMAIL, message: 'hi' });
 
       expect(res.status).toBe(400);
@@ -365,14 +374,27 @@ describe('AI Agent / Chatbot Module', () => {
     it('rejects missing email in provider payload', async () => {
       const res = await request(app)
         .post('/api/chat/external/leena-ai')
+        .set(webhookAuth())
         .send({ intent: 'my_shift' });
 
       expect(res.status).toBe(400);
     });
 
+    it('rejects webhook without secret', async () => {
+      const res = await request(app)
+        .post('/api/chat/external/leena-ai')
+        .send({
+          user_email: EMAIL,
+          intent: 'my_shift',
+          params: {},
+        });
+      expect(res.status).toBe(401);
+    });
+
     it('blocks admin tool from non-admin external request', async () => {
       const res = await request(app)
         .post('/api/chat/external/leena-ai')
+        .set(webhookAuth())
         .send({
           user_email: EMAIL,
           intent: 'who_is_late_today',

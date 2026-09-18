@@ -1,15 +1,8 @@
 /**
  * shared/themes.js — Theme Application
  *
- * Responsibilities:
- *  - setTheme(name)          — applies theme class to body
- *  - applyColourOverrides()  — per-user colour overrides via CSS custom properties
- *  - applyBranding()         — tenant branding (logo, name, tagline)
- *  - syncThemeDots()         — updates header theme indicator dots
- *
- * Four themes: chromium, neural, holodeck, clean
- * All CSS custom properties are defined in shared.css; this module switches
- * between them by changing document.body.className.
+ * Two product themes only: light | dark.
+ * Legacy ids (chromium, neural, holodeck, clean) normalize via LEGACY_THEME_MAP.
  *
  * Colour-scheme presets (including BlokSchool / csp-blokschool from migration 045)
  * are loaded from the server — not hardcoded here.
@@ -17,18 +10,35 @@
 
 import { syncBrandLogos, setTenantLogoOverride } from './brand.js';
 
-const VALID_THEMES = ['chromium', 'neural', 'holodeck', 'clean'];
+const VALID_THEMES = ['light', 'dark'];
 const THEME_NAMES = {
-  chromium: 'Chromium Forge',
-  neural: 'Neural Circuit',
-  holodeck: 'Holodeck HUD',
-  clean: 'Electric Blue',
+  light: 'Light',
+  dark: 'Dark',
 };
 
-let _currentTheme = 'chromium';
+/** Prefer dark for old Chromium/Clean; light for Neural/Holodeck. */
+const LEGACY_THEME_MAP = {
+  chromium: 'dark',
+  clean: 'dark',
+  neural: 'light',
+  holodeck: 'light',
+};
+
+let _currentTheme = 'dark';
 
 /**
- * Get the currently active theme name.
+ * Map any stored / UI theme id to light | dark.
+ * @param {string|null|undefined} name
+ * @returns {'light'|'dark'}
+ */
+export function normalizeTheme(name) {
+  const raw = String(name || '').toLowerCase();
+  if (VALID_THEMES.indexOf(raw) >= 0) return /** @type {'light'|'dark'} */ (raw);
+  if (LEGACY_THEME_MAP[raw]) return /** @type {'light'|'dark'} */ (LEGACY_THEME_MAP[raw]);
+  return 'dark';
+}
+
+/**
  * @returns {string}
  */
 export function getTheme() {
@@ -38,12 +48,11 @@ export function getTheme() {
 /**
  * Apply a theme by switching body class.
  * Preserves non-theme body classes (e.g. guardian-body, on-login-screen).
- * Does NOT persist — call prefs.savePrefs({ theme }) or guardian profile for that.
  *
- * @param {string} name — one of: chromium, neural, holodeck, clean
+ * @param {string} name — light | dark (legacy ids accepted)
  */
 export function setTheme(name) {
-  const t = VALID_THEMES.indexOf(name) >= 0 ? name : 'chromium';
+  const t = normalizeTheme(name);
   _currentTheme = t;
   const keep = Array.from(document.body.classList).filter(function (c) {
     return c && !/^theme-/.test(c);
@@ -54,9 +63,6 @@ export function setTheme(name) {
 }
 
 /**
- * Apply per-user colour overrides from member_preferences.
- * Each colour is set as a CSS custom property on :root.
- *
  * @param {{ color_accent?: string, color_status_in?: string,
  *           color_status_break?: string, color_status_absent?: string,
  *           color_bg0?: string, color_tx?: string }} prefs
@@ -84,9 +90,6 @@ export function applyColourOverrides(prefs) {
   });
 }
 
-/**
- * Clear all per-user colour overrides (reset to theme defaults).
- */
 export function clearColourOverrides() {
   const root = document.documentElement;
   [
@@ -104,8 +107,6 @@ export function clearColourOverrides() {
 }
 
 /**
- * Apply background image settings from member preferences.
- *
  * @param {{ bg_image_url?: string, bg_opacity?: number,
  *           bg_blur?: number, bg_darken?: number }} prefs
  */
@@ -141,8 +142,6 @@ export function applyBackgroundImage(prefs) {
 }
 
 /**
- * Apply tenant-level branding (logo, platform name, tagline).
- *
  * @param {{ platform_name?: string, logo_data_url?: string,
  *           login_tagline?: string }} branding
  */
@@ -201,9 +200,6 @@ export function applyBranding(branding) {
   }
 }
 
-/**
- * Sync header theme indicator dots to the current theme.
- */
 export function syncThemeDots() {
   document.querySelectorAll('.ht-btn').forEach(function (btn) {
     btn.classList.toggle('active', btn.dataset.theme === _currentTheme);
@@ -218,7 +214,7 @@ export function syncThemeDots() {
 }
 
 /**
- * @returns {string[]} List of valid theme names
+ * @returns {string[]}
  */
 export function getValidThemes() {
   return VALID_THEMES.slice();
@@ -226,8 +222,9 @@ export function getValidThemes() {
 
 /**
  * @param {string} name
- * @returns {string} Human-readable theme label
+ * @returns {string}
  */
 export function getThemeLabel(name) {
-  return THEME_NAMES[name] || name;
+  const n = normalizeTheme(name);
+  return THEME_NAMES[n] || name;
 }

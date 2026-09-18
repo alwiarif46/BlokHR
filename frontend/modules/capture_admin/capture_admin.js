@@ -30,11 +30,10 @@ function _esc(s) {
   return d.innerHTML;
 }
 
-function _empty(text, icon) {
+function _empty(text) {
   return (
-    '<div class="ca-empty"><div class="ca-empty-icon">' +
-    (icon || '&#128241;') +
-    '</div><div class="ca-empty-text">' +
+    '<div class="ca-empty"><div class="ca-empty-mark" aria-hidden="true"></div>' +
+    '<div class="ca-empty-text">' +
     _esc(text) +
     '</div></div>'
   );
@@ -65,7 +64,7 @@ export function renderCaptureAdminPage(container) {
   container.innerHTML =
     '<div class="ca-wrap" id="caWrap">' +
     '<div class="ca-toolbar">' +
-    '<div class="ca-title"><span>&#128241;</span> Capture Admin</div>' +
+    '<div class="ca-title">Capture Admin</div>' +
     '<div class="ca-spacer"></div>' +
     '<button type="button" class="ca-btn ghost" data-action="refresh">Refresh</button>' +
     '</div>' +
@@ -230,7 +229,7 @@ function caRender() {
 function _renderEnrolments() {
   let tableHtml;
   if (!_enrolments.length) {
-    tableHtml = _empty('No enrolments yet. Enrol a QR card below.', '&#128196;');
+    tableHtml = _empty('No enrolments yet. Enrol a QR card below.');
   } else {
     tableHtml =
       '<div class="ca-table-wrap"><table class="ca-table"><thead><tr>' +

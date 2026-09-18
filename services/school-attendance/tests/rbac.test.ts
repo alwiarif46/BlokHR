@@ -90,14 +90,19 @@ describe('school-attendance P12-03 role guard', () => {
     expect(res.body.error).toBe('no_policy');
   });
 
-  it('device capture allowed with internal secret only', async () => {
-    const res = await request(app)
+  it('device capture allowed without staff principal', async () => {
+    const withSecret = await request(app)
       .post('/api/attendance/t1/capture')
       .set(internalOnly())
       .send({});
-    expect(res.status).not.toBe(401);
-    expect(res.body?.error).not.toBe('role_denied');
-    expect(res.body?.error).not.toBe('no_policy');
+    expect(withSecret.status).not.toBe(401);
+    expect(withSecret.body?.error).not.toBe('role_denied');
+    expect(withSecret.body?.error).not.toBe('no_policy');
+
+    const publicDevice = await request(app).post('/api/attendance/t1/capture').send({});
+    expect(publicDevice.status).not.toBe(401);
+    expect(publicDevice.body?.error).not.toBe('role_denied');
+    expect(publicDevice.body?.error).not.toBe('no_policy');
   });
 
   it('guardian reported-absences still works', async () => {

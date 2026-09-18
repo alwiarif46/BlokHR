@@ -370,3 +370,13 @@ export async function seedMember(
     ],
   );
 }
+
+export async function seedAdmin(
+  db: DatabaseEngine,
+  email = 'admin@shaavir.com',
+): Promise<void> {
+  await db.run('INSERT OR IGNORE INTO admins (tenant_id, email) VALUES (?, ?)', [
+    'default',
+    email.toLowerCase().trim(),
+  ]);
+}

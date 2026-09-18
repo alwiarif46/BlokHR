@@ -16,39 +16,6 @@
   --gp-nav-tx-active: var(--accent);
 }
 
-/* Neural: white content cards + navy sidebar (matches staff Neural) */
-.theme-neural.guardian-body {
-  --gp-panel-bg: var(--surface);
-  --gp-panel-border: var(--surface-border);
-  --gp-panel-tx: #14213d;
-  --gp-panel-tx-muted: #5c6578;
-  --gp-nav-bg: var(--sidebar-bg);
-  --gp-nav-tx: var(--sidebar-tx-muted);
-  --gp-nav-tx-active: #ffffff;
-}
-
-/* Holodeck: light surfaces → black/dark copy */
-.theme-holodeck.guardian-body {
-  --gp-panel-bg: var(--surface);
-  --gp-panel-border: var(--surface-border);
-  --gp-panel-tx: #18162b;
-  --gp-panel-tx-muted: #18162b;
-  --gp-nav-bg: var(--sidebar-bg);
-  --gp-nav-tx: #6d6b85;
-  --gp-nav-tx-active: var(--accent);
-}
-
-/* Electric Blue: dark surfaces → white copy */
-.theme-clean.guardian-body {
-  --gp-panel-bg: var(--bg1);
-  --gp-panel-border: var(--bd2);
-  --gp-panel-tx: #ffffff;
-  --gp-panel-tx-muted: #ffffff;
-  --gp-nav-bg: var(--sidebar-bg);
-  --gp-nav-tx: rgba(255, 255, 255, 0.75);
-  --gp-nav-tx-active: #ffffff;
-}
-
 /* Author display rules must not resurrect [hidden] chrome (esp. desktop nav). */
 #gpApp[hidden],
 #gpAuthMain[hidden],
@@ -751,5 +718,63 @@ button.gp-chip {
   .gp-themes .ht-btn {
     width: 12px;
     height: 12px;
+  }
+}
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
   }
 }

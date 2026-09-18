@@ -65,6 +65,20 @@ describe('Multi-Provider Auth Module', () => {
       expect(res.body.email).toBe('alice@shaavir.com');
       expect(res.body.sessionToken).toBeTruthy();
       expect(res.body.vertical).toBe('hr');
+      expect(String(res.headers['set-cookie'] || '')).toMatch(/blok_session=/);
+    });
+
+    it('logout clears the session cookie', async () => {
+      const login = await request(app)
+        .post('/api/auth/local')
+        .send({ email: 'alice@shaavir.com', password: 'securepass123' });
+      const token = login.body.sessionToken as string;
+      const res = await request(app)
+        .post('/api/auth/logout')
+        .set('Authorization', `Bearer ${token}`);
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(String(res.headers['set-cookie'] || '')).toMatch(/Max-Age=0/);
     });
 
     it('exposes school vertical on login after school setup', async () => {
@@ -349,26 +363,34 @@ describe('Multi-Provider Auth Module', () => {
   // ── Microsoft MSAL ──
 
   describe('POST /api/auth/teams-sso (multi-auth)', () => {
-    it('decodes a valid SSO token', async () => {
+    it('rejects unsigned SSO tokens', async () => {
       const payload = { preferred_username: 'alice@shaavir.com', name: 'Alice' };
       const token = `header.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`;
       const res = await request(app).post('/api/auth/teams-sso')
         .send({ ssoToken: token });
-      expect(res.status).toBe(200);
-      expect(res.body.email).toBe('alice@shaavir.com');
+      expect(res.status).toBe(401);
     });
   });
 
   // ── Google OAuth ──
 
   describe('POST /api/auth/google', () => {
-    it('decodes a valid Google ID token', async () => {
+    it('rejects unsigned Google ID tokens', async () => {
+      await db.run(
+        "UPDATE branding SET google_oauth_client_id = 'google-client' WHERE tenant_id = 'default'",
+      );
       const payload = { email: 'alice@shaavir.com', name: 'Alice' };
       const token = `header.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`;
       const res = await request(app).post('/api/auth/google')
         .send({ idToken: token });
-      expect(res.status).toBe(200);
-      expect(res.body.email).toBe('alice@shaavir.com');
+      expect(res.status).toBe(401);
+    });
+
+    it('rejects Google Sign-In when not configured', async () => {
+      const payload = { email: 'alice@shaavir.com', name: 'Alice' };
+      const token = `header.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.sig`;
+      const res = await request(app).post('/api/auth/google').send({ idToken: token });
+      expect(res.status).toBe(401);
     });
   });
 
@@ -390,13 +412,15 @@ describe('Multi-Provider Auth Module', () => {
       expect(res.status).toBe(400);
     });
 
-    it('decodes OIDC callback token', async () => {
+    it('rejects unsigned OIDC callback tokens', async () => {
+      await db.run(
+        "UPDATE branding SET oidc_enabled = 1, oidc_client_id = 'oidc-id', oidc_issuer_url = 'https://idp.example.com' WHERE tenant_id = 'default'",
+      );
       const payload = { email: 'alice@shaavir.com', name: 'Alice', sub: 'user-123' };
       const token = `h.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.s`;
       const res = await request(app).post('/api/auth/oidc/callback')
         .send({ idToken: token });
-      expect(res.status).toBe(200);
-      expect(res.body.email).toBe('alice@shaavir.com');
+      expect(res.status).toBe(401);
     });
   });
 
@@ -412,17 +436,17 @@ describe('Multi-Provider Auth Module', () => {
       expect(res.body.loginUrl).toContain('https://idp.corp.com/saml');
     });
 
-    it('processes SAML callback assertion', async () => {
+    it('rejects client-supplied SAML identity', async () => {
       const res = await request(app).post('/api/auth/saml/callback')
         .send({ email: 'alice@shaavir.com', name: 'Alice' });
-      expect(res.status).toBe(200);
-      expect(res.body.email).toBe('alice@shaavir.com');
+      expect(res.status).toBe(401);
+      expect(res.body.error).toMatch(/SAML assertion/i);
     });
 
-    it('rejects callback without email', async () => {
+    it('rejects callback without a signed assertion', async () => {
       const res = await request(app).post('/api/auth/saml/callback')
         .send({ name: 'Alice' });
-      expect(res.status).toBe(400);
+      expect(res.status).toBe(401);
     });
   });
 
@@ -452,6 +476,13 @@ describe('Multi-Provider Auth Module', () => {
         .send({ email: 'alice@shaavir.com', password: 'pass' });
       expect(res.status).toBe(401);
       expect(res.body.error).toMatch(/not configured/);
+    });
+
+    it('rejects LDAP when the member has no local password hash', async () => {
+      const res = await request(app).post('/api/auth/ldap')
+        .send({ email: 'admin@shaavir.com', password: 'any-password' });
+      expect(res.status).toBe(401);
+      expect(res.body.error).toMatch(/[Ii]nvalid/);
     });
   });
 });

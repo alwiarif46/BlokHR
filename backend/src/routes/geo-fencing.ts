@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { isTenantAdmin } from '../tenant/admin-access';
 import { AppError, asyncHandler } from '../app';
 import { ClockRepository } from '../repositories/clock-repository';
 import { ClockService } from '../services/clock-service';
@@ -25,18 +26,35 @@ export function createGeoFencingRouter(db: DatabaseEngine, logger: Logger): Rout
   const clockService = new ClockService(clockRepo, logger);
   const service = new GeoFencingService(repo, clockService, logger);
 
+  async function requireCaller(req: Request): Promise<string> {
+    const email = (req.identity?.email ?? '').toLowerCase().trim();
+    if (!email) throw new AppError('Authentication required', 401);
+    return email;
+  }
+
+  async function requireAdmin(req: Request): Promise<string> {
+    const email = await requireCaller(req);
+    if (!(await isTenantAdmin(db, email))) {
+      throw new AppError('Admin access required', 403);
+    }
+    return email;
+  }
+
   router.post(
     '/clock/geo',
     asyncHandler(async (req: Request, res: Response) => {
+      const caller = await requireCaller(req);
       const body = req.body as Record<string, unknown>;
-      const email = ((body.email as string) ?? '').toLowerCase().trim();
+      const email = ((body.email as string) ?? caller).toLowerCase().trim();
+      if (email !== caller && !(await isTenantAdmin(db, caller))) {
+        throw new AppError('Admin access required to clock another employee', 403);
+      }
       const name = ((body.name as string) ?? email).trim();
       const action = (body.action as string) ?? '';
       const latitude = body.latitude as number | undefined;
       const longitude = body.longitude as number | undefined;
       const accuracyMeters = body.accuracyMeters as number | undefined;
 
-      if (!email) throw new AppError('email is required', 400);
       if (!action) throw new AppError('action is required (in, out, break, back)', 400);
       if (latitude === undefined || longitude === undefined) {
         throw new AppError('latitude and longitude are required', 400);
@@ -72,6 +90,7 @@ export function createGeoFencingRouter(db: DatabaseEngine, logger: Logger): Rout
   router.get(
     '/geo/zones',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireCaller(req);
       const includeInactive = req.query.includeInactive === 'true';
       const zones = await service.getZones(includeInactive);
       res.json({ zones });
@@ -81,6 +100,7 @@ export function createGeoFencingRouter(db: DatabaseEngine, logger: Logger): Rout
   router.post(
     '/geo/zones',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req);
       const body = req.body as Record<string, unknown>;
       const name = (body.name as string) ?? '';
       const latitude = body.latitude as number | undefined;
@@ -105,6 +125,7 @@ export function createGeoFencingRouter(db: DatabaseEngine, logger: Logger): Rout
   router.put(
     '/geo/zones/:id',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req);
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) throw new AppError('Invalid zone ID', 400);
       await service.updateZone(id, req.body as Record<string, unknown>);
@@ -115,6 +136,7 @@ export function createGeoFencingRouter(db: DatabaseEngine, logger: Logger): Rout
   router.delete(
     '/geo/zones/:id',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req);
       const id = parseInt(req.params.id, 10);
       if (isNaN(id)) throw new AppError('Invalid zone ID', 400);
       await service.deleteZone(id);
@@ -124,7 +146,8 @@ export function createGeoFencingRouter(db: DatabaseEngine, logger: Logger): Rout
 
   router.get(
     '/geo/settings',
-    asyncHandler(async (_req: Request, res: Response) => {
+    asyncHandler(async (req: Request, res: Response) => {
+      await requireCaller(req);
       const settings = await service.getSettings();
       res.json(settings);
     }),
@@ -133,6 +156,7 @@ export function createGeoFencingRouter(db: DatabaseEngine, logger: Logger): Rout
   router.put(
     '/geo/settings',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req);
       const body = req.body as Record<string, unknown>;
       const enabled = body.enabled === true || body.enabled === 1;
       const strict = body.strict === true || body.strict === 1;
@@ -144,8 +168,14 @@ export function createGeoFencingRouter(db: DatabaseEngine, logger: Logger): Rout
   router.get(
     '/geo/logs',
     asyncHandler(async (req: Request, res: Response) => {
+      const caller = await requireCaller(req);
+      const admin = await isTenantAdmin(db, caller);
+      const requested = (req.query.email as string | undefined)?.toLowerCase().trim();
+      if (requested && requested !== caller && !admin) {
+        throw new AppError('Forbidden', 403);
+      }
       const logs = await service.getLogs({
-        email: (req.query.email as string) || undefined,
+        email: admin ? requested || undefined : caller,
         startDate: (req.query.startDate as string) || undefined,
         endDate: (req.query.endDate as string) || undefined,
         limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,

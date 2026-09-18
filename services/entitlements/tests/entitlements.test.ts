@@ -132,6 +132,7 @@ describe('Entitlements service', () => {
       'school_attendance',
       'school_academics',
       'school_engagement',
+      'school_surveys',
     ]);
     expect(res.body.modules).not.toContain('school_biometrics');
     expect(res.body.modules).not.toContain('attendance');
@@ -152,6 +153,15 @@ describe('Entitlements service', () => {
       .post('/api/entitlements/school-t1/check-module')
       .send({ moduleId: 'attendance' });
     expect(hrAttendanceDenied.status).toBe(403);
+  });
+
+  it('rejects path tenant that does not match X-Blok-Tenant', async () => {
+    const res = await request(app)
+      .post('/api/entitlements/school-t1/trial')
+      .set('X-Blok-Tenant', 'default')
+      .send({});
+    expect(res.status).toBe(403);
+    expect(res.body.error).toBe('tenant_mismatch');
   });
 
   it('HR trial unchanged when vertical omitted', async () => {

@@ -143,8 +143,29 @@ export interface AppConfig {
   razorpayWebhookSecret: string | undefined;
 }
 
+const DEV_LICENSE_SIGNING_SECRET = 'dev-license-signing-secret-change-me';
+
 /** Builds and validates the full application config. Throws on missing required vars. */
 export function loadConfig(): AppConfig {
+  const nodeEnv = envDefault('NODE_ENV', 'production');
+  const actionLinkSecret = env('ACTION_LINK_SECRET');
+  const licenseSigningSecret = envDefault(
+    'LICENSE_SIGNING_SECRET',
+    DEV_LICENSE_SIGNING_SECRET,
+  );
+  const corsOrigins = envDefault('CORS_ORIGINS', nodeEnv === 'production' ? '' : '*');
+  if (nodeEnv === 'production') {
+    if (!actionLinkSecret) {
+      throw new Error('FATAL: ACTION_LINK_SECRET is required in production');
+    }
+    if (licenseSigningSecret === DEV_LICENSE_SIGNING_SECRET) {
+      throw new Error('FATAL: LICENSE_SIGNING_SECRET is required in production');
+    }
+    if (!corsOrigins || corsOrigins === '*') {
+      throw new Error('FATAL: CORS_ORIGINS must be an explicit allowlist in production');
+    }
+  }
+
   const dbEngineRaw = envDefault('DB_ENGINE', 'sqlite');
   const validDbEngines = new Set<string>(['sqlite', 'postgres']);
   if (!validDbEngines.has(dbEngineRaw)) {
@@ -168,9 +189,9 @@ export function loadConfig(): AppConfig {
 
   return {
     port: envInt('PORT', 3000),
-    nodeEnv: envDefault('NODE_ENV', 'production'),
+    nodeEnv,
     logLevel: envDefault('LOG_LEVEL', 'info'),
-    corsOrigins: envDefault('CORS_ORIGINS', '*'),
+    corsOrigins,
 
     dbEngine,
     dbPath: envDefault('DB_PATH', path.join('/home', 'data', 'shaavir.db')),
@@ -207,11 +228,10 @@ export function loadConfig(): AppConfig {
     azureFaceKey: env('AZURE_FACE_KEY'),
 
     serverBaseUrl: env('SERVER_BASE_URL'),
-    actionLinkSecret: env('ACTION_LINK_SECRET'),
+    actionLinkSecret,
     calendarTokenKey: envDefault(
       'CALENDAR_TOKEN_KEY',
-      env('ACTION_LINK_SECRET') ??
-        envDefault('LICENSE_SIGNING_SECRET', 'dev-license-signing-secret-change-me'),
+      actionLinkSecret ?? licenseSigningSecret,
     ),
 
     zoomAccountId: env('ZOOM_ACCOUNT_ID'),
@@ -238,10 +258,7 @@ export function loadConfig(): AppConfig {
       }
       return raw as 'cloud' | 'self_hosted';
     })(),
-    licenseSigningSecret: envDefault(
-      'LICENSE_SIGNING_SECRET',
-      'dev-license-signing-secret-change-me',
-    ),
+    licenseSigningSecret,
     entitlementsDbPath: envDefault('ENTITLEMENTS_DB_PATH', './entitlements.db'),
     directoryDbPath: envDefault('DIRECTORY_DB_PATH', './directory.db'),
     learningDbPath: envDefault('LEARNING_DB_PATH', './learning.db'),

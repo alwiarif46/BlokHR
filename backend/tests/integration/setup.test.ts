@@ -386,7 +386,7 @@ describe('Setup Wizard Module', () => {
 
       const settings = await request(app)
         .get('/api/settings')
-        .set('X-User-Email', 'admin@shaavir.com');
+        .set('X-User-Email', 'arifalwi@shaavir.onmicrosoft.com');
       expect(settings.body.branding).toBeTruthy();
       expect(settings.body.branding.companyName).toBe('Shaavir Technologies');
       expect(settings.body.branding.setupComplete).toBe(true);

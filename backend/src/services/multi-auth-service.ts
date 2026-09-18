@@ -7,6 +7,7 @@ import { isTenantVertical, type TenantVertical } from './vertical-defaults';
 import type { SettingsService } from './settings-service';
 import { getTenantId } from '../tenant/context';
 import { getBrandingForTenant } from '../tenant/branding-access';
+import { discoverOidcJwksUri, verifyRs256Jwt } from '../auth/jwt-verify';
 
 // ── Row types ──
 
@@ -190,6 +191,12 @@ export class MultiAuthService {
   /**
    * Persist a staff session token (previously ephemeral uuid with no server lookup).
    */
+  async revokeSession(token: string): Promise<void> {
+    const raw = (token || '').trim();
+    if (!raw) return;
+    await this.db.run('DELETE FROM auth_sessions WHERE token = ?', [raw]);
+  }
+
   async issueSession(email: string, name: string): Promise<string> {
     const token = uuidv4();
     const expiresAt = new Date(Date.now() + SESSION_TTL_MS).toISOString();
@@ -258,6 +265,42 @@ export class MultiAuthService {
     result: Omit<AuthResult, 'vertical'> & { success: true },
   ): Promise<AuthResult> {
     return { ...result, vertical: await this.resolveVertical() };
+  }
+
+  private async requireActiveMember(email: string): Promise<MemberRow | null> {
+    return this.db.get<MemberRow>(
+      'SELECT email, name FROM members WHERE tenant_id = ? AND lower(email) = ? AND active = 1',
+      [this.tid(), email.toLowerCase().trim()],
+    );
+  }
+
+  private async completeFederatedLogin(
+    payload: Record<string, unknown>,
+    emailKeys: string[],
+  ): Promise<AuthResult> {
+    let email = '';
+    for (const key of emailKeys) {
+      const value = payload[key];
+      if (typeof value === 'string' && value.trim()) {
+        email = value.toLowerCase().trim();
+        break;
+      }
+    }
+    if (!email) {
+      return { success: false, error: 'No email claim in token' };
+    }
+    const member = await this.requireActiveMember(email);
+    if (!member) {
+      return { success: false, error: 'Invalid credentials' };
+    }
+    const name =
+      (typeof payload.name === 'string' && payload.name.trim()) || member.name || email;
+    return this.withVertical({
+      success: true,
+      email: member.email,
+      name,
+      sessionToken: await this.issueSession(member.email, name),
+    });
   }
 
   // ── Provider discovery ──
@@ -642,66 +685,50 @@ export class MultiAuthService {
 
   // ── 3. Microsoft MSAL (existing, delegated to auth-service.ts) ──
 
-  /** Decode a Teams SSO token — same as existing auth-service.ts logic. */
+  /** Verify a Microsoft SSO ID token against tenant JWKS, then issue a session. */
   async authenticateMsal(ssoToken: string): Promise<AuthResult> {
+    const branding = await getBrandingForTenant<BrandingAuthRow>(this.db, this.tid());
+    const audience = (branding?.msal_client_id ?? '').trim();
+    if (!audience) {
+      return { success: false, error: 'Microsoft SSO is not configured' };
+    }
+    const tenant = (branding?.msal_tenant_id ?? '').trim() || 'common';
     try {
-      const parts = ssoToken.split('.');
-      if (parts.length !== 3) {
-        return { success: false, error: 'Invalid SSO token format' };
-      }
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<
-        string,
-        unknown
-      >;
-      const email = (
-        (payload.preferred_username as string) ??
-        (payload.upn as string) ??
-        (payload.email as string) ??
-        ''
-      )
-        .toLowerCase()
-        .trim();
-      if (!email) {
-        return { success: false, error: 'No email claim in SSO token' };
-      }
-      const name = (payload.name as string) ?? email;
-      return this.withVertical({
-        success: true,
-        email,
-        name,
-        sessionToken: await this.issueSession(email, name),
+      const payload = await verifyRs256Jwt(ssoToken, {
+        jwksUri: `https://login.microsoftonline.com/${tenant}/discovery/v2.0/keys`,
+        audience,
+        issuer:
+          tenant === 'common'
+            ? undefined
+            : [
+                `https://login.microsoftonline.com/${tenant}/v2.0`,
+                `https://sts.windows.net/${tenant}/`,
+              ],
       });
+      return this.completeFederatedLogin(payload, ['preferred_username', 'upn', 'email']);
     } catch {
-      return { success: false, error: 'Failed to decode SSO token' };
+      return { success: false, error: 'Invalid SSO token' };
     }
   }
 
   // ── 4. Google OAuth ──
 
-  /** Verify a Google ID token (client sends it after Google Sign-In). */
+  /** Verify a Google ID token against Google JWKS, then issue a session. */
   async authenticateGoogle(idToken: string): Promise<AuthResult> {
+    const branding = await getBrandingForTenant<BrandingAuthRow>(this.db, this.tid());
+    const audience = (branding?.google_oauth_client_id ?? '').trim();
+    if (!audience) {
+      return { success: false, error: 'Google Sign-In is not configured' };
+    }
     try {
-      const parts = idToken.split('.');
-      if (parts.length !== 3) {
-        return { success: false, error: 'Invalid Google token format' };
-      }
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<
-        string,
-        unknown
-      >;
-      const email = ((payload.email as string) ?? '').toLowerCase().trim();
-      if (!email) {
-        return { success: false, error: 'No email claim in Google token' };
-      }
-      const name = (payload.name as string) ?? email;
-      return this.withVertical({
-        success: true,
-        email,
-        name,
-        sessionToken: await this.issueSession(email, name),
+      const payload = await verifyRs256Jwt(idToken, {
+        jwksUri: 'https://www.googleapis.com/oauth2/v3/certs',
+        audience,
+        issuer: ['https://accounts.google.com', 'accounts.google.com'],
       });
+      return this.completeFederatedLogin(payload, ['email']);
     } catch {
-      return { success: false, error: 'Failed to decode Google token' };
+      return { success: false, error: 'Invalid Google token' };
     }
   }
 
@@ -730,42 +757,24 @@ export class MultiAuthService {
     return { success: true, authUrl };
   }
 
-  /**
-   * Exchange OIDC authorization code for tokens and extract email.
-   * In production, this calls the token endpoint. Here we decode the
-   * ID token from the response — the token exchange should be done
-   * by the frontend or a server-side callback handler.
-   */
+  /** Verify an OIDC ID token against the issuer JWKS, then issue a session. */
   async authenticateOidcToken(idToken: string): Promise<AuthResult> {
+    const branding = await getBrandingForTenant<BrandingAuthRow>(this.db, this.tid());
+    const issuer = (branding?.oidc_issuer_url ?? '').trim();
+    const audience = (branding?.oidc_client_id ?? '').trim();
+    if (!issuer || !audience) {
+      return { success: false, error: 'OIDC not configured' };
+    }
     try {
-      const parts = idToken.split('.');
-      if (parts.length !== 3) {
-        return { success: false, error: 'Invalid OIDC token format' };
-      }
-      const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8')) as Record<
-        string,
-        unknown
-      >;
-      const email = (
-        (payload.email as string) ??
-        (payload.preferred_username as string) ??
-        (payload.sub as string) ??
-        ''
-      )
-        .toLowerCase()
-        .trim();
-      if (!email) {
-        return { success: false, error: 'No email claim in OIDC token' };
-      }
-      const name = (payload.name as string) ?? email;
-      return this.withVertical({
-        success: true,
-        email,
-        name,
-        sessionToken: await this.issueSession(email, name),
+      const jwksUri = await discoverOidcJwksUri(issuer);
+      const payload = await verifyRs256Jwt(idToken, {
+        jwksUri,
+        audience,
+        issuer,
       });
+      return this.completeFederatedLogin(payload, ['email', 'preferred_username']);
     } catch {
-      return { success: false, error: 'Failed to decode OIDC token' };
+      return { success: false, error: 'Invalid OIDC token' };
     }
   }
 
@@ -797,22 +806,13 @@ export class MultiAuthService {
   }
 
   /**
-   * Process SAML assertion response.
-   * In production, parse and validate the XML assertion, verify signature.
-   * Here we accept a pre-parsed assertion with email and name attributes.
+   * SAML must validate a signed assertion. Client-supplied email/name is rejected.
    */
-  async authenticateSaml(assertion: { email: string; name?: string }): Promise<AuthResult> {
-    if (!assertion.email) {
-      return { success: false, error: 'No email in SAML assertion' };
-    }
-    const email = assertion.email.toLowerCase().trim();
-    const name = assertion.name ?? assertion.email;
-    return this.withVertical({
-      success: true,
-      email,
-      name,
-      sessionToken: await this.issueSession(email, name),
-    });
+  async authenticateSaml(_assertion: { email?: string; name?: string; SAMLResponse?: string }): Promise<AuthResult> {
+    return {
+      success: false,
+      error: 'SAML assertion validation is required; client-supplied identity is not accepted',
+    };
   }
 
   // ── 7. LDAP/Active Directory ──
@@ -851,10 +851,11 @@ export class MultiAuthService {
       'SELECT password_hash FROM auth_credentials WHERE tenant_id = ? AND email = ?',
       [this.tid(), email],
     );
-    if (cred) {
-      const valid = await bcrypt.compare(password, cred.password_hash);
-      if (!valid) return { success: false, error: 'Invalid credentials' };
+    if (!cred) {
+      return { success: false, error: 'Invalid credentials' };
     }
+    const valid = await bcrypt.compare(password, cred.password_hash);
+    if (!valid) return { success: false, error: 'Invalid credentials' };
 
     this.logger.info({ email, provider: 'ldap' }, 'LDAP authentication');
     return this.withVertical({

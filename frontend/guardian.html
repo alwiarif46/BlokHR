@@ -12,7 +12,7 @@
     <link rel="stylesheet" href="/shared/shared.css" />
     <link rel="stylesheet" href="/modules/guardian_portal/guardian_portal.css" />
   </head>
-  <body class="theme-chromium guardian-body">
+  <body class="theme-dark guardian-body">
     <div id="toasts" class="toasts" aria-live="polite"></div>
     <div id="guardianRoot"></div>
     <script type="module">
@@ -22,7 +22,7 @@
       import { bootGuardianPortal } from '/modules/guardian_portal/guardian_portal.js';
 
       initApi({});
-      setTheme('chromium');
+      setTheme('dark');
       applyBrand('school');
       bootGuardianPortal(document.getElementById('guardianRoot'));
     </script>

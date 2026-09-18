@@ -96,7 +96,10 @@ export async function createSchoolIdentityApp(
     app.use('/api/identity', bindTenantDb);
   }
 
-  app.use('/api/identity/guardian-auth', createGuardianAuthRouter(guardianAuth));
+  app.use(
+    '/api/identity/guardian-auth',
+    createGuardianAuthRouter(guardianAuth, internalSecret),
+  );
   app.use(
     '/api/identity',
     createIdentityRouter(service, { internalSecret, guardianAuth }),

@@ -2,7 +2,7 @@
  * shared/shared.css — Global CSS
  *
  * Contains:
- *  - CSS custom properties (4 themes)
+ *  - CSS custom properties (2 themes: light + dark)
  *  - Reset & base
  *  - Screen transitions
  *  - Boot splash, Login, Change Password
@@ -54,17 +54,18 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   THEME: CHROMIUM
+   THEME: DARK  (Design.html dark — mint on near-black)
    ══════════════════════════════════════════════════════════════ */
-.theme-chromium {
-  --bg0: #0c0d0f;
+.theme-dark {
+  --bg0: #0a0b0d;
   --bg1: #121416;
-  --bg2: #1a1c20;
+  --bg2: #16181b;
   --bg3: #222529;
   --bg4: #2c3035;
   --accent: #00e59a;
-  --accent-dim: rgba(0, 229, 154, 0.06);
+  --accent-dim: rgba(0, 229, 154, 0.10);
   --accent-glow: rgba(0, 229, 154, 0.25);
+  --ink-on-accent: #0c0d0f;
   --tx: #edf0f5;
   --tx2: #a8b0be;
   --tx3: #738090;
@@ -73,19 +74,34 @@ body {
   --bd2: rgba(255, 255, 255, 0.14);
   --metal1: #3a3d42;
   --metal2: #52565c;
-  --r: 6px;
+  --r: 12px;
+  --status-in: #4f86ff;
+  --status-break: #ffd166;
+  --status-out: #738090;
+  --status-absent: #ff6b9d;
+  --sidebar-bg: #121416;
+  --sidebar-tx: #edf0f5;
+  --sidebar-tx-muted: #738090;
+  --sidebar-active-bg: rgba(0, 229, 154, 0.10);
+  --header-bg: #121416;
+  --header-border: rgba(255, 255, 255, 0.09);
+  --surface: #16181b;
+  --surface-border: rgba(255, 255, 255, 0.12);
+  --login-page-bg: #0a0b0d;
+  --login-card-bg: #121416;
+  --login-card-border: rgba(255, 255, 255, 0.12);
   font-family: 'Plus Jakarta Sans', sans-serif;
   background: var(--bg0);
   color: var(--tx);
 }
-.theme-chromium .df {
+.theme-dark .df {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
 }
-.theme-chromium .mf {
+.theme-dark .mf {
   font-family: 'JetBrains Mono', monospace;
 }
-.theme-chromium::before {
+.theme-dark::before {
   content: '';
   position: fixed;
   inset: 0;
@@ -102,24 +118,24 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   THEME: NEURAL  (Navy Rail — light, multi-color)
-   Cool light shell, dark navy sidebar, blue accent.
+   THEME: LIGHT  (Design.html light — purple on soft lavender)
    ══════════════════════════════════════════════════════════════ */
-.theme-neural {
-  --bg0: #dbe0ea;
-  --bg1: #16224a;
+.theme-light {
+  --bg0: #fbfaff;
+  --bg1: #14213d;
   --bg2: #ffffff;
-  --bg3: #d5dbe8;
-  --bg4: #ced4e0;
-  --accent: #2f6df6;
-  --accent-dim: rgba(47, 109, 246, 0.08);
-  --accent-glow: rgba(47, 109, 246, 0.18);
+  --bg3: #efe9ff;
+  --bg4: #e6e1f7;
+  --accent: #6d3aed;
+  --accent-dim: rgba(109, 58, 237, 0.08);
+  --accent-glow: rgba(109, 58, 237, 0.20);
+  --ink-on-accent: #ffffff;
   --tx: #14213d;
-  --tx2: #7b8398;
-  --tx3: #9aa3b6;
+  --tx2: #4d5875;
+  --tx3: #5c6780;
   --tx4: #6d7cab;
   --bd: rgba(20, 33, 61, 0.09);
-  --bd2: rgba(20, 33, 61, 0.14);
+  --bd2: #ddd6f5;
   --metal1: #b5bed6;
   --metal2: #ced4e0;
   --r: 12px;
@@ -127,143 +143,29 @@ body {
   --status-break: #f5a524;
   --status-out: #9aa3b6;
   --status-absent: #e8467c;
-  --sidebar-bg: #16224a;
-  --sidebar-tx: #c9d3ee;
-  --sidebar-tx-muted: #7f8fbe;
+  --sidebar-bg: #14213d;
+  --sidebar-tx: #edf0f5;
+  --sidebar-tx-muted: #a8b0be;
   --sidebar-active-bg: rgba(255, 255, 255, 0.07);
   --header-bg: #ffffff;
-  --header-border: #ced4e0;
+  --header-border: #e6e1f7;
   --surface: #ffffff;
-  --surface-border: #ced4e0;
-  --login-page-bg: #dbe0ea;
+  --surface-border: #e6e1f7;
+  --login-page-bg: #fbfaff;
   --login-card-bg: #ffffff;
-  --login-card-border: #ced4e0;
+  --login-card-border: #ddd6f5;
   font-family: 'Plus Jakarta Sans', sans-serif;
   background: var(--bg0);
   color: var(--tx);
 }
-.theme-neural .df {
+.theme-light .df {
   font-family: 'Plus Jakarta Sans', sans-serif;
   font-weight: 800;
 }
-.theme-neural .mf {
+.theme-light .mf {
   font-family: 'JetBrains Mono', monospace;
 }
-.theme-neural::before {
-  display: none;
-}
-
-/* ══════════════════════════════════════════════════════════════
-   THEME: HOLODECK  (Spectrum Top Rail — light, multi-color)
-   Lavender shell, purple accent, spectrum status set.
-   ══════════════════════════════════════════════════════════════ */
-.theme-holodeck {
-  --bg0: #dedee8;
-  --bg1: #ffffff;
-  --bg2: #ffffff;
-  --bg3: #d9d9e0;
-  --bg4: #d4d4db;
-  --accent: #5b4ae0;
-  --accent-dim: rgba(91, 74, 224, 0.08);
-  --accent-glow: rgba(91, 74, 224, 0.18);
-  --tx: #18162b;
-  --tx2: #6d6b85;
-  --tx3: #7c7a94;
-  --tx4: #9d9bb3;
-  --bd: rgba(24, 22, 43, 0.09);
-  --bd2: rgba(24, 22, 43, 0.14);
-  --metal1: #d4d4db;
-  --metal2: #d9d9e0;
-  --r: 12px;
-  --status-in: #5b4ae0;
-  --status-break: #f5a524;
-  --status-out: #00b3a4;
-  --status-absent: #ef4a76;
-  --sidebar-bg: #ffffff;
-  --sidebar-tx: #18162b;
-  --sidebar-tx-muted: #6d6b85;
-  --sidebar-active-bg: rgba(91, 74, 224, 0.08);
-  --header-bg: #ffffff;
-  --header-border: #d4d4db;
-  --surface: #ffffff;
-  --surface-border: #d4d4db;
-  --login-page-bg: #dedee8;
-  --login-card-bg: #ffffff;
-  --login-card-border: #d4d4db;
-  --spectrum-rail-1: #5b4ae0;
-  --spectrum-rail-2: #00b3a4;
-  --spectrum-rail-3: #f5a524;
-  --spectrum-rail-4: #ef4a76;
-  --spectrum-rail-5: #2f9bff;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  background: var(--bg0);
-  color: var(--tx);
-}
-.theme-holodeck .df {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-weight: 800;
-}
-.theme-holodeck .mf {
-  font-family: 'JetBrains Mono', monospace;
-}
-.theme-holodeck::before {
-  display: none;
-}
-
-/* ══════════════════════════════════════════════════════════════
-   THEME: CLEAN  (Electric Blue on Black — 3a)
-   Black canvas, near-black chrome, electric blue scale.
-   ══════════════════════════════════════════════════════════════ */
-.theme-clean {
-  --bg0: #000000;
-  --bg1: #050505;
-  --bg2: #0a0c10;
-  --bg3: #0b0d11;
-  --bg4: #0e1219;
-  --accent: #3d8bff;
-  --blue-2: #5ea8ff;
-  --blue-3: #7fc4ff;
-  --blue-4: #2563eb;
-  --blue-5: #1e40af;
-  --ink-on-accent: #00112b;
-  --accent-dim: rgba(61, 139, 255, 0.16);
-  --accent-glow: rgba(61, 139, 255, 0.35);
-  --tx: #ffffff;
-  --tx2: #ffffff;
-  --tx3: #ffffff;
-  --tx4: #ffffff;
-  --bd: #16181c;
-  --bd2: #1c2028;
-  --metal1: #1c2028;
-  --metal2: #0e1219;
-  --r: 14px;
-  --status-in: #3d8bff;
-  --status-break: #5ea8ff;
-  --status-out: #7fc4ff;
-  --status-absent: #2563eb;
-  --sidebar-bg: #0e2347;
-  --sidebar-tx: #ffffff;
-  --sidebar-tx-muted: #ffffff;
-  --sidebar-active-bg: rgba(61, 139, 255, 0.16);
-  --header-bg: #050505;
-  --header-border: #16181c;
-  --surface: #0a0c10;
-  --surface-border: #1c2028;
-  --login-page-bg: #000000;
-  --login-card-bg: #0a0c10;
-  --login-card-border: #1c2028;
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  background: var(--bg0);
-  color: var(--tx);
-}
-.theme-clean .df {
-  font-family: 'Plus Jakarta Sans', sans-serif;
-  font-weight: 800;
-}
-.theme-clean .mf {
-  font-family: 'JetBrains Mono', monospace;
-}
-.theme-clean::before {
+.theme-light::before {
   display: none;
 }
 
@@ -301,16 +203,16 @@ input[type='week']::-webkit-calendar-picker-indicator {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Crect x='3' y='5' width='18' height='16' rx='2' stroke='%23e8f2ea' stroke-width='2.2'/%3E%3Cpath d='M8 3v4M16 3v4M3 11h18' stroke='%23e8f2ea' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
 }
 
-.theme-neural input[type='date']::-webkit-calendar-picker-indicator,
-.theme-neural input[type='datetime-local']::-webkit-calendar-picker-indicator,
-.theme-neural input[type='time']::-webkit-calendar-picker-indicator,
-.theme-neural input[type='month']::-webkit-calendar-picker-indicator,
-.theme-neural input[type='week']::-webkit-calendar-picker-indicator,
-.theme-holodeck input[type='date']::-webkit-calendar-picker-indicator,
-.theme-holodeck input[type='datetime-local']::-webkit-calendar-picker-indicator,
-.theme-holodeck input[type='time']::-webkit-calendar-picker-indicator,
-.theme-holodeck input[type='month']::-webkit-calendar-picker-indicator,
-.theme-holodeck input[type='week']::-webkit-calendar-picker-indicator {
+.theme-light input[type='date']::-webkit-calendar-picker-indicator,
+.theme-light input[type='datetime-local']::-webkit-calendar-picker-indicator,
+.theme-light input[type='time']::-webkit-calendar-picker-indicator,
+.theme-light input[type='month']::-webkit-calendar-picker-indicator,
+.theme-light input[type='week']::-webkit-calendar-picker-indicator,
+.theme-light input[type='date']::-webkit-calendar-picker-indicator,
+.theme-light input[type='datetime-local']::-webkit-calendar-picker-indicator,
+.theme-light input[type='time']::-webkit-calendar-picker-indicator,
+.theme-light input[type='month']::-webkit-calendar-picker-indicator,
+.theme-light input[type='week']::-webkit-calendar-picker-indicator {
   /* Dark icon for light themes */
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'%3E%3Crect x='3' y='5' width='18' height='16' rx='2' stroke='%23475569' stroke-width='2.2'/%3E%3Cpath d='M8 3v4M16 3v4M3 11h18' stroke='%23475569' stroke-width='2.2' stroke-linecap='round'/%3E%3C/svg%3E");
   opacity: 0.9 !important;
@@ -404,45 +306,45 @@ input[type='week']::-webkit-calendar-picker-indicator {
   padding: 20px;
 }
 /* Light themes login: solid page bg, white card, no dark overlays/scanlines */
-body.theme-neural.on-login-screen,
-body.theme-neural:has(#screenLogin.active),
-body.theme-neural:has(#screenChangePassword.active),
-body.theme-holodeck.on-login-screen,
-body.theme-holodeck:has(#screenLogin.active),
-body.theme-holodeck:has(#screenChangePassword.active) {
+body.theme-light.on-login-screen,
+body.theme-light:has(#screenLogin.active),
+body.theme-light:has(#screenChangePassword.active),
+body.theme-light.on-login-screen,
+body.theme-light:has(#screenLogin.active),
+body.theme-light:has(#screenChangePassword.active) {
   background: var(--login-page-bg, var(--bg0)) !important;
 }
-body.theme-neural.on-login-screen::before,
-body.theme-neural:has(#screenLogin.active)::before,
-body.theme-neural:has(#screenChangePassword.active)::before,
-body.theme-holodeck.on-login-screen::before,
-body.theme-holodeck:has(#screenLogin.active)::before,
-body.theme-holodeck:has(#screenChangePassword.active)::before {
+body.theme-light.on-login-screen::before,
+body.theme-light:has(#screenLogin.active)::before,
+body.theme-light:has(#screenChangePassword.active)::before,
+body.theme-light.on-login-screen::before,
+body.theme-light:has(#screenLogin.active)::before,
+body.theme-light:has(#screenChangePassword.active)::before {
   opacity: 0 !important;
   display: none !important;
 }
-body.theme-neural.on-login-screen .bg-layer,
-body.theme-neural.on-login-screen .bg-dim,
-body.theme-neural:has(#screenLogin.active) .bg-layer,
-body.theme-neural:has(#screenLogin.active) .bg-dim,
-body.theme-neural:has(#screenChangePassword.active) .bg-layer,
-body.theme-neural:has(#screenChangePassword.active) .bg-dim,
-body.theme-holodeck.on-login-screen .bg-layer,
-body.theme-holodeck.on-login-screen .bg-dim,
-body.theme-holodeck:has(#screenLogin.active) .bg-layer,
-body.theme-holodeck:has(#screenLogin.active) .bg-dim,
-body.theme-holodeck:has(#screenChangePassword.active) .bg-layer,
-body.theme-holodeck:has(#screenChangePassword.active) .bg-dim {
+body.theme-light.on-login-screen .bg-layer,
+body.theme-light.on-login-screen .bg-dim,
+body.theme-light:has(#screenLogin.active) .bg-layer,
+body.theme-light:has(#screenLogin.active) .bg-dim,
+body.theme-light:has(#screenChangePassword.active) .bg-layer,
+body.theme-light:has(#screenChangePassword.active) .bg-dim,
+body.theme-light.on-login-screen .bg-layer,
+body.theme-light.on-login-screen .bg-dim,
+body.theme-light:has(#screenLogin.active) .bg-layer,
+body.theme-light:has(#screenLogin.active) .bg-dim,
+body.theme-light:has(#screenChangePassword.active) .bg-layer,
+body.theme-light:has(#screenChangePassword.active) .bg-dim {
   display: none !important;
 }
-body.theme-neural.on-login-screen #screenLogin,
-body.theme-neural.on-login-screen #screenChangePassword,
-body.theme-neural #screenLogin.active,
-body.theme-neural #screenChangePassword.active,
-body.theme-holodeck.on-login-screen #screenLogin,
-body.theme-holodeck.on-login-screen #screenChangePassword,
-body.theme-holodeck #screenLogin.active,
-body.theme-holodeck #screenChangePassword.active {
+body.theme-light.on-login-screen #screenLogin,
+body.theme-light.on-login-screen #screenChangePassword,
+body.theme-light #screenLogin.active,
+body.theme-light #screenChangePassword.active,
+body.theme-light.on-login-screen #screenLogin,
+body.theme-light.on-login-screen #screenChangePassword,
+body.theme-light #screenLogin.active,
+body.theme-light #screenChangePassword.active {
   position: fixed;
   inset: 0;
   z-index: 2;
@@ -451,25 +353,25 @@ body.theme-holodeck #screenChangePassword.active {
   min-height: 100vh;
   background: var(--login-page-bg, var(--bg0)) !important;
 }
-body.theme-neural.on-login-screen #screenLogin .login-wrap,
-body.theme-neural.on-login-screen #screenChangePassword .login-wrap,
-body.theme-neural #screenLogin.active .login-wrap,
-body.theme-neural #screenChangePassword.active .login-wrap,
-body.theme-holodeck.on-login-screen #screenLogin .login-wrap,
-body.theme-holodeck.on-login-screen #screenChangePassword .login-wrap,
-body.theme-holodeck #screenLogin.active .login-wrap,
-body.theme-holodeck #screenChangePassword.active .login-wrap {
+body.theme-light.on-login-screen #screenLogin .login-wrap,
+body.theme-light.on-login-screen #screenChangePassword .login-wrap,
+body.theme-light #screenLogin.active .login-wrap,
+body.theme-light #screenChangePassword.active .login-wrap,
+body.theme-light.on-login-screen #screenLogin .login-wrap,
+body.theme-light.on-login-screen #screenChangePassword .login-wrap,
+body.theme-light #screenLogin.active .login-wrap,
+body.theme-light #screenChangePassword.active .login-wrap {
   background: var(--login-page-bg, var(--bg0));
   flex: 1;
   width: 100%;
   min-height: 100%;
 }
-body.theme-neural.on-login-screen .login-card,
-body.theme-neural:has(#screenLogin.active) .login-card,
-body.theme-neural:has(#screenChangePassword.active) .login-card,
-body.theme-holodeck.on-login-screen .login-card,
-body.theme-holodeck:has(#screenLogin.active) .login-card,
-body.theme-holodeck:has(#screenChangePassword.active) .login-card {
+body.theme-light.on-login-screen .login-card,
+body.theme-light:has(#screenLogin.active) .login-card,
+body.theme-light:has(#screenChangePassword.active) .login-card,
+body.theme-light.on-login-screen .login-card,
+body.theme-light:has(#screenLogin.active) .login-card,
+body.theme-light:has(#screenChangePassword.active) .login-card {
   background: var(--login-card-bg, var(--bg2));
   border-color: var(--login-card-border, var(--bd2));
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
@@ -486,11 +388,11 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   animation: cardUp 0.6s var(--ease) both;
   transition: all 0.4s ease !important;
 }
-.theme-neural .login-card,
-.theme-holodeck .login-card {
+.theme-light .login-card,
+.theme-light .login-card {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.06);
 }
-.theme-clean .login-card {
+.theme-dark .login-card {
   background: var(--login-card-bg, var(--bg2));
   border-color: var(--login-card-border, var(--bd2));
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
@@ -522,7 +424,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   overflow: hidden;
   transition: all 0.4s ease !important;
 }
-.theme-clean .login-logo {
+.theme-dark .login-logo {
   border: none;
   background: var(--accent);
   color: var(--ink-on-accent, #00112b);
@@ -554,7 +456,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   object-fit: contain;
   display: block;
 }
-.theme-clean .login-logo.login-logo--mark {
+.theme-dark .login-logo.login-logo--mark {
   border: none;
   background: transparent;
   border-radius: 0;
@@ -613,7 +515,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   gap: 10px;
   transition: all 0.3s ease !important;
 }
-.theme-clean .sso-btn {
+.theme-dark .sso-btn {
   border-radius: 12px;
 }
 .sso-btn:hover {
@@ -639,19 +541,19 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 .sso-btn.google:hover {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
 }
-.theme-chromium .sso-btn.google,
-.theme-neural .sso-btn.google,
-.theme-holodeck .sso-btn.google {
+.theme-dark .sso-btn.google,
+.theme-light .sso-btn.google,
+.theme-light .sso-btn.google {
   background: var(--bg3);
   border: 1px solid var(--bd2);
   color: var(--tx);
 }
 .sso-btn.oidc {
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
   box-shadow: 0 4px 16px var(--accent-glow);
 }
-.theme-clean .sso-btn.oidc {
+.theme-dark .sso-btn.oidc {
   color: #fff;
 }
 .sso-btn.saml,
@@ -722,7 +624,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   outline: none;
   transition: all 0.25s ease !important;
 }
-.theme-clean .lf-input {
+.theme-dark .lf-input {
   border-radius: 10px;
 }
 .lf-input::placeholder {
@@ -778,7 +680,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   border: none;
   border-radius: var(--r);
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
   font-family: inherit;
   font-size: 14px;
   font-weight: 700;
@@ -787,12 +689,12 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   margin-top: 6px;
   position: relative;
 }
-.theme-clean .lf-submit {
+.theme-dark .lf-submit {
   color: var(--ink-on-accent, #00112b);
   border-radius: 12px;
 }
-.theme-neural .lf-submit,
-.theme-holodeck .lf-submit {
+.theme-light .lf-submit,
+.theme-light .lf-submit {
   color: #ffffff;
 }
 .lf-submit:hover:not(:disabled) {
@@ -812,7 +714,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   width: 16px;
   height: 16px;
   border: 2px solid rgba(0, 0, 0, 0.2);
-  border-top-color: #000;
+  border-top-color: var(--ink-on-accent, var(--bg0));
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   position: absolute;
@@ -820,7 +722,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   top: 50%;
   margin-top: -8px;
 }
-.theme-clean .lf-submit .spinner {
+.theme-dark .lf-submit .spinner {
   border-color: rgba(255, 255, 255, 0.3);
   border-top-color: #fff;
 }
@@ -898,7 +800,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
   transition: all 0.4s ease !important;
 }
-.theme-clean .login-theme-bar {
+.theme-dark .login-theme-bar {
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
 }
@@ -920,9 +822,9 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 }
 .lt-btn.active {
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
 }
-.theme-clean .lt-btn.active {
+.theme-dark .lt-btn.active {
   color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
@@ -939,7 +841,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.4);
   animation: cardUp 0.6s var(--ease) both;
 }
-.theme-clean .cp-card {
+.theme-dark .cp-card {
   box-shadow: 0 8px 40px rgba(0, 0, 0, 0.55);
   border-radius: 20px;
   background: var(--login-card-bg, var(--bg2));
@@ -1022,23 +924,23 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   transition: all 0.4s ease !important;
   perspective: 800px;
 }
-.theme-chromium .hdr {
+.theme-dark .hdr {
   background: linear-gradient(180deg, var(--bg1) 0%, var(--bg0) 100%);
   border-bottom: 1px solid var(--bd);
 }
-.theme-neural .hdr,
-.theme-holodeck .hdr {
+.theme-light .hdr,
+.theme-light .hdr {
   background: var(--header-bg, var(--bg2));
   border-bottom: 1px solid var(--header-border, var(--bd2));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
-.theme-clean .hdr {
+.theme-dark .hdr {
   background: var(--header-bg, var(--bg1));
   border-bottom: 1px solid var(--header-border, var(--bd));
   box-shadow: none;
 }
 /* Spectrum color hint on Holodeck header (colors only — no new DOM) */
-.theme-holodeck .hdr {
+.theme-light .hdr {
   border-top: 3px solid transparent;
   border-image: linear-gradient(
       90deg,
@@ -1074,8 +976,8 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   object-position: left center;
   display: none;
 }
-.theme-clean .hdr-logo,
-.theme-neural .hdr-logo {
+.theme-dark .hdr-logo,
+.theme-light .hdr-logo {
   background: transparent;
 }
 .hdr-titles {
@@ -1141,7 +1043,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   z-index: 200;
   overflow: hidden;
 }
-.theme-clean .tz-dropdown {
+.theme-dark .tz-dropdown {
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.1);
   border-radius: 14px;
 }
@@ -1249,18 +1151,10 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   border-color: var(--accent);
   box-shadow: 0 0 8px var(--accent-glow);
 }
-.ht-btn[data-theme='chromium'] {
-  background: #00e59a;
-}
-.ht-btn[data-theme='neural'] {
-  background: #0aff6a;
-}
-.ht-btn[data-theme='holodeck'] {
-  background: #00e59a;
-}
-.ht-btn[data-theme='clean'] {
-  background: #3d8bff;
-}
+.ht-btn[data-theme='dark'] { background: #00e59a; }
+
+
+.ht-btn[data-theme='light'] { background: #6d3aed; }
 .view-switch {
   display: flex;
   border: 1px solid var(--bd);
@@ -1281,9 +1175,9 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 }
 .vs-btn.active {
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
 }
-.theme-clean .vs-btn.active {
+.theme-dark .vs-btn.active {
   color: var(--ink-on-accent, #00112b);
 }
 .hdr-bell {
@@ -1349,7 +1243,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 .hdr-dropdown.open {
   display: block;
 }
-.theme-clean .hdr-dropdown {
+.theme-dark .hdr-dropdown {
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
   border-radius: 14px;
 }
@@ -1403,11 +1297,11 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 .sidebar.collapsed {
   width: 56px;
 }
-.theme-clean .sidebar,
-.theme-holodeck .sidebar {
+.theme-dark .sidebar,
+.theme-light .sidebar {
   border-right: 1px solid var(--header-border, var(--bd2));
 }
-.theme-neural .sidebar {
+.theme-light .sidebar {
   border-right: 1px solid rgba(255, 255, 255, 0.06);
 }
 .sb-nav {
@@ -1436,46 +1330,46 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   border-left-color: var(--accent);
   background: var(--accent-dim);
 }
-.theme-neural .sb-item {
+.theme-light .sb-item {
   color: var(--sidebar-tx-muted, var(--tx2));
 }
-.theme-neural .sb-item:hover {
+.theme-light .sb-item:hover {
   color: var(--sidebar-tx, #ffffff);
   background: var(--sidebar-active-bg, rgba(255, 255, 255, 0.07));
 }
-.theme-neural .sb-item.active {
+.theme-light .sb-item.active {
   color: #ffffff;
   border-left-color: #38bdf8;
   background: var(--sidebar-active-bg, rgba(255, 255, 255, 0.07));
 }
-.theme-neural .sb-section-label {
+.theme-light .sb-section-label {
   color: var(--sidebar-tx-muted, #7f8fbe);
 }
-.theme-holodeck .sb-item {
+.theme-light .sb-item {
   color: var(--sidebar-tx-muted, var(--tx2));
 }
-.theme-holodeck .sb-item:hover {
+.theme-light .sb-item:hover {
   color: var(--sidebar-tx, var(--tx));
   background: var(--sidebar-active-bg, var(--accent-dim));
 }
-.theme-holodeck .sb-item.active {
+.theme-light .sb-item.active {
   color: var(--accent);
   border-left-color: var(--accent);
   background: var(--sidebar-active-bg, var(--accent-dim));
 }
-.theme-clean .sb-item {
+.theme-dark .sb-item {
   color: var(--sidebar-tx-muted, var(--tx2));
 }
-.theme-clean .sb-item:hover {
+.theme-dark .sb-item:hover {
   color: var(--sidebar-tx, var(--tx));
   background: var(--sidebar-active-bg, var(--accent-dim));
 }
-.theme-clean .sb-item.active {
+.theme-dark .sb-item.active {
   color: var(--sidebar-tx, var(--tx));
   border-left-color: transparent;
   background: var(--sidebar-active-bg, var(--accent-dim));
 }
-.theme-clean .sb-item.active .sb-icon {
+.theme-dark .sb-item.active .sb-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1541,17 +1435,25 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 }
 .content-page {
   display: none;
-  padding: 20px;
+  padding: 16px 24px;
 }
 .content-page.active {
   display: block;
 }
 .mod-page {
   display: none;
-  padding: 20px;
+  padding: 16px 24px;
 }
 .mod-page.active {
   display: block;
+}
+
+/* Horizontal scroll for wide tables (geometry law on mobile) */
+.table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Module coming-soon placeholder */
@@ -1602,12 +1504,12 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   cursor: pointer;
   transition: all 0.3s ease !important;
 }
-.theme-clean .toast {
+.theme-dark .toast {
   border-radius: 12px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06);
 }
-.theme-neural .toast,
-.theme-holodeck .toast {
+.theme-light .toast,
+.theme-light .toast {
   background: var(--surface, var(--bg2));
   border-color: var(--surface-border, var(--bd));
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
@@ -1641,7 +1543,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   DETAIL VIEWS (theme-aware: modal/split/inline/drawer)
+   DETAIL VIEWS (centered modal for both themes)
    ══════════════════════════════════════════════════════════════ */
 
 /* Chromium: Modal overlay */
@@ -1670,21 +1572,21 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5);
   animation: cardUp 0.35s var(--ease);
 }
-.theme-clean .modal-box {
+.theme-dark .modal-box {
   border-radius: 20px;
   background: var(--surface, var(--bg2));
   border-color: var(--surface-border, var(--bd2));
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.65);
 }
-.theme-neural .modal-overlay,
-.theme-holodeck .modal-overlay {
+.theme-light .modal-overlay,
+.theme-light .modal-overlay {
   background: rgba(20, 33, 61, 0.35);
 }
-.theme-clean .modal-overlay {
+.theme-dark .modal-overlay {
   background: rgba(0, 0, 0, 0.72);
 }
-.theme-neural .modal-box,
-.theme-holodeck .modal-box {
+.theme-light .modal-box,
+.theme-light .modal-box {
   background: var(--surface, var(--bg2));
   border-color: var(--surface-border, var(--bd2));
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.12);
@@ -1770,20 +1672,20 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 .drawer-panel.open {
   transform: translateX(0);
 }
-.theme-clean .drawer-panel {
+.theme-dark .drawer-panel {
   background: var(--surface, var(--bg2));
   border-left-color: var(--surface-border, var(--bd2));
   box-shadow: -8px 0 40px rgba(0, 0, 0, 0.55);
 }
-.theme-neural .drawer-overlay,
-.theme-holodeck .drawer-overlay {
+.theme-light .drawer-overlay,
+.theme-light .drawer-overlay {
   background: rgba(20, 33, 61, 0.25);
 }
-.theme-clean .drawer-overlay {
+.theme-dark .drawer-overlay {
   background: rgba(0, 0, 0, 0.65);
 }
-.theme-neural .drawer-panel,
-.theme-holodeck .drawer-panel {
+.theme-light .drawer-panel,
+.theme-light .drawer-panel {
   background: var(--surface, var(--bg2));
   border-left-color: var(--surface-border, var(--bd2));
   box-shadow: -8px 0 40px rgba(0, 0, 0, 0.1);
@@ -1914,21 +1816,21 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5);
   animation: cardUp 0.35s var(--ease);
 }
-.theme-clean .crud-modal-box {
+.theme-dark .crud-modal-box {
   border-radius: 20px;
   background: var(--surface, var(--bg2));
   border-color: var(--surface-border, var(--bd2));
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.65);
 }
-.theme-neural .crud-modal-overlay,
-.theme-holodeck .crud-modal-overlay {
+.theme-light .crud-modal-overlay,
+.theme-light .crud-modal-overlay {
   background: rgba(20, 33, 61, 0.35);
 }
-.theme-clean .crud-modal-overlay {
+.theme-dark .crud-modal-overlay {
   background: rgba(0, 0, 0, 0.72);
 }
-.theme-neural .crud-modal-box,
-.theme-holodeck .crud-modal-box {
+.theme-light .crud-modal-box,
+.theme-light .crud-modal-box {
   background: var(--surface, var(--bg2));
   border-color: var(--surface-border, var(--bd2));
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.12);
@@ -1998,8 +1900,8 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   resize: vertical;
   transition: all 0.25s ease;
 }
-.theme-clean .crud-prompt-field input,
-.theme-clean .crud-prompt-field textarea {
+.theme-dark .crud-prompt-field input,
+.theme-dark .crud-prompt-field textarea {
   border-radius: 10px;
 }
 .crud-prompt-field input:focus,
@@ -2021,8 +1923,8 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   font-weight: 700;
   cursor: pointer;
 }
-.theme-clean .crud-confirm-cancel,
-.theme-clean .crud-confirm-ok {
+.theme-dark .crud-confirm-cancel,
+.theme-dark .crud-confirm-ok {
   border-radius: 10px;
 }
 .crud-confirm-cancel {
@@ -2033,9 +1935,9 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 .crud-confirm-ok {
   background: var(--accent);
   border: 1px solid var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
 }
-.theme-clean .crud-confirm-ok {
+.theme-dark .crud-confirm-ok {
   color: var(--ink-on-accent, #00112b);
 }
 .crud-confirm-ok.danger {
@@ -2280,7 +2182,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   left: 18px;
   background: #000;
 }
-.theme-clean .form-toggle input[type='checkbox']:checked::after {
+.theme-dark .form-toggle input[type='checkbox']:checked::after {
   background: #fff;
 }
 .form-btn {
@@ -2288,7 +2190,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   border: none;
   border-radius: var(--r);
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
   font-family: inherit;
   font-size: 13px;
   font-weight: 700;
@@ -2303,7 +2205,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   opacity: 0.4;
   cursor: not-allowed;
 }
-.theme-clean .form-btn {
+.theme-dark .form-btn {
   color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }
@@ -2377,7 +2279,7 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   RESPONSIVE
+   RESPONSIVE — geometry law on small screens
    ══════════════════════════════════════════════════════════════ */
 @media (max-width: 900px) {
   .hdr-logo {
@@ -2418,7 +2320,61 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   .hdr-sync {
     display: none;
   }
+  .split-panel {
+    width: min(100vw, 380px);
+    max-width: 100vw;
+  }
 }
+
+@media (max-width: 768px) {
+  .content-page,
+  .mod-page {
+    padding: 16px;
+  }
+  .hdr {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding-block: 8px;
+  }
+  .hdr-tz {
+    display: none;
+  }
+  .modal-box,
+  .crud-modal-box {
+    width: 100%;
+    max-width: 100%;
+    max-height: 92vh;
+    padding: 16px;
+    margin: 8px;
+    border-radius: 12px;
+  }
+  .crud-modal-body {
+    padding: 16px;
+  }
+  .drawer-panel {
+    width: 100vw;
+    max-width: 100vw;
+    padding: 16px;
+  }
+  .split-panel {
+    top: 54px;
+    width: 100vw;
+    max-width: 100vw;
+    padding: 16px;
+  }
+  .table-scroll,
+  [class$='-table-wrap'],
+  [class*='-table-wrap'] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+  .mod-coming {
+    min-height: 0;
+    padding: 24px 16px;
+  }
+}
+
 @media (max-width: 480px) {
   .hdr {
     padding-inline: 12px;
@@ -2426,9 +2382,14 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   .hdr-logo {
     width: 128px;
   }
+  .hdr-view-switch {
+    order: 10;
+    width: 100%;
+    justify-content: stretch;
+  }
   .login-card,
   .cp-card {
-    padding: 28px 24px;
+    padding: 24px 16px;
   }
   .login-theme-bar {
     bottom: 10px;
@@ -2439,6 +2400,10 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   }
   .drawer-panel {
     width: 100vw;
+  }
+  .tz-dropdown {
+    max-width: calc(100vw - 24px);
+    width: min(300px, calc(100vw - 24px));
   }
 }
 
@@ -2505,11 +2470,11 @@ body.theme-holodeck:has(#screenChangePassword.active) .login-card {
   border: 1px solid var(--accent);
   border-radius: var(--r);
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
   cursor: pointer;
   font-family: inherit;
 }
-.theme-clean .grid-empty-cta {
+.theme-dark .grid-empty-cta {
   color: var(--ink-on-accent, #00112b);
   border-radius: 10px;
 }

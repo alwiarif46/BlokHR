@@ -56,8 +56,12 @@ export class FeatureFlagCache {
         return;
       }
       const body = (await res.json()) as { features?: Array<{ key: string; enabled: boolean }> };
+      if (!Array.isArray(body.features)) {
+        this.logger?.warn('Feature flag refresh: missing features array');
+        return;
+      }
       const next: FlagMap = {};
-      for (const f of body.features ?? []) {
+      for (const f of body.features) {
         next[f.key] = !!f.enabled;
       }
       this.cache = next;
@@ -68,6 +72,7 @@ export class FeatureFlagCache {
   }
 
   isEnabled(key: string): boolean {
+    if (this.loadedAt === 0) return true;
     if (key === SCHOOL_VERTICAL_FLAG) {
       return this.cache[key] === true;
     }

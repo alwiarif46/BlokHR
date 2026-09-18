@@ -178,6 +178,49 @@ export async function claimWorkspace(apiClient, slug) {
 }
 
 /**
+ * Prefer the React Apex bundle (desktop/mobile + light/dark) when present.
+ * Falls back to the vanilla Assembly hero markup.
+ * @param {HTMLElement} root
+ * @param {{ subdomainBase?: string|null, signupPortal?: boolean }} status
+ * @param {{ api?: typeof api, navigate?: (url: string) => void }} [deps]
+ * @returns {Promise<boolean>}
+ */
+export async function tryMountReactApex(root, status, deps) {
+  if (!root || typeof document === 'undefined') return false;
+  try {
+    if (!document.querySelector('link[data-apex-css]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = '/apex/apex.css';
+      link.setAttribute('data-apex-css', '1');
+      document.head.appendChild(link);
+    }
+    if (!document.querySelector('link[data-apex-font]')) {
+      const font = document.createElement('link');
+      font.rel = 'stylesheet';
+      font.href =
+        'https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@500;600;700&display=swap';
+      font.setAttribute('data-apex-font', '1');
+      document.head.appendChild(font);
+    }
+    const mod = await import('/apex/apex.js');
+    if (!mod || typeof mod.mountApexLanding !== 'function') return false;
+    root.innerHTML = '';
+    mod.mountApexLanding(root, status || {}, {
+      api: (deps && deps.api) || api,
+      navigate:
+        (deps && deps.navigate) ||
+        function (url) {
+          window.location.href = url;
+        },
+    });
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+/**
  * @param {HTMLElement} root
  * @param {{ subdomainBase?: string|null, signupPortal?: boolean }} status
  * @param {{ api?: typeof api, navigate?: (url: string) => void }} [deps]
@@ -185,16 +228,28 @@ export async function claimWorkspace(apiClient, slug) {
 export function initLanding(root, status, deps) {
   if (!root) return;
 
+  /* Sync vanilla first so tests and first paint stay interactive. */
+  if (!root.querySelector('.landing')) {
+    root.innerHTML = LANDING_MARKUP;
+  }
+  bindVanillaLanding(root, status, deps);
+
+  /* Upgrade to React Apex (desktop/mobile + themes) when the bundle is present. */
+  void tryMountReactApex(root, status, deps);
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {{ subdomainBase?: string|null, signupPortal?: boolean }} status
+ * @param {{ api?: typeof api, navigate?: (url: string) => void }} [deps]
+ */
+function bindVanillaLanding(root, status, deps) {
   const apiClient = (deps && deps.api) || api;
   const navigate =
     (deps && deps.navigate) ||
     function (url) {
       window.location.href = url;
     };
-
-  if (!root.querySelector('.landing')) {
-    root.innerHTML = LANDING_MARKUP;
-  }
 
   const subdomainBase =
     status && status.subdomainBase ? String(status.subdomainBase).trim() : '';

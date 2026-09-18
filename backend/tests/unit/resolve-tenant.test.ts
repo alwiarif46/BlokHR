@@ -120,6 +120,45 @@ describe('resolveTenantId', () => {
     ).toBeNull();
   });
 
+  it('ignores spoofed X-Blok-Client-Host when Host already maps', () => {
+    expect(
+      resolveTenantId({
+        headers: {
+          host: 'si.blokhr.app',
+          'x-blok-client-host': 'acme.example.com',
+        },
+        hostMap: map,
+        fallback: 'default',
+      }),
+    ).toBe('si');
+  });
+
+  it('ignores X-Blok-Client-Host alone on an unmapped Host', () => {
+    expect(
+      resolveTenantId({
+        headers: {
+          host: 'gateway.railway.app',
+          'x-blok-client-host': 'acme.example.com',
+        },
+        hostMap: map,
+        fallback: 'default',
+      }),
+    ).toBe('default');
+  });
+
+  it('still resolves tenant from browser Origin behind a rewrite', () => {
+    expect(
+      resolveTenantId({
+        headers: {
+          host: 'gateway.railway.app',
+          origin: 'https://si.blokhr.app',
+        },
+        hostMap: map,
+        fallback: 'default',
+      }),
+    ).toBe('si');
+  });
+
   it('prefers exact Host map over subdomain extraction', () => {
     const overrideMap = parseTenantHostMap(
       JSON.stringify({ 'special.13blok.com': 'enterprise-x' }),

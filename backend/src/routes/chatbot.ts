@@ -156,6 +156,17 @@ export function createChatbotRouter(
   router.post(
     '/chat/external/:provider',
     asyncHandler(async (req: Request, res: Response) => {
+      const expected = (config.actionLinkSecret ?? '').trim();
+      if (!expected) {
+        throw new AppError('External chat webhook is not configured', 503);
+      }
+      const provided = String(
+        req.headers['x-chat-webhook-secret'] ?? req.headers['x-blok-webhook-secret'] ?? '',
+      );
+      if (provided !== expected) {
+        throw new AppError('Unauthorized', 401);
+      }
+
       const provider = req.params.provider.toLowerCase();
       const parser = PROVIDER_PARSERS[provider];
       if (!parser) {

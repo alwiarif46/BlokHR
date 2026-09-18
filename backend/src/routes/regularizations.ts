@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { isTenantAdmin } from '../tenant/admin-access';
 import { AppError, asyncHandler } from '../app';
 import { RegularizationRepository } from '../repositories/regularization-repository';
 import { ClockRepository } from '../repositories/clock-repository';
@@ -28,8 +29,7 @@ export function createRegularizationRouter(
   router.post(
     '/regularizations',
     asyncHandler(async (req: Request, res: Response) => {
-      const { email, name, date, correctionType, inTime, outTime, reason } = req.body as {
-        email?: string;
+      const { name, date, correctionType, inTime, outTime, reason } = req.body as {
         name?: string;
         date?: string;
         correctionType?: string;
@@ -38,10 +38,8 @@ export function createRegularizationRouter(
         reason?: string;
       };
 
-      const identityEmail = (req.identity?.email ?? '').toLowerCase().trim();
-      const applicantEmail = identityEmail || (email ?? '').toLowerCase().trim();
-
-      if (!applicantEmail) throw new AppError('email is required', 400);
+      const applicantEmail = (req.identity?.email ?? '').toLowerCase().trim();
+      if (!applicantEmail) throw new AppError('Authentication required', 401);
       if (!date) throw new AppError('date is required', 400);
       if (!reason) throw new AppError('reason is required', 400);
 
@@ -67,13 +65,16 @@ export function createRegularizationRouter(
   router.get(
     '/regularizations',
     asyncHandler(async (req: Request, res: Response) => {
-      const email =
-        (req.query.email as string | undefined) ||
-        req.identity?.email ||
-        (req.headers['x-user-email'] as string | undefined);
-      if (!email) throw new AppError('email query parameter required', 400);
+      const caller = (req.identity?.email ?? '').toLowerCase().trim();
+      if (!caller) throw new AppError('Authentication required', 401);
 
-      const regularizations = await service.getByEmail(email.toLowerCase().trim());
+      const requested =
+        (req.query.email as string | undefined)?.toLowerCase().trim() || caller;
+      if (requested !== caller && !(await isTenantAdmin(db, caller))) {
+        throw new AppError('Forbidden', 403);
+      }
+
+      const regularizations = await service.getByEmail(requested);
       res.json({ regularizations });
     }),
   );
@@ -83,16 +84,17 @@ export function createRegularizationRouter(
     '/regularizations/:id/approve',
     asyncHandler(async (req: Request, res: Response) => {
       const { id } = req.params;
-      const { role, approverEmail } = req.body as {
+      const { role } = req.body as {
         role?: string;
-        approverEmail?: string;
       };
+      const approverEmail = (req.identity?.email ?? '').toLowerCase().trim();
+      if (!approverEmail) throw new AppError('Authentication required', 401);
 
       if (!role || (role !== 'manager' && role !== 'hr')) {
         throw new AppError('role must be "manager" or "hr"', 400);
       }
 
-      const result = await service.approve(id, role, approverEmail ?? req.identity?.email ?? '');
+      const result = await service.approve(id, role, approverEmail);
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to approve', 400);
@@ -106,16 +108,13 @@ export function createRegularizationRouter(
     '/regularizations/:id/reject',
     asyncHandler(async (req: Request, res: Response) => {
       const { id } = req.params;
-      const { approverEmail, comments } = req.body as {
-        approverEmail?: string;
+      const { comments } = req.body as {
         comments?: string;
       };
+      const approverEmail = (req.identity?.email ?? '').toLowerCase().trim();
+      if (!approverEmail) throw new AppError('Authentication required', 401);
 
-      const result = await service.reject(
-        id,
-        approverEmail ?? req.identity?.email ?? '',
-        comments ?? '',
-      );
+      const result = await service.reject(id, approverEmail, comments ?? '');
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to reject', 400);

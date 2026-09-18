@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import type { Logger } from 'pino';
 import type { DatabaseEngine } from '../db/engine';
+import { isTenantAdmin } from '../tenant/admin-access';
 import { AppError, asyncHandler } from '../app';
 import { StorageService } from '../services/storage';
 import type { StorageProvider } from '../services/storage';
@@ -23,9 +24,24 @@ export function createStorageRouter(
   const router = Router();
   const service = new StorageService(db, logger, providerOverride);
 
+  async function requireCaller(req: Request): Promise<string> {
+    const email = (req.identity?.email ?? '').toLowerCase().trim();
+    if (!email) throw new AppError('Authentication required', 401);
+    return email;
+  }
+
+  async function requireAdmin(req: Request): Promise<string> {
+    const email = await requireCaller(req);
+    if (!(await isTenantAdmin(db, email))) {
+      throw new AppError('Admin access required', 403);
+    }
+    return email;
+  }
+
   router.get(
     '/storage/config',
-    asyncHandler(async (_req: Request, res: Response) => {
+    asyncHandler(async (req: Request, res: Response) => {
+      await requireCaller(req);
       const config = await service.getConfig();
       // Never return secrets to the client
       res.json({
@@ -46,6 +62,7 @@ export function createStorageRouter(
   router.put(
     '/storage/config',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireAdmin(req);
       const body = req.body as Record<string, unknown>;
       const result = await service.updateConfig({
         provider: body.provider as 'local' | 'azure_blob' | 'aws_s3' | 'none' | undefined,
@@ -70,12 +87,11 @@ export function createStorageRouter(
       const fileBase64 = (body.file as string) ?? '';
       const originalName = (body.originalName as string) ?? (body.fileName as string) ?? 'unnamed';
       const mimeType = (body.mimeType as string) ?? 'application/octet-stream';
-      const uploadedBy = req.identity?.email ?? ((body.email as string) ?? '').toLowerCase().trim();
+      const uploadedBy = await requireCaller(req);
       const contextType = (body.contextType as string) ?? '';
       const contextId = (body.contextId as string) ?? '';
 
       if (!fileBase64) throw new AppError('file (base64) is required', 400);
-      if (!uploadedBy) throw new AppError('email is required', 400);
 
       let buffer: Buffer;
       try {
@@ -104,8 +120,14 @@ export function createStorageRouter(
   router.get(
     '/storage/files',
     asyncHandler(async (req: Request, res: Response) => {
+      const caller = await requireCaller(req);
+      const admin = await isTenantAdmin(db, caller);
+      const requested = (req.query.email as string | undefined)?.toLowerCase().trim();
+      if (requested && requested !== caller && !admin) {
+        throw new AppError('Forbidden', 403);
+      }
       const files = await service.listFiles({
-        uploadedBy: (req.query.email as string) || undefined,
+        uploadedBy: admin ? requested || undefined : caller,
         contextType: (req.query.contextType as string) || undefined,
         contextId: (req.query.contextId as string) || undefined,
         limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
@@ -117,6 +139,7 @@ export function createStorageRouter(
   router.get(
     '/storage/files/:id',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireCaller(req);
       const file = await service.getFileInfo(req.params.id);
       if (!file) throw new AppError('File not found', 404);
       res.json(file);
@@ -126,6 +149,7 @@ export function createStorageRouter(
   router.get(
     '/storage/files/:id/download',
     asyncHandler(async (req: Request, res: Response) => {
+      await requireCaller(req);
       const result = await service.download(req.params.id);
       if (!result.success) throw new AppError(result.error ?? 'Download failed', 404);
 
@@ -143,6 +167,13 @@ export function createStorageRouter(
   router.delete(
     '/storage/files/:id',
     asyncHandler(async (req: Request, res: Response) => {
+      const caller = await requireCaller(req);
+      const existing = await service.getFileInfo(req.params.id);
+      if (!existing) throw new AppError('File not found', 404);
+      const owner = String(existing.uploaded_by ?? '').toLowerCase().trim();
+      if (owner !== caller && !(await isTenantAdmin(db, caller))) {
+        throw new AppError('Forbidden', 403);
+      }
       const result = await service.deleteFile(req.params.id);
       if (!result.success) throw new AppError(result.error ?? 'Delete failed', 400);
       res.json({ success: true });

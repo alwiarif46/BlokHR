@@ -12,6 +12,7 @@ function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     nodeEnv: 'test',
     logLevel: 'silent',
     corsOrigins: '*',
+    allowHeaderIdentity: true,
     dbEngine: 'sqlite',
     dbPath: ':memory:',
     dbUrl: '',
@@ -118,6 +119,17 @@ describe('CORS', () => {
     expect(res.headers['access-control-allow-origin']).toBeTruthy();
   });
 
+  it('does not reflect an origin outside the allowlist', async () => {
+    const app = createApp(
+      testConfig({ corsOrigins: 'https://app.blokhr.com' }),
+      logger,
+    );
+    const res = await request(app)
+      .get('/api/health')
+      .set('Origin', 'https://evil.example');
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
   it('handles preflight OPTIONS requests', async () => {
     const app = createApp(testConfig(), logger);
     const res = await request(app)
@@ -134,6 +146,13 @@ describe('Helmet security headers', () => {
     const res = await request(app).get('/api/health');
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['x-frame-options']).toBe('SAMEORIGIN');
+    expect(res.headers['strict-transport-security']).toBeUndefined();
+  });
+
+  it('sets HSTS in production', async () => {
+    const app = createApp(testConfig({ nodeEnv: 'production' }), logger);
+    const res = await request(app).get('/api/health');
+    expect(res.headers['strict-transport-security']).toMatch(/max-age=/);
   });
 });
 

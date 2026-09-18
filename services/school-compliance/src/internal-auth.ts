@@ -8,8 +8,12 @@ export function resolveInternalSecret(
 ): string {
   const secret = (env.INTERNAL_SECRET ?? '').trim();
   if (secret) return secret;
-  if ((env.NODE_ENV ?? 'development') === 'test') {
+  const nodeEnv = env.NODE_ENV ?? 'development';
+  if (nodeEnv === 'test') {
     return 'test-internal-secret';
+  }
+  if (nodeEnv === 'production') {
+    throw new Error('FATAL: INTERNAL_SECRET is required in production');
   }
   return '';
 }

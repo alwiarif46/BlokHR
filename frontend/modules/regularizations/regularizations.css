@@ -8,9 +8,9 @@
 
 /* ── Wrapper ── */
 .reg-wrap {
-  padding: 20px 24px 60px;
+  padding: 16px 24px 24px;
   height: 100%;
-  overflow-y: auto;
+  overflow-x: auto; overflow-y: auto;
 }
 
 /* ── Toolbar ── */
@@ -42,13 +42,7 @@
 }
 .reg-tab.active {
   background: var(--accent);
-  color: #000;
-}
-.theme-clean .reg-tab.active {
-  color: var(--ink-on-accent, #00112b);
-}
-.theme-clean .reg-tabs {
-  border-radius: 10px;
+  color: var(--ink-on-accent, var(--bg0));
 }
 
 /* ── Stats bar ── */
@@ -67,9 +61,6 @@
   align-items: center;
   gap: 8px;
   transition: all 0.3s ease;
-}
-.theme-clean .reg-stat {
-  border-radius: 12px;
 }
 .reg-stat:hover {
   border-color: var(--accent);
@@ -90,7 +81,7 @@
 /* ── Card grid ── */
 .reg-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(0, 1fr));
   gap: 12px;
 }
 .reg-card {
@@ -104,19 +95,6 @@
 .reg-card:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
-}
-.theme-chromium .reg-card {
-  background: linear-gradient(170deg, var(--bg2), var(--bg1));
-}
-.theme-neural .reg-card {
-  border-radius: 0;
-}
-.theme-holodeck .reg-card {
-  border-radius: var(--r); background: var(--surface, var(--bg2));
-}
-.theme-clean .reg-card {
-  border-radius: 14px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 /* ── Card header ── */
@@ -144,9 +122,6 @@
   border-radius: 3px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-}
-.theme-clean .reg-card-badge {
-  border-radius: 6px;
 }
 .reg-card-badge.pending {
   background: rgba(251, 191, 36, 0.1);
@@ -209,9 +184,6 @@
   font-family: inherit;
   transition: all 0.2s ease;
 }
-.theme-clean .reg-card-actions button {
-  border-radius: 8px;
-}
 .reg-card-actions button.approve {
   background: var(--status-in);
   color: #fff;
@@ -230,17 +202,13 @@
   border: 1px solid var(--accent);
   border-radius: var(--r);
   background: var(--accent);
-  color: #000;
+  color: var(--ink-on-accent, var(--bg0));
   cursor: pointer;
   font-family: inherit;
   transition: all 0.2s ease;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-}
-.theme-clean .reg-btn {
-  color: var(--ink-on-accent, #00112b);
-  border-radius: 10px;
 }
 .reg-btn.ghost {
   background: transparent;
@@ -276,9 +244,6 @@
   box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5);
   animation: modalIn 0.35s var(--ease);
 }
-.theme-clean .reg-modal-box {
-  border-radius: 20px;
-}
 .reg-modal-title {
   font-size: 16px;
   font-weight: 800;
@@ -311,11 +276,6 @@
   outline: none;
   transition: all 0.25s ease;
 }
-.theme-clean .reg-field input,
-.theme-clean .reg-field select,
-.theme-clean .reg-field textarea {
-  border-radius: 10px;
-}
 .reg-field input:focus,
 .reg-field select:focus,
 .reg-field textarea:focus {
@@ -332,7 +292,7 @@
 /* ── Empty state ── */
 .reg-empty {
   text-align: center;
-  padding: 60px 20px;
+  padding: 16px;
   color: var(--tx3);
 }
 .reg-empty-icon {
@@ -343,4 +303,62 @@
 .reg-empty-text {
   font-size: 13px;
   font-weight: 600;
+}
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
 }

@@ -14,7 +14,7 @@ import {
 import {
   setTheme,
   getTheme,
-  getValidThemes,
+  normalizeTheme,
   syncThemeDots,
 } from '../../shared/themes.js';
 import {
@@ -93,7 +93,7 @@ export async function bootGuardianPortal(container) {
   bindThemePicker(onThemeSelect);
   syncThemeDots();
 
-  setTheme('chromium');
+  setTheme('dark');
   syncThemeDots();
 
   const session = loadGuardianSession();
@@ -109,7 +109,7 @@ function showLogin() {
   resetAuthenticatedState();
   setLogoutVisible(false);
   setAppVisible(false, { clearMain: true });
-  setTheme('chromium');
+  setTheme('dark');
   syncThemeDots();
   renderLogin(enterApp);
 }
@@ -235,8 +235,8 @@ async function loadProfileTheme(gen) {
     res.accessibility && typeof res.accessibility === 'object' ? { ...res.accessibility } : {};
   state.profileAccessibility = accessibility;
   const theme = typeof accessibility.theme === 'string' ? accessibility.theme : '';
-  if (theme && getValidThemes().indexOf(theme) >= 0) {
-    setTheme(theme);
+  if (theme) {
+    setTheme(normalizeTheme(theme));
     syncThemeDots();
   }
 }
@@ -247,12 +247,12 @@ async function loadProfileTheme(gen) {
 async function onThemeSelect(themeId) {
   const session = getGuardianSession();
   if (!session || !session.token) {
-    setTheme('chromium');
+    setTheme('dark');
     syncThemeDots();
     return;
   }
   const prev = getTheme();
-  const next = getValidThemes().indexOf(themeId) >= 0 ? themeId : 'chromium';
+  const next = normalizeTheme(themeId);
   setTheme(next);
   syncThemeDots();
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import type { Express } from 'express';
 import type { DatabaseEngine } from '../../src/db/engine';
-import { createTestApp, seedMember } from '../helpers/setup';
+import { createTestApp, seedMember, seedAdmin } from '../helpers/setup';
 import type { MockStorageProvider } from '../../src/services/storage';
 
 describe('File Storage Module', () => {
@@ -11,6 +11,8 @@ describe('File Storage Module', () => {
   let mockStorage: MockStorageProvider;
 
   const EMAIL = 'alice@shaavir.com';
+  const asAlice = { 'X-User-Email': EMAIL };
+  const asAdmin = { 'X-User-Email': 'admin@shaavir.com' };
   // Tiny PNG (1x1 white pixel) in base64
   const TINY_FILE =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
@@ -29,6 +31,7 @@ describe('File Storage Module', () => {
       groupShiftStart: '09:00',
       groupShiftEnd: '18:00',
     });
+    await seedAdmin(db, 'admin@shaavir.com');
   });
 
   afterEach(async () => {
@@ -40,7 +43,7 @@ describe('File Storage Module', () => {
 
   describe('Storage config', () => {
     it('returns default config (local)', async () => {
-      const res = await request(app).get('/api/storage/config');
+      const res = await request(app).get('/api/storage/config').set(asAlice);
       expect(res.status).toBe(200);
       expect(res.body.provider).toBe('local');
       expect(res.body.maxFileSizeMb).toBe(25);
@@ -49,6 +52,7 @@ describe('File Storage Module', () => {
     it('updates storage config to azure', async () => {
       const res = await request(app)
         .put('/api/storage/config')
+        .set(asAdmin)
         .send({
           provider: 'azure_blob',
           azureConnectionString: 'DefaultEndpointsProtocol=https;AccountName=test;AccountKey=abc;',
@@ -57,7 +61,7 @@ describe('File Storage Module', () => {
 
       expect(res.status).toBe(200);
 
-      const config = await request(app).get('/api/storage/config');
+      const config = await request(app).get('/api/storage/config').set(asAlice);
       expect(config.body.provider).toBe('azure_blob');
       expect(config.body.azureContainer).toBe('my-container');
       expect(config.body.azureConnectionStringSet).toBe(true);
@@ -66,6 +70,7 @@ describe('File Storage Module', () => {
     it('updates storage config to aws s3', async () => {
       await request(app)
         .put('/api/storage/config')
+        .set(asAdmin)
         .send({
           provider: 'aws_s3',
           awsRegion: 'ap-south-1',
@@ -74,7 +79,7 @@ describe('File Storage Module', () => {
           awsSecretKey: 'secret...',
         });
 
-      const config = await request(app).get('/api/storage/config');
+      const config = await request(app).get('/api/storage/config').set(asAlice);
       expect(config.body.provider).toBe('aws_s3');
       expect(config.body.awsRegion).toBe('ap-south-1');
       expect(config.body.awsBucket).toBe('my-bucket');
@@ -85,30 +90,33 @@ describe('File Storage Module', () => {
     it('updates to none (disabled)', async () => {
       await request(app)
         .put('/api/storage/config')
+        .set(asAdmin)
         .send({ provider: 'none' });
 
-      const config = await request(app).get('/api/storage/config');
+      const config = await request(app).get('/api/storage/config').set(asAlice);
       expect(config.body.provider).toBe('none');
     });
 
     it('updates max file size', async () => {
       await request(app)
         .put('/api/storage/config')
+        .set(asAdmin)
         .send({ maxFileSizeMb: 50 });
 
-      const config = await request(app).get('/api/storage/config');
+      const config = await request(app).get('/api/storage/config').set(asAlice);
       expect(config.body.maxFileSizeMb).toBe(50);
     });
 
     it('never exposes secrets in config response', async () => {
       await request(app)
         .put('/api/storage/config')
+        .set(asAdmin)
         .send({
           provider: 'azure_blob',
           azureConnectionString: 'SuperSecret123',
         });
 
-      const config = await request(app).get('/api/storage/config');
+      const config = await request(app).get('/api/storage/config').set(asAlice);
       expect(config.body.azureConnectionString).toBeUndefined();
       expect(config.body.azureConnectionStringSet).toBe(true);
     });
@@ -120,6 +128,7 @@ describe('File Storage Module', () => {
     it('uploads a file successfully', async () => {
       const res = await request(app)
         .post('/api/storage/upload')
+        .set(asAlice)
         .send({
           email: EMAIL,
           file: TINY_FILE,
@@ -144,6 +153,7 @@ describe('File Storage Module', () => {
     it('handles data URI prefix', async () => {
       const res = await request(app)
         .post('/api/storage/upload')
+        .set(asAlice)
         .send({
           email: EMAIL,
           file: `data:image/png;base64,${TINY_FILE}`,
@@ -157,24 +167,25 @@ describe('File Storage Module', () => {
     it('rejects missing file', async () => {
       const res = await request(app)
         .post('/api/storage/upload')
+        .set(asAlice)
         .send({ email: EMAIL, originalName: 'test.txt' });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toContain('file');
     });
 
-    it('rejects missing email', async () => {
+    it('rejects unauthenticated upload', async () => {
       const res = await request(app)
         .post('/api/storage/upload')
         .send({ file: TINY_FILE, originalName: 'test.txt' });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error).toContain('email');
+      expect(res.status).toBe(401);
     });
 
     it('rejects empty file data', async () => {
       const res = await request(app)
         .post('/api/storage/upload')
+        .set(asAlice)
         .send({ email: EMAIL, file: '', originalName: 'test.txt' });
 
       expect(res.status).toBe(400);
@@ -187,6 +198,7 @@ describe('File Storage Module', () => {
     async function uploadFile(name: string, contextType = ''): Promise<string> {
       const res = await request(app)
         .post('/api/storage/upload')
+        .set(asAlice)
         .send({
           email: EMAIL, file: TINY_FILE,
           originalName: name, mimeType: 'image/png',
@@ -199,7 +211,7 @@ describe('File Storage Module', () => {
       await uploadFile('file1.png');
       await uploadFile('file2.png');
 
-      const res = await request(app).get('/api/storage/files');
+      const res = await request(app).get('/api/storage/files').set(asAlice);
       expect(res.status).toBe(200);
       expect(res.body.files).toHaveLength(2);
     });
@@ -207,7 +219,7 @@ describe('File Storage Module', () => {
     it('filters by uploader', async () => {
       await uploadFile('mine.png');
 
-      const res = await request(app).get(`/api/storage/files?email=${EMAIL}`);
+      const res = await request(app).get(`/api/storage/files?email=${EMAIL}`).set(asAlice);
       expect(res.body.files).toHaveLength(1);
       expect(res.body.files[0].uploaded_by).toBe(EMAIL);
     });
@@ -216,21 +228,21 @@ describe('File Storage Module', () => {
       await uploadFile('photo.png', 'profile_photo');
       await uploadFile('doc.png', 'document');
 
-      const res = await request(app).get('/api/storage/files?contextType=profile_photo');
+      const res = await request(app).get('/api/storage/files?contextType=profile_photo').set(asAlice);
       expect(res.body.files).toHaveLength(1);
     });
 
     it('gets file metadata by ID', async () => {
       const fileId = await uploadFile('info.png');
 
-      const res = await request(app).get(`/api/storage/files/${fileId}`);
+      const res = await request(app).get(`/api/storage/files/${fileId}`).set(asAlice);
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(fileId);
       expect(res.body.original_name).toBe('info.png');
     });
 
     it('returns 404 for nonexistent file', async () => {
-      const res = await request(app).get('/api/storage/files/nonexistent');
+      const res = await request(app).get('/api/storage/files/nonexistent').set(asAlice);
       expect(res.status).toBe(404);
     });
   });
@@ -241,12 +253,13 @@ describe('File Storage Module', () => {
     it('downloads a file', async () => {
       const upload = await request(app)
         .post('/api/storage/upload')
+        .set(asAlice)
         .send({
           email: EMAIL, file: TINY_FILE,
           originalName: 'download-me.png', mimeType: 'image/png',
         });
 
-      const res = await request(app).get(`/api/storage/files/${upload.body.id}/download`);
+      const res = await request(app).get(`/api/storage/files/${upload.body.id}/download`).set(asAlice);
       expect(res.status).toBe(200);
       expect(res.headers['content-type']).toContain('image/png');
       expect(res.headers['content-disposition']).toContain('download-me.png');
@@ -254,7 +267,7 @@ describe('File Storage Module', () => {
     });
 
     it('returns 404 for nonexistent download', async () => {
-      const res = await request(app).get('/api/storage/files/nonexistent/download');
+      const res = await request(app).get('/api/storage/files/nonexistent/download').set(asAlice);
       expect(res.status).toBe(404);
     });
   });
@@ -265,13 +278,14 @@ describe('File Storage Module', () => {
     it('deletes a file', async () => {
       const upload = await request(app)
         .post('/api/storage/upload')
+        .set(asAlice)
         .send({ email: EMAIL, file: TINY_FILE, originalName: 'delete-me.png', mimeType: 'image/png' });
 
-      const del = await request(app).delete(`/api/storage/files/${upload.body.id}`);
+      const del = await request(app).delete(`/api/storage/files/${upload.body.id}`).set(asAlice);
       expect(del.status).toBe(200);
 
       // Verify gone from listing
-      const list = await request(app).get('/api/storage/files');
+      const list = await request(app).get('/api/storage/files').set(asAlice);
       expect(list.body.files).toHaveLength(0);
 
       // Verify gone from mock storage
@@ -279,9 +293,9 @@ describe('File Storage Module', () => {
       expect(deleteCalls).toHaveLength(1);
     });
 
-    it('returns 400 for nonexistent delete', async () => {
-      const res = await request(app).delete('/api/storage/files/nonexistent');
-      expect(res.status).toBe(400);
+    it('returns 404 for nonexistent delete', async () => {
+      const res = await request(app).delete('/api/storage/files/nonexistent').set(asAlice);
+      expect(res.status).toBe(404);
     });
   });
 });

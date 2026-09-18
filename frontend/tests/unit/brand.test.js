@@ -64,7 +64,7 @@ describe('applyBrand', () => {
   beforeEach(() => {
     setTenantLogoOverride(false);
     document.head.innerHTML = '';
-    document.body.className = 'theme-chromium';
+    document.body.className = 'theme-dark';
     document.body.innerHTML = `
       <div id="hdrLogoLetter">B</div>
       <img id="hdrLogoImg" style="display:none" />
@@ -104,9 +104,9 @@ describe('applyBrand', () => {
     expect(document.getElementById('loginTitle').hidden).toBe(true);
   });
 
-  it('applies ink mono when theme is neural (light login card)', () => {
-    document.body.className = 'theme-neural';
-    applyBrand('hr', 'neural');
+  it('applies ink mono when theme is light', () => {
+    document.body.className = 'theme-light';
+    applyBrand('hr', 'light');
     expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
       'blok-mono-ink.png',
     );
@@ -115,9 +115,9 @@ describe('applyBrand', () => {
     );
   });
 
-  it('applies white mono when theme is clean (dark login card)', () => {
-    document.body.className = 'theme-clean';
-    applyBrand('hr', 'clean');
+  it('applies white mono when theme is dark', () => {
+    document.body.className = 'theme-dark';
+    applyBrand('hr', 'dark');
     expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
       'blok-mono-white.png',
     );
@@ -134,7 +134,7 @@ describe('applyBrand', () => {
   it('skips mono sync when tenant logo override is active', () => {
     setTenantLogoOverride(true);
     document.getElementById('hdrLogoImg').setAttribute('src', 'tenant://logo');
-    syncBrandLogos('clean');
+    syncBrandLogos('dark');
     expect(document.getElementById('hdrLogoImg').getAttribute('src')).toBe('tenant://logo');
   });
 });

@@ -170,7 +170,7 @@ export function applyBrand(vertical, themeOrWz) {
   let theme = themeOrWz;
   if (theme == null || theme === '') {
     const bodyTheme = (document.body && document.body.className.match(/theme-(\w+)/)) || null;
-    theme = bodyTheme ? bodyTheme[1] : 'chromium';
+    theme = bodyTheme ? bodyTheme[1] : 'dark';
   }
 
   if (!_tenantLogoOverride) {

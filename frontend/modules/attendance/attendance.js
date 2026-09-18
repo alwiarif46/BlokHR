@@ -14,7 +14,6 @@ import { api } from '../../shared/api.js';
 import { toast } from '../../shared/toast.js';
 import { getSession } from '../../shared/session.js';
 import { openDetail, closeDetail } from '../../shared/modal.js';
-import { getTheme } from '../../shared/themes.js';
 import { onSSE } from '../../shared/sse.js';
 import { registerModule, navigateToModule } from '../../shared/router.js';
 import { triggerLottie } from '../../shared/lottie.js';
@@ -252,14 +251,11 @@ export function attRender() {
     return;
   }
 
-  const t = getTheme();
   grid.innerHTML = list
     .map(function (p, i) {
       const sc = 's-' + (p.status || 'off');
       const label =
-        t === 'clean'
-          ? { in: 'Active', break: 'On Break', out: 'Offline', off: 'Offline', absent: 'Absent' }[p.status] || 'Offline'
-          : { in: 'ONLINE', break: 'BREAK', out: 'OFF', off: 'OFF', absent: 'ABSENT' }[p.status] || 'OFF';
+        { in: 'ONLINE', break: 'BREAK', out: 'OFF', off: 'OFF', absent: 'ABSENT' }[p.status] || 'OFF';
       let dur = '';
       if (p.clockIn) {
         const mins = Math.floor((Date.now() - new Date(p.clockIn).getTime()) / 60000);

@@ -7,7 +7,7 @@ import {
   createSchoolIdentityApp,
   type SchoolIdentitySqlite,
 } from '../src/index';
-import { staff, guardian, SECRET } from './helpers/auth';
+import { staff, guardian, SECRET, internalOnly } from './helpers/auth';
 
 function guardianPayload(overrides: Record<string, unknown> = {}) {
   return {
@@ -80,6 +80,7 @@ describe('school-identity family hub (invitations, OTP, profile, section)', () =
     const g = await createGuardian('t1', { phone: '9222222222' });
     await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({ tenant_id: 't1', guardian_id: g.id, password: 'oldpass12' });
 
     const reqOtp = await request(app)
@@ -101,7 +102,7 @@ describe('school-identity family hub (invitations, OTP, profile, section)', () =
 
     const login = await request(app)
       .post('/api/identity/guardian-auth/login')
-      .send({ phone: g.phone, password: 'newpass99' });
+      .send({ phone: g.phone, password: 'newpass99', tenant_id: 't1' });
     expect(login.status).toBe(200);
   });
 
@@ -113,9 +114,11 @@ describe('school-identity family hub (invitations, OTP, profile, section)', () =
     });
     await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({ tenant_id: 't1', guardian_id: a.id, password: 'secret123' });
     await request(app)
       .post('/api/identity/guardian-auth/set-password')
+      .set(internalOnly())
       .send({ tenant_id: 't2', guardian_id: b.id, password: 'secret456' });
 
     const ambiguous = await request(app)

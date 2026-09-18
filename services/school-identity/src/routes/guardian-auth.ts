@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import type { GuardianAuthService } from '../services/guardian-auth-service';
+import { requireInternalMatch } from '../internal-auth';
 
 function asyncHandler(
   fn: (req: Request, res: Response, next: NextFunction) => Promise<void>,
@@ -9,7 +10,10 @@ function asyncHandler(
   };
 }
 
-export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
+export function createGuardianAuthRouter(
+  auth: GuardianAuthService,
+  internalSecret: string,
+): Router {
   const router = Router();
 
   function resolveTenantInput(
@@ -31,6 +35,11 @@ export function createGuardianAuthRouter(auth: GuardianAuthService): Router {
   router.post(
     '/set-password',
     asyncHandler(async (req, res) => {
+      const internal = requireInternalMatch(req, internalSecret);
+      if (!('ok' in internal) || !internal.ok) {
+        res.status(401).json({ error: 'unauthorized' });
+        return;
+      }
       const body = req.body as Record<string, unknown>;
       const tenant = resolveTenantInput(req, body);
       if (tenant.mismatch) {

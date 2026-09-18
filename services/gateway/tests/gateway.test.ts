@@ -133,10 +133,10 @@ describe('Gateway G-01', () => {
       }),
     });
     const res = await request(app)
-      .get('/svc/school-identity/api/identity/t1/students')
+      .get('/svc/school-identity/api/identity/default/students')
       .set('Authorization', 'Bearer staff-tok');
     expect(res.status).toBe(200);
-    expect(res.body.path).toBe('/api/identity/t1/students');
+    expect(res.body.path).toBe('/api/identity/default/students');
     expect(res.body.method).toBe('GET');
   });
 
@@ -197,7 +197,7 @@ describe('Gateway G-01', () => {
       }),
     });
     const res = await request(app)
-      .get('/svc/school-identity/api/identity/t1/students')
+      .get('/svc/school-identity/api/identity/default/students')
       .set('Authorization', 'Bearer staff-tok');
     expect(res.status).toBe(502);
     expect(res.body.error).toBe('upstream_unavailable');
@@ -246,7 +246,7 @@ describe('Gateway G-02 — header hygiene', () => {
         active: true,
         email: 'staff@school.edu',
         name: 'Staff',
-        tenantId: 'tenant-real',
+        tenantId: 'default',
         isAdmin: false,
         isGlobalManager: false,
         isGlobalHR: false,
@@ -257,13 +257,13 @@ describe('Gateway G-02 — header hygiene', () => {
       }),
     });
     const res = await request(app)
-      .get('/svc/school-identity/api/identity/t1/students')
+      .get('/svc/school-identity/api/identity/default/students')
       .set('Authorization', 'Bearer staff-tok')
       .set('X-Blok-Tenant', 'spoofed-tenant')
       .set('X-Blok-Role', 'admin');
     expect(res.status).toBe(200);
-    // Spoofed inbound stripped; gateway-set staff headers win
-    expect(res.body.headers['x-blok-tenant']).toBe('tenant-real');
+    // Spoofed inbound stripped; Host-resolved tenant wins
+    expect(res.body.headers['x-blok-tenant']).toBe('default');
     expect(res.body.headers['x-blok-role']).toBe('office');
     expect(res.body.headers['x-blok-principal']).toBe('staff');
   });
@@ -377,8 +377,21 @@ describe('loadGatewayConfig', () => {
         NODE_ENV: 'production',
         PORT: '8080',
         MONOLITH_URL: 'http://localhost:3000',
+        CORS_ORIGINS: 'https://app.blokhr.com',
       }),
     ).toThrow(/INTERNAL_SECRET/);
+  });
+
+  it('fails fast when production CORS_ORIGINS is a wildcard', () => {
+    expect(() =>
+      loadGatewayConfig({
+        NODE_ENV: 'production',
+        PORT: '8080',
+        MONOLITH_URL: 'http://localhost:3000',
+        INTERNAL_SECRET: 'prod-internal',
+        CORS_ORIGINS: '*',
+      }),
+    ).toThrow(/CORS_ORIGINS/);
   });
 
   it('allows missing INTERNAL_SECRET when NODE_ENV=test', () => {
@@ -533,7 +546,9 @@ describe('Gateway P9-02 — guardian principal guard', () => {
     echoPort = await listen(echoServer);
     monolithPort = await listen(monolithServer);
     config = loadGatewayConfig(
-      baseEnv(monolithPort, echoPort, frontendDir),
+      baseEnv(monolithPort, echoPort, frontendDir, {
+        DEFAULT_TENANT_ID: 'tenant-from-token',
+      }),
       path.resolve(__dirname, '..'),
     );
     introspectCalls = 0;
@@ -884,13 +899,20 @@ describe('Gateway P12-02 — staff guard', () => {
   });
 
   it('active staff sets exact X-Blok-* headers; strips spoofed role', async () => {
+    const mapped = loadGatewayConfig(
+      baseEnv(monolithPort, echoPort, frontendDir, {
+        TENANT_HOST_MAP: JSON.stringify({ 't1.test': 't1' }),
+      }),
+      path.resolve(__dirname, '..'),
+    );
     const { app } = createGatewayApp({
-      config,
+      config: mapped,
       logger,
       staffIntrospect: stubStaff(),
     });
     const res = await request(app)
       .get('/svc/school-identity/api/identity/t1/students')
+      .set('Host', 't1.test')
       .set('Authorization', 'Bearer good')
       .set('X-Blok-Role', 'admin')
       .set('X-Blok-Email', 'spoof@evil');
@@ -906,13 +928,20 @@ describe('Gateway P12-02 — staff guard', () => {
 
   it('directory-miss fallback role (admin via claims, no member header)', async () => {
     staffMode = 'active-no-member';
+    const mapped = loadGatewayConfig(
+      baseEnv(monolithPort, echoPort, frontendDir, {
+        TENANT_HOST_MAP: JSON.stringify({ 't1.test': 't1' }),
+      }),
+      path.resolve(__dirname, '..'),
+    );
     const { app } = createGatewayApp({
-      config,
+      config: mapped,
       logger,
       staffIntrospect: stubStaff(),
     });
     const res = await request(app)
       .get('/svc/school-identity/api/x')
+      .set('Host', 't1.test')
       .set('Authorization', 'Bearer good');
     expect(res.status).toBe(200);
     expect(res.body.headers['x-blok-role']).toBe('admin');
@@ -928,27 +957,41 @@ describe('Gateway P12-02 — staff guard', () => {
     });
 
     const boarding = await request(app).post(
-      '/svc/school-transport/api/transport/t1/boarding',
+      '/svc/school-transport/api/transport/default/boarding',
     );
     expect(boarding.status).toBe(200);
 
-    const pings = await request(app).post('/svc/school-transport/api/transport/t1/pings');
+    const pings = await request(app).post('/svc/school-transport/api/transport/default/pings');
     expect(pings.status).toBe(200);
 
     const capture = await request(app).post(
-      '/svc/school-attendance/api/attendance/t1/capture',
+      '/svc/school-attendance/api/attendance/default/capture',
     );
     expect(capture.status).toBe(200);
 
     const prune = await request(app).post(
-      '/svc/school-transport/api/transport/t1/pings/prune',
+      '/svc/school-transport/api/transport/default/pings/prune',
     );
     expect(prune.status).toBe(401);
 
     const mark = await request(app).post(
-      '/svc/school-attendance/api/attendance/t1/mark',
+      '/svc/school-attendance/api/attendance/default/mark',
     );
     expect(mark.status).toBe(401);
+  });
+
+  it('does not inject X-Blok-Internal on public device paths', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const capture = await request(app).post(
+      '/svc/school-attendance/api/attendance/default/capture',
+    );
+    expect(capture.status).toBe(200);
+    expect(capture.body.headers['x-blok-internal']).toBeUndefined();
+    expect(capture.body.headers['x-blok-tenant']).toBeTruthy();
   });
 
   it('blocks /api/auth/introspect from outside with 404', async () => {
@@ -962,6 +1005,42 @@ describe('Gateway P12-02 — staff guard', () => {
       .send({ token: 'x' });
     expect(res.status).toBe(404);
     expect(res.body.error).toBe('not_found');
+  });
+
+  it('rejects unauthenticated monolith /api paths that are not public', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const res = await request(app).get('/api/attendance?date=2026-09-18');
+    expect(res.status).toBe(401);
+    expect(res.body.error).toBe('unauthorized');
+  });
+
+  it('proxies authenticated monolith /api paths after staff introspect', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const res = await request(app)
+      .get('/api/attendance?date=2026-09-18')
+      .set('Authorization', 'Bearer staff-tok');
+    expect(res.status).toBe(200);
+    expect(res.body.path).toBe('/api/attendance?date=2026-09-18');
+  });
+
+  it('keeps login and setup probes public', async () => {
+    const { app } = createGatewayApp({
+      config,
+      logger,
+      staffIntrospect: stubStaff(),
+    });
+    const providers = await request(app).get('/api/auth/providers');
+    expect(providers.status).toBe(200);
+    const login = await request(app).post('/api/auth/local').send({ email: 'a@b.c', password: 'x' });
+    expect(login.status).toBe(200);
   });
 
   it('whoami: staff / anonymous / guardian-as-anonymous', async () => {

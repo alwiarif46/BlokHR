@@ -45,7 +45,9 @@ export function connectSSE() {
   const base = location.origin || '';
 
   try {
-    _source = new EventSource(base + '/api/sse?email=' + encodeURIComponent(email));
+    _source = new EventSource(base + '/api/sse?email=' + encodeURIComponent(email), {
+      withCredentials: true,
+    });
 
     _source.onopen = function () {
       setSyncStatus('live');

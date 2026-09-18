@@ -2,7 +2,7 @@
  * modules/expenses/expenses.css
  * Expenses module. All colours use CSS custom properties.
  */
-.exp-wrap { padding: 20px 24px 60px; height: 100%; overflow-y: auto; }
+.exp-wrap { padding: 16px 24px 24px; height: 100%; overflow-x: auto; overflow-y: auto; }
 .exp-toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .exp-spacer { flex: 1; }
 .exp-tabs { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
@@ -12,46 +12,35 @@
   font-family: inherit; transition: all 0.2s ease;
 }
 .exp-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
-.theme-clean .exp-tab { border-radius: 10px; }
-.exp-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: #000; cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
-.theme-clean .exp-btn { color: var(--ink-on-accent, #00112b); border-radius: 10px; }
+.exp-btn { padding: 7px 16px; font-size: 11px; font-weight: 700; border: 1px solid var(--accent); border-radius: var(--r); background: var(--accent); color: var(--ink-on-accent, var(--bg0)); cursor: pointer; font-family: inherit; transition: all 0.2s ease; display: inline-flex; align-items: center; gap: 5px; }
 .exp-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px var(--accent-glow); }
 .exp-btn.ghost { background: transparent; color: var(--accent); }
 .exp-btn.ghost.danger { color: var(--status-absent); border-color: var(--status-absent); }
 .exp-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .exp-stat { flex: 1; min-width: 100px; background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 14px; text-align: center; transition: all 0.3s ease; }
-.theme-clean .exp-stat { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .exp-stat:hover { border-color: var(--accent); }
 .exp-stat-num { font-size: 24px; font-weight: 900; color: var(--tx); }
 .exp-stat-label { font-size: 9px; color: var(--tx3); text-transform: uppercase; letter-spacing: 1px; margin-top: 2px; font-weight: 600; }
-.exp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.exp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(0, 1fr)); gap: 12px; }
 .exp-card { background: var(--bg2); border: 1px solid var(--bd); border-radius: var(--r); padding: 16px; transition: all 0.3s ease; animation: cardIn 0.4s var(--ease) both; }
 .exp-card:hover { border-color: var(--accent); transform: translateY(-2px); }
-.theme-chromium .exp-card { background: linear-gradient(170deg, var(--bg2), var(--bg1)); }
-.theme-neural .exp-card { border-radius: 0; }
-.theme-holodeck .exp-card { border-radius: var(--r); background: var(--surface, var(--bg2)); }
-.theme-clean .exp-card { border-radius: 14px; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04); }
 .exp-card-title { font-size: 13px; font-weight: 700; color: var(--tx); margin-bottom: 4px; }
 .exp-card-amount { font-size: 18px; font-weight: 900; color: var(--accent); margin: 4px 0; }
 .exp-card-sub { font-size: 10px; color: var(--tx3); }
 .exp-card-badge { font-size: 8px; font-weight: 700; padding: 2px 8px; border-radius: 3px; text-transform: uppercase; display: inline-block; margin-top: 6px; }
-.theme-clean .exp-card-badge { border-radius: 6px; }
 .exp-card-actions { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
 .exp-card-actions button { padding: 4px 10px; font-size: 10px; font-weight: 600; border: 1px solid var(--bd); border-radius: 4px; background: var(--bg3); color: var(--tx2); cursor: pointer; font-family: inherit; transition: all 0.2s ease; }
-.theme-clean .exp-card-actions button { border-radius: 8px; }
 .exp-card-actions button:hover { border-color: var(--accent); color: var(--accent); }
 .exp-card-actions button.danger:hover { border-color: var(--status-absent); color: var(--status-absent); }
 .exp-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); z-index: 700; display: none; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
 .exp-modal.open { display: flex; }
 .exp-modal-box { background: var(--surface, var(--bg2)); border: 1px solid var(--bd2); border-radius: var(--r); padding: 24px; width: 480px; max-width: 94vw; max-height: 85vh; overflow-y: auto; box-shadow: 0 16px 60px rgba(0, 0, 0, 0.5); animation: modalIn 0.35s var(--ease); }
 .exp-modal-box.wide { width: 720px; }
-.theme-clean .exp-modal-box { border-radius: 20px; }
 .exp-modal-title { font-size: 16px; font-weight: 800; color: var(--tx); margin-bottom: 16px; }
 .exp-row { display: flex; gap: 12px; }
 .exp-field { margin-bottom: 14px; }
 .exp-field label { display: block; font-size: 10px; font-weight: 600; color: var(--tx3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
 .exp-field input, .exp-field select, .exp-field textarea { width: 100%; background: var(--bg3); border: 1.5px solid var(--bd); border-radius: var(--r); padding: 10px 12px; color: var(--tx); font-family: inherit; font-size: 12px; outline: none; transition: all 0.25s ease; }
-.theme-clean .exp-field input, .theme-clean .exp-field select, .theme-clean .exp-field textarea { border-radius: 10px; }
 .exp-field input:focus, .exp-field select:focus, .exp-field textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 .exp-field input[type="checkbox"] { width: auto; margin-right: 6px; }
 .exp-field input[type="file"] { padding: 8px; }
@@ -64,10 +53,68 @@
 .exp-history-row { font-size: 11px; color: var(--tx2); padding: 6px 0; border-bottom: 1px solid var(--bd); }
 .exp-history-row:last-child { border-bottom: 0; }
 .exp-history-empty { font-size: 11px; color: var(--tx3); }
-.exp-empty { text-align: center; padding: 60px 20px; color: var(--tx3); }
+.exp-empty { text-align: center; padding: 16px; color: var(--tx3); }
 .exp-empty-icon { font-size: 40px; opacity: 0.15; margin-bottom: 8px; }
 .exp-empty-text { font-size: 13px; font-weight: 600; }
 @media (max-width: 700px) {
   .exp-row { flex-direction: column; }
   .exp-detail-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Mobile geometry (≤768px) ── */
+@media (max-width: 768px) {
+  /* Page shells: 16px side pad; scroll wide content */
+  [class$='-wrap']:not([class*='btn']):not([class*='chip']):not([class*='icon']):not([class*='avatar']):not([class*='badge']) {
+    padding-left: 16px;
+    padding-right: 16px;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  [class$='-toolbar'],
+  [class$='-header'],
+  [class$='-actions'],
+  [class$='-stats'],
+  [class$='-stat-row'],
+  [class$='-cal-actions'] {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  [class$='-grid'],
+  [class$='-detail-grid'],
+  [class$='-form-grid'],
+  [class$='-cards'],
+  [class$='-card-grid'] {
+    grid-template-columns: 1fr !important;
+  }
+  [class$='-modal-box'],
+  [class$='-modal-box'].wide,
+  [class$='-dialog'],
+  [class$='-sheet'] {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+    padding: 16px;
+    margin: 8px;
+    max-height: 92vh;
+    box-sizing: border-box;
+  }
+  [class$='-search'],
+  [class$='-tb-search'],
+  .tb-search,
+  input[type='search'] {
+    width: 100% !important;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  [class$='-table-wrap'],
+  [class*='-table-wrap'],
+  [class$='-panel']:has(table),
+  [class$='-body']:has(table),
+  [class$='-content']:has(table),
+  [class$='-list']:has(table) {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
 }
