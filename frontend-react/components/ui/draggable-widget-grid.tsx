@@ -544,44 +544,47 @@ const Widget = memo(function Widget({
       }}
       data-held={held ? '1' : undefined}
     >
-      <motion.div
-        initial={{ opacity: 0, y: 18, scale: 0.97 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ type: 'spring', visualDuration: 0.6, bounce: 0.12, delay }}
-        className={`relative isolate flex h-full w-full flex-col overflow-hidden rounded-[var(--widget-radius)] ring-inset transition-shadow duration-300 [clip-path:inset(0_round_var(--widget-radius))] ${
-          plainShell
-            ? landed
-              ? 'ring-2 ring-[#7CE3A2]/80'
-              : 'ring-0 shadow-none'
-            : landed
-              ? 'bg-card text-card-foreground ring-2 ring-emerald-400/80'
-              : 'bg-card text-card-foreground ring-2 ring-white/85 dark:ring-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]'
-        } ${shellClassName ?? ''}`}
+      <div
+        className={`h-full w-full ${
+          jiggle && !held && phase === 'idle' ? 'apex-widget-jiggle' : ''
+        } ${nudge && !held && phase === 'idle' ? 'apex-widget-nudge' : ''}`}
+        style={{ '--jiggle-n': position } as CSSProperties}
       >
-        {editable ? (
-          <div
-            data-drag-handle=""
-            className="absolute inset-x-0 top-0 z-20 flex h-8 cursor-grab items-center justify-center rounded-t-[var(--widget-radius)] bg-[#121314]/6 hover:bg-[#121314]/12 active:cursor-grabbing dark:bg-white/8 dark:hover:bg-white/14"
-            aria-hidden="true"
-          >
-            <span className="flex items-center gap-[3px]" aria-hidden="true">
-              <span className="size-[3px] rounded-full bg-current opacity-45" />
-              <span className="size-[3px] rounded-full bg-current opacity-45" />
-              <span className="size-[3px] rounded-full bg-current opacity-45" />
-              <span className="size-[3px] rounded-full bg-current opacity-45" />
-              <span className="size-[3px] rounded-full bg-current opacity-45" />
-              <span className="size-[3px] rounded-full bg-current opacity-45" />
-            </span>
-          </div>
-        ) : null}
-        <div
-          className={`flex h-full min-h-0 w-full flex-col ${editable ? 'pt-7' : ''} ${
-            jiggle && !held && phase === 'idle' ? 'apex-widget-jiggle' : ''
-          } ${nudge && !held && phase === 'idle' ? 'apex-widget-nudge' : ''}`}
+        <motion.div
+          initial={{ opacity: 0, y: 18, scale: 0.97 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ type: 'spring', visualDuration: 0.6, bounce: 0.12, delay }}
+          className={`relative isolate flex h-full w-full flex-col overflow-hidden rounded-[var(--widget-radius)] ring-inset transition-shadow duration-300 [clip-path:inset(0_round_var(--widget-radius))] ${
+            plainShell
+              ? landed
+                ? 'ring-2 ring-[#7CE3A2]/80'
+                : 'ring-0 shadow-none'
+              : landed
+                ? 'bg-card text-card-foreground ring-2 ring-emerald-400/80'
+                : 'bg-card text-card-foreground ring-2 ring-white/85 dark:ring-white/80 shadow-[0_0_0_1px_rgba(255,255,255,0.35)]'
+          } ${shellClassName ?? ''}`}
         >
-          {renderItem?.(item, sizeOf(w, h))}
-        </div>
-      </motion.div>
+          {editable ? (
+            <div
+              data-drag-handle=""
+              className="absolute inset-x-0 top-0 z-20 flex h-8 cursor-grab items-center justify-center rounded-t-[var(--widget-radius)] bg-[#121314]/6 hover:bg-[#121314]/12 active:cursor-grabbing dark:bg-white/8 dark:hover:bg-white/14"
+              aria-hidden="true"
+            >
+              <span className="flex items-center gap-[3px]" aria-hidden="true">
+                <span className="size-[3px] rounded-full bg-current opacity-45" />
+                <span className="size-[3px] rounded-full bg-current opacity-45" />
+                <span className="size-[3px] rounded-full bg-current opacity-45" />
+                <span className="size-[3px] rounded-full bg-current opacity-45" />
+                <span className="size-[3px] rounded-full bg-current opacity-45" />
+                <span className="size-[3px] rounded-full bg-current opacity-45" />
+              </span>
+            </div>
+          ) : null}
+          <div className={`flex h-full min-h-0 w-full flex-col ${editable ? 'pt-7' : ''}`}>
+            {renderItem?.(item, sizeOf(w, h))}
+          </div>
+        </motion.div>
+      </div>
     </motion.div>
   )
 })

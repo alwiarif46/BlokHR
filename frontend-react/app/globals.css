@@ -102,3 +102,59 @@
   white-space: nowrap;
   border-width: 0;
 }
+
+/* iOS home-screen shiver while Arrange is on. Phase is staggered per tile. */
+@keyframes apex-widget-jiggle {
+  0% {
+    transform: rotate(-1.2deg) translate(0.5px, -0.4px);
+  }
+  25% {
+    transform: rotate(1.15deg) translate(-0.45px, 0.35px);
+  }
+  50% {
+    transform: rotate(-0.95deg) translate(0.35px, 0.25px);
+  }
+  75% {
+    transform: rotate(1.05deg) translate(-0.3px, -0.35px);
+  }
+  100% {
+    transform: rotate(-1.2deg) translate(0.5px, -0.4px);
+  }
+}
+
+@keyframes apex-widget-nudge {
+  0%,
+  100% {
+    transform: rotate(0deg) translate(0, 0);
+  }
+  18% {
+    transform: rotate(1.6deg) translate(2px, -1px);
+  }
+  36% {
+    transform: rotate(-1.7deg) translate(-2px, 1px);
+  }
+  54% {
+    transform: rotate(1.1deg) translate(1.5px, 0.5px);
+  }
+  72% {
+    transform: rotate(-0.8deg) translate(-1px, -0.5px);
+  }
+}
+
+.apex-widget-jiggle {
+  transform-origin: 50% 50%;
+  animation: apex-widget-jiggle calc(0.26s + (var(--jiggle-n, 1) * 0.012s)) ease-in-out infinite;
+  animation-delay: calc(var(--jiggle-n, 1) * -0.06s);
+}
+
+.apex-widget-nudge {
+  transform-origin: 50% 50%;
+  animation: apex-widget-nudge 1.1s ease-in-out 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .apex-widget-jiggle,
+  .apex-widget-nudge {
+    animation: none;
+  }
+}
