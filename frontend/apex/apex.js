@@ -18020,8 +18020,8 @@ function Ag({ items: e, maxColumns: t = 4, fixedColumns: n, cellSize: r = 180, g
 					children: s
 				}),
 				/* @__PURE__ */ (0, $.jsx)("p", {
-					className: "min-w-0 flex-1 text-[13px] font-bold leading-snug tracking-[-0.01em] text-[#121314] dark:text-white sm:text-[14px]",
-					style: { fontFamily: "var(--font-display)" },
+					className: "min-w-0 flex-1 text-[13px] font-bold leading-snug tracking-[-0.01em] text-foreground sm:text-[14px]",
+					style: { fontFamily: "var(--font-display), \"Space Grotesk\", system-ui, sans-serif" },
 					children: c
 				}),
 				/* @__PURE__ */ (0, $.jsxs)("button", {

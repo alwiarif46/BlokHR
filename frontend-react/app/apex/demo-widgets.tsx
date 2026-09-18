@@ -910,8 +910,8 @@ export function DemoBoard({
           {title}
         </h2>
         <p
-          className="min-w-0 flex-1 text-[13px] font-bold leading-snug tracking-[-0.01em] text-[#121314] dark:text-white sm:text-[14px]"
-          style={{ fontFamily: 'var(--font-display)' }}
+          className="min-w-0 flex-1 text-[13px] font-bold leading-snug tracking-[-0.01em] text-foreground sm:text-[14px]"
+          style={{ fontFamily: 'var(--font-display), "Space Grotesk", system-ui, sans-serif' }}
         >
           {stripLabel}
         </p>
