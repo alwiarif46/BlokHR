@@ -4,6 +4,12 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AccessPage } from '@/app/apex/pages/access-page'
 import { CampusPage } from '@/app/apex/pages/campus-page'
 import { HomePage } from '@/app/apex/pages/home-page'
+import {
+  ContactPage,
+  CookiesPage,
+  PrivacyPage,
+  TermsPage,
+} from '@/app/apex/pages/legal-routes'
 import { ModulesPage } from '@/app/apex/pages/modules-page'
 import { PricingPage } from '@/app/apex/pages/pricing-page'
 import { SetupPage } from '@/app/apex/pages/setup-page'
@@ -29,6 +35,10 @@ export function ApexRouter({ status, api, navigate }: ApexRouterProps) {
           <Route path="campus" element={<CampusPage />} />
           <Route path="workforce" element={<WorkforcePage />} />
           <Route path="pricing" element={<PricingPage />} />
+          <Route path="privacy" element={<PrivacyPage />} />
+          <Route path="terms" element={<TermsPage />} />
+          <Route path="cookies" element={<CookiesPage />} />
+          <Route path="contact" element={<ContactPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>

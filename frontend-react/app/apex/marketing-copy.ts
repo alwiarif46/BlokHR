@@ -4,12 +4,12 @@ export const BRAND = '13blok'
 export const MODULE_COUNT = 50
 
 export const NAV = [
-  { id: 'modules', label: 'Modules', path: '/modules' },
-  { id: 'setup', label: 'Setup', path: '/setup' },
-  { id: 'access', label: 'Access', path: '/access' },
-  { id: 'campus', label: 'Campus', path: '/campus' },
-  { id: 'workforce', label: 'Workforce', path: '/workforce' },
-  { id: 'pricing', label: 'Pricing', path: '/pricing' },
+  { id: 'modules', label: 'Modules', path: '/modules', icon: 'mdi:view-grid-outline' },
+  { id: 'setup', label: 'Setup', path: '/setup', icon: 'mdi:cog-outline' },
+  { id: 'access', label: 'Access', path: '/access', icon: 'mdi:shield-key-outline' },
+  { id: 'campus', label: 'Campus', path: '/campus', icon: 'mdi:school-outline' },
+  { id: 'workforce', label: 'Workforce', path: '/workforce', icon: 'mdi:account-group-outline' },
+  { id: 'pricing', label: 'Pricing', path: '/pricing', icon: 'mdi:tag-outline' },
 ] as const
 
 export const HERO = {
@@ -36,11 +36,11 @@ export const FEATURE_MODULES = [
 export const FEATURES_BLURB =
   'Off means gone from the sidebar and 404 from its own API. On means back on the next load.'
 
-/** Proof band placeholders only. Do not replace with invented figures. */
+/** Modest product-true proof — no invented customer counts or quotes. */
 export const PROOF_BAND = [
-  '[X] schools in [REGION]',
-  '[N] staff clocking in daily',
-  '"[QUOTE]" [NAME], [ROLE], [SCHOOL]',
+  'Workforce or Campus — pick once per workspace',
+  'Four steps to a live trial, no card to start',
+  'Off modules stay 404, not only hidden in the UI',
 ] as const
 
 export const STATS = [

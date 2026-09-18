@@ -116,7 +116,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
         </div>
 
         <nav
-          className="apex-nav-mobile font-mono text-[11px] font-bold tracking-[1px]"
+          className="apex-nav-mobile font-mono font-bold tracking-[0.6px]"
           aria-label="Primary mobile"
         >
           {NAV.map((item) => (
@@ -124,12 +124,13 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
               key={item.id}
               to={item.path}
               className={({ isActive }) =>
-                `flex min-h-11 flex-1 items-center justify-center px-1 text-center font-mono text-[11px] font-bold tracking-[1px] uppercase ${
+                `apex-nav-mobile-link ${
                   isActive ? 'text-foreground' : 'text-muted-foreground'
                 }`
               }
             >
-              {item.label}
+              <Icon icon={item.icon} className="size-5 shrink-0" aria-hidden />
+              <span>{item.label}</span>
             </NavLink>
           ))}
         </nav>

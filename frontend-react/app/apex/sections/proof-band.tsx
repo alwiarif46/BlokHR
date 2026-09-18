@@ -2,11 +2,11 @@
 
 import { PROOF_BAND } from '@/app/apex/marketing-copy'
 
-/** Placeholder proof slots shared by home and secondary pages. */
+/** Modest product proof shared by home and secondary pages. */
 export function ProofBand() {
   return (
     <section
-      aria-label="Customer proof"
+      aria-label="Product proof"
       className="mt-16 border-t border-border pt-10 md:mt-20"
     >
       <ul className="grid gap-4 sm:grid-cols-3">
