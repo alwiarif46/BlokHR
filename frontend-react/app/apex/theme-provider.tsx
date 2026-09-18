@@ -43,7 +43,7 @@ function syncDocumentElement(mode: ThemeMode) {
   const root = document.documentElement
   root.classList.toggle('dark', mode === 'dark')
   root.dataset.theme = mode
-  root.style.backgroundColor = mode === 'dark' ? '#0a0b0d' : '#fbfaff'
+  root.style.backgroundColor = mode === 'dark' ? '#2a1412' : '#fbf4e1'
   root.style.colorScheme = mode
 }
 

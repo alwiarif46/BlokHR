@@ -25,24 +25,25 @@
  * ThemeProvider keeps .apex-root for shell isolation; tokens live here.
  */
 .landing-root {
-  --background: #fbfaff;
+  /* Warm wash from mosaic gold (#EDC457), not solid tile fill */
+  --background: #fbf4e1;
   --foreground: #14213d;
-  --card: #ffffff;
+  --card: #fffef9;
   --card-foreground: #14213d;
-  --popover: #ffffff;
+  --popover: #fffef9;
   --popover-foreground: #14213d;
   /* Assembly mock: black CTAs on light, not purple */
   --primary: #121314;
   --primary-foreground: #ffffff;
-  --secondary: #efe9ff;
+  --secondary: #f5edd4;
   --secondary-foreground: #14213d;
-  --muted: #efe9ff;
+  --muted: #f5edd4;
   --muted-foreground: #5c6780;
-  --accent: #efe9ff;
+  --accent: #f5edd4;
   --accent-foreground: #14213d;
   --destructive: #e8467c;
-  --border: #ddd6f5;
-  --input: #ddd6f5;
+  --border: #e6d9b5;
+  --input: #e6d9b5;
   --ring: #121314;
   --radius: 0.75rem;
   color-scheme: light;
@@ -51,23 +52,24 @@
 .apex-root.dark .landing-root,
 .dark .landing-root,
 .landing-root.dark {
-  --background: #0a0b0d;
+  /* Deep wash from mosaic coral (#DE695A), not solid tile fill */
+  --background: #2a1412;
   --foreground: #edf0f5;
-  --card: #121416;
+  --card: #3a1c1a;
   --card-foreground: #edf0f5;
-  --popover: #121416;
+  --popover: #3a1c1a;
   --popover-foreground: #edf0f5;
   --primary: #00e59a;
   --primary-foreground: #0c0d0f;
-  --secondary: #16181b;
+  --secondary: #3f1f1c;
   --secondary-foreground: #edf0f5;
-  --muted: #16181b;
-  --muted-foreground: #a8b0be;
-  --accent: #16181b;
+  --muted: #3f1f1c;
+  --muted-foreground: #d4b8b4;
+  --accent: #3f1f1c;
   --accent-foreground: #edf0f5;
   --destructive: #ff6b9d;
-  --border: rgba(255, 255, 255, 0.12);
-  --input: rgba(255, 255, 255, 0.14);
+  --border: rgba(222, 105, 90, 0.32);
+  --input: rgba(222, 105, 90, 0.36);
   --ring: #00e59a;
   color-scheme: dark;
 }

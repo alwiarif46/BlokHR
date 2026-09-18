@@ -41,7 +41,7 @@ export function HomePage() {
     <main className="relative z-10 mx-auto w-full max-w-[1180px] px-5 pb-16 md:px-8 md:pb-20">
       <div className="md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-start md:gap-10 md:pt-2">
         <section
-          className="mb-6 flex flex-col justify-start pt-0 md:mb-0"
+          className="mb-6 flex flex-col justify-start bg-white pt-0 md:mb-0 dark:bg-black"
           aria-labelledby="landingHeadline"
         >
           <HeroMosaic compact={!isDesktop} />

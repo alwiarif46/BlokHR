@@ -53,7 +53,8 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
           className="pointer-events-none absolute inset-0"
         />
 
-        <header className="relative z-10 mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4 px-5 pt-5 pb-3 md:gap-6 md:px-8 md:pt-8 md:pb-4">
+        <header className="relative z-10 w-full bg-white dark:bg-black">
+          <div className="mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4 px-5 pt-5 pb-3 md:gap-6 md:px-8 md:pt-8 md:pb-4">
           <NavLink
             to="/"
             className="text-[28px] font-extrabold tracking-[-1.2px] leading-none md:text-[40px] md:tracking-[-1.4px]"
@@ -106,6 +107,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
               <Icon icon="mdi:plus-box-outline" className="size-3.5" />
               Create workspace
             </button>
+          </div>
           </div>
         </header>
 

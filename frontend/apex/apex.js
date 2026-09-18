@@ -18370,7 +18370,7 @@ function Wg() {
 function Gg(e) {
 	if (!Wg()) return;
 	let t = document.documentElement;
-	t.classList.toggle("dark", e === "dark"), t.dataset.theme = e, t.style.backgroundColor = e === "dark" ? "#0a0b0d" : "#fbfaff", t.style.colorScheme = e;
+	t.classList.toggle("dark", e === "dark"), t.dataset.theme = e, t.style.backgroundColor = e === "dark" ? "#2a1412" : "#fbf4e1", t.style.colorScheme = e;
 }
 function Kg({ children: e }) {
 	let [t, n] = (0, _.useState)(() => Ug() ?? "light");
@@ -18438,58 +18438,61 @@ function Xg({ status: e, api: t, navigate: n, children: r }) {
 					"aria-hidden": "true",
 					className: "pointer-events-none absolute inset-0"
 				}),
-				/* @__PURE__ */ (0, X.jsxs)("header", {
-					className: "relative z-10 mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4 px-5 pt-5 pb-3 md:gap-6 md:px-8 md:pt-8 md:pb-4",
-					children: [
-						/* @__PURE__ */ (0, X.jsx)(An, {
-							to: "/",
-							className: "text-[28px] font-extrabold tracking-[-1.2px] leading-none md:text-[40px] md:tracking-[-1.4px]",
-							"aria-label": Ai,
-							children: Ai
-						}),
-						/* @__PURE__ */ (0, X.jsx)("nav", {
-							className: "apex-nav-desktop font-mono text-[12px] tracking-[1px]",
-							"aria-label": "Primary",
-							children: ji.map((e) => /* @__PURE__ */ (0, X.jsx)(An, {
-								to: e.path,
-								className: ({ isActive: e }) => `uppercase ${e ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`,
-								children: e.label
-							}, e.id))
-						}),
-						/* @__PURE__ */ (0, X.jsxs)("div", {
-							className: "flex items-center gap-2 md:gap-3",
-							children: [
-								/* @__PURE__ */ (0, X.jsx)("button", {
-									type: "button",
-									onClick: a,
-									className: "inline-flex size-11 items-center justify-center rounded-xl border border-border text-muted-foreground hover:text-foreground",
-									"aria-label": i === "dark" ? "Switch to light theme" : "Switch to dark theme",
-									children: /* @__PURE__ */ (0, X.jsx)(ki, {
-										icon: i === "dark" ? "mdi:white-balance-sunny" : "mdi:moon-waning-crescent",
-										className: "size-4"
+				/* @__PURE__ */ (0, X.jsx)("header", {
+					className: "relative z-10 w-full bg-white dark:bg-black",
+					children: /* @__PURE__ */ (0, X.jsxs)("div", {
+						className: "mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4 px-5 pt-5 pb-3 md:gap-6 md:px-8 md:pt-8 md:pb-4",
+						children: [
+							/* @__PURE__ */ (0, X.jsx)(An, {
+								to: "/",
+								className: "text-[28px] font-extrabold tracking-[-1.2px] leading-none md:text-[40px] md:tracking-[-1.4px]",
+								"aria-label": Ai,
+								children: Ai
+							}),
+							/* @__PURE__ */ (0, X.jsx)("nav", {
+								className: "apex-nav-desktop font-mono text-[12px] tracking-[1px]",
+								"aria-label": "Primary",
+								children: ji.map((e) => /* @__PURE__ */ (0, X.jsx)(An, {
+									to: e.path,
+									className: ({ isActive: e }) => `uppercase ${e ? "text-foreground" : "text-muted-foreground hover:text-foreground"}`,
+									children: e.label
+								}, e.id))
+							}),
+							/* @__PURE__ */ (0, X.jsxs)("div", {
+								className: "flex items-center gap-2 md:gap-3",
+								children: [
+									/* @__PURE__ */ (0, X.jsx)("button", {
+										type: "button",
+										onClick: a,
+										className: "inline-flex size-11 items-center justify-center rounded-xl border border-border text-muted-foreground hover:text-foreground",
+										"aria-label": i === "dark" ? "Switch to light theme" : "Switch to dark theme",
+										children: /* @__PURE__ */ (0, X.jsx)(ki, {
+											icon: i === "dark" ? "mdi:white-balance-sunny" : "mdi:moon-waning-crescent",
+											className: "size-4"
+										})
+									}),
+									/* @__PURE__ */ (0, X.jsxs)("button", {
+										type: "button",
+										onClick: () => u("login"),
+										className: "inline-flex min-h-11 items-center gap-1.5 rounded-[10px] border border-border px-4 py-2 font-mono text-[12px] tracking-[1px] text-muted-foreground uppercase hover:text-foreground",
+										children: [/* @__PURE__ */ (0, X.jsx)(ki, {
+											icon: "mdi:login",
+											className: "size-3.5"
+										}), "Log in"]
+									}),
+									/* @__PURE__ */ (0, X.jsxs)("button", {
+										type: "button",
+										onClick: () => u("create"),
+										className: "apex-header-create min-h-11 gap-1.5 rounded-[10px] bg-primary px-4 py-2 font-mono text-[12px] tracking-[1px] text-primary-foreground uppercase",
+										children: [/* @__PURE__ */ (0, X.jsx)(ki, {
+											icon: "mdi:plus-box-outline",
+											className: "size-3.5"
+										}), "Create workspace"]
 									})
-								}),
-								/* @__PURE__ */ (0, X.jsxs)("button", {
-									type: "button",
-									onClick: () => u("login"),
-									className: "inline-flex min-h-11 items-center gap-1.5 rounded-[10px] border border-border px-4 py-2 font-mono text-[12px] tracking-[1px] text-muted-foreground uppercase hover:text-foreground",
-									children: [/* @__PURE__ */ (0, X.jsx)(ki, {
-										icon: "mdi:login",
-										className: "size-3.5"
-									}), "Log in"]
-								}),
-								/* @__PURE__ */ (0, X.jsxs)("button", {
-									type: "button",
-									onClick: () => u("create"),
-									className: "apex-header-create min-h-11 gap-1.5 rounded-[10px] bg-primary px-4 py-2 font-mono text-[12px] tracking-[1px] text-primary-foreground uppercase",
-									children: [/* @__PURE__ */ (0, X.jsx)(ki, {
-										icon: "mdi:plus-box-outline",
-										className: "size-3.5"
-									}), "Create workspace"]
-								})
-							]
-						})
-					]
+								]
+							})
+						]
+					})
 				}),
 				/* @__PURE__ */ (0, X.jsx)("nav", {
 					className: "apex-nav-mobile relative z-10 px-5 pb-3 font-mono text-[11px] tracking-[1px]",
@@ -21193,7 +21196,7 @@ function ry() {
 			/* @__PURE__ */ (0, X.jsxs)("div", {
 				className: "md:grid md:grid-cols-[minmax(0,420px)_minmax(0,1fr)] md:items-start md:gap-10 md:pt-2",
 				children: [/* @__PURE__ */ (0, X.jsxs)("section", {
-					className: "mb-6 flex flex-col justify-start pt-0 md:mb-0",
+					className: "mb-6 flex flex-col justify-start bg-white pt-0 md:mb-0 dark:bg-black",
 					"aria-labelledby": "landingHeadline",
 					children: [
 						/* @__PURE__ */ (0, X.jsx)(a_, { compact: !e }),
