@@ -4,23 +4,12 @@ export const BRAND = '13blok'
 export const MODULE_COUNT = 50
 
 export const NAV = [
-  { id: 'modules', label: 'Modules', path: '/modules', icon: 'mdi:view-grid-outline' },
-  { id: 'setup', label: 'Setup', path: '/setup', icon: 'mdi:cog-outline' },
-  { id: 'access', label: 'Access', path: '/access', icon: 'mdi:shield-key-outline' },
-  { id: 'campus', label: 'Campus', path: '/campus', icon: 'mdi:school-outline' },
-  { id: 'workforce', label: 'Workforce', path: '/workforce', icon: 'mdi:briefcase-outline' },
-  { id: 'pricing', label: 'Pricing', path: '/pricing', icon: 'mdi:tag-outline' },
-] as const
-
-/** Mobile bottom bar — Home plus every marketing page (icons keep labels readable at ~390px). */
-export const MOBILE_NAV = [
-  { id: 'home', label: 'Home', path: '/', icon: 'mdi:home-outline' },
-  { id: 'modules', label: 'Modules', path: '/modules', icon: 'mdi:view-grid-outline' },
-  { id: 'setup', label: 'Setup', path: '/setup', icon: 'mdi:cog-outline' },
-  { id: 'access', label: 'Access', path: '/access', icon: 'mdi:shield-key-outline' },
-  { id: 'campus', label: 'Campus', path: '/campus', icon: 'mdi:school-outline' },
-  { id: 'workforce', label: 'Work', path: '/workforce', icon: 'mdi:briefcase-outline' },
-  { id: 'pricing', label: 'Price', path: '/pricing', icon: 'mdi:tag-outline' },
+  { id: 'modules', label: 'Modules', path: '/modules' },
+  { id: 'setup', label: 'Setup', path: '/setup' },
+  { id: 'access', label: 'Access', path: '/access' },
+  { id: 'campus', label: 'Campus', path: '/campus' },
+  { id: 'workforce', label: 'Workforce', path: '/workforce' },
+  { id: 'pricing', label: 'Pricing', path: '/pricing' },
 ] as const
 
 export const HERO = {

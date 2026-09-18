@@ -3,7 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { Icon } from '@iconify/react'
 import { NavLink, Outlet } from 'react-router-dom'
-import { BRAND, MOBILE_NAV, NAV } from '@/app/apex/marketing-copy'
+import { BRAND, NAV } from '@/app/apex/marketing-copy'
 import { SignupPanel } from '@/app/apex/signup-panel'
 import { useTheme } from '@/app/apex/theme-provider'
 import type { ApiClient, LandingMode, SetupStatus } from '@/lib/tenants-api'
@@ -56,7 +56,6 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
         <header className="relative z-10 mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4 px-5 pt-5 pb-3 md:gap-6 md:px-8 md:pt-8 md:pb-4">
           <NavLink
             to="/"
-            end
             className="text-[28px] font-extrabold tracking-[-1.2px] leading-none md:text-[40px] md:tracking-[-1.4px]"
             aria-label={BRAND}
           >
@@ -110,35 +109,26 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
           </div>
         </header>
 
-        <div className="pb-[calc(4.75rem+env(safe-area-inset-bottom))]">
-          {children ?? <Outlet />}
-        </div>
-
         <nav
-          className="fixed inset-x-0 bottom-0 z-50 border-t border-border bg-background"
-          style={{ paddingBottom: 'max(0.4rem, env(safe-area-inset-bottom))' }}
-          aria-label="Page menu"
+          className="relative z-10 flex gap-4 overflow-x-auto px-5 pb-3 lg:hidden"
+          aria-label="Primary mobile"
         >
-          <div className="mx-auto flex w-full max-w-[1180px] items-stretch justify-between gap-0.5 px-1 pt-1">
-            {MOBILE_NAV.map((item) => (
-              <NavLink
-                key={item.id}
-                to={item.path}
-                end={item.path === '/'}
-                className={({ isActive }) =>
-                  `flex min-h-12 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg px-0.5 py-1 font-mono text-[10px] tracking-[0.3px] uppercase transition-colors ${
-                    isActive
-                      ? 'bg-primary/15 text-primary'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`
-                }
-              >
-                <Icon icon={item.icon} className="size-5 shrink-0" aria-hidden="true" />
-                <span className="max-w-full truncate leading-none">{item.label}</span>
-              </NavLink>
-            ))}
-          </div>
+          {NAV.map((item) => (
+            <NavLink
+              key={item.id}
+              to={item.path}
+              className={({ isActive }) =>
+                `shrink-0 font-mono text-[11px] tracking-[1px] uppercase ${
+                  isActive ? 'text-foreground' : 'text-muted-foreground'
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
         </nav>
+
+        {children ?? <Outlet />}
 
         <SignupPanel
           status={status}
