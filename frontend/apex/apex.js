@@ -12457,14 +12457,14 @@ function ha({ status: e, api: t, navigate: n, children: r }) {
 	return /* @__PURE__ */ (0, P.jsx)(pa.Provider, {
 		value: d,
 		children: /* @__PURE__ */ (0, P.jsxs)("div", {
-			className: "relative min-h-screen bg-background text-foreground",
+			className: "apex-shell relative min-h-screen bg-background text-foreground",
 			children: [
 				/* @__PURE__ */ (0, P.jsx)("div", {
 					"aria-hidden": "true",
 					className: "pointer-events-none absolute inset-0"
 				}),
 				/* @__PURE__ */ (0, P.jsx)("header", {
-					className: "relative z-10 w-full bg-white dark:bg-black",
+					className: "apex-shell-header relative z-10 w-full shrink-0 bg-white dark:bg-black",
 					children: /* @__PURE__ */ (0, P.jsxs)("div", {
 						className: "mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4 px-5 pt-5 pb-3 md:gap-6 md:px-8 md:pt-8 md:pb-4",
 						children: [

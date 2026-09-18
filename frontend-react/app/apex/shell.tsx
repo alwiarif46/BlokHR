@@ -47,13 +47,13 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
 
   return (
     <ApexCtx.Provider value={value}>
-      <div className="relative min-h-screen bg-background text-foreground">
+      <div className="apex-shell relative min-h-screen bg-background text-foreground">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0"
         />
 
-        <header className="relative z-10 w-full bg-white dark:bg-black">
+        <header className="apex-shell-header relative z-10 w-full shrink-0 bg-white dark:bg-black">
           <div className="mx-auto flex w-full max-w-[1180px] items-center justify-between gap-4 px-5 pt-5 pb-3 md:gap-6 md:px-8 md:pt-8 md:pb-4">
           <NavLink
             to="/"

@@ -125,30 +125,21 @@
   }
 
   .apex-root .apex-nav-mobile {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: 40;
     display: flex;
     align-items: stretch;
     justify-content: space-between;
     gap: 0;
+    flex: 0 0 auto;
     min-height: 3.5rem;
     padding: 0.25rem 0.5rem calc(0.25rem + env(safe-area-inset-bottom));
     background: #fff;
     border-top: 1px solid var(--border);
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 
   .apex-root.dark .apex-nav-mobile {
     background: #000;
-  }
-
-  @media (width < 48rem) {
-    .apex-root .apex-shell-body {
-      padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
-    }
   }
 
   .apex-root .apex-header-create {
@@ -174,6 +165,51 @@
 
   body {
     margin: 0;
+  }
+}
+
+/*
+ * Mobile viewport shell — unlayered so shared.css cannot flatten it.
+ * Only .apex-shell-body scrolls; nav is a flex footer on the screen bottom.
+ */
+@media (width < 48rem) {
+  html:has(.apex-root),
+  html:has(.apex-root) body,
+  html:has(.apex-root) #root,
+  html:has(.apex-root) #landingRoot {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  .apex-root,
+  .apex-root .landing-root {
+    height: 100%;
+    max-height: 100%;
+    overflow: hidden;
+  }
+
+  .apex-root .apex-shell {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    max-height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .apex-root .apex-shell-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0;
+  }
+
+  .apex-root .apex-nav-mobile {
+    position: relative;
+    z-index: 40;
   }
 }
 
