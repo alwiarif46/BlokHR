@@ -91,4 +91,59 @@ describe('Tracked Meetings - Tenant Isolation & Security', () => {
       .set('X-Blok-Tenant', 't2').set('X-Blok-Internal', 'test-internal-secret');
     expect(resGet.status).toBe(404); // Not found!
   });
+
+  it('legacy NULL tenant records are completely inaccessible', async () => {
+    // Manually insert a legacy NULL tenant_id meeting
+    await db.run(
+      'INSERT INTO tracked_meetings (id, name, join_url, platform, added_by) VALUES (?, ?, ?, ?, ?)',
+      ['legacy-null-1', 'Legacy Meeting', 'url', 'manual', 'unknown@unknown.com']
+    );
+    
+    // Manually insert a meeting that can be backfilled
+    await db.run(
+      'INSERT INTO tracked_meetings (id, name, join_url, platform, added_by) VALUES (?, ?, ?, ?, ?)',
+      ['backfillable-1', 'Backfillable Meeting', 'url', 'manual', 'user1@t1.com']
+    );
+    
+    // Run the migration backfill logic
+    await db.run(`
+      UPDATE tracked_meetings
+      SET tenant_id = (
+        SELECT tenant_id 
+        FROM members 
+        WHERE members.email = tracked_meetings.added_by
+        LIMIT 1
+      )
+      WHERE tenant_id IS NULL;
+    `);
+
+    // T1 tries to get the backfilled meeting (Should succeed!)
+    const resGetT1 = await request(app).get('/api/meetings')
+      .set('X-User-Email', 'user1@t1.com')
+      .set('X-Blok-Tenant', 't1').set('X-Blok-Internal', 'test-internal-secret');
+    expect(resGetT1.status).toBe(200);
+    expect(resGetT1.body.meetings).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'backfillable-1' })]));
+
+    // T2 tries to get unmappable legacy record (NULL) via getAll
+    const resGetAll = await request(app).get('/api/meetings')
+      .set('X-User-Email', 'user3@t2.com')
+      .set('X-Blok-Tenant', 't2').set('X-Blok-Internal', 'test-internal-secret');
+    // Ensure it doesn't return the legacy record
+    if (resGetAll.body.meetings) {
+      expect(resGetAll.body.meetings).not.toEqual(expect.arrayContaining([expect.objectContaining({ id: 'legacy-null-1' })]));
+    }
+
+    // T2 tries to update
+    const resUpdate = await request(app).put('/api/meetings/legacy-null-1')
+      .send({ name: 'Hacked' })
+      .set('X-User-Email', 'user3@t2.com')
+      .set('X-Blok-Tenant', 't2').set('X-Blok-Internal', 'test-internal-secret');
+    expect(resUpdate.status).toBe(400);
+
+    // T2 tries to delete
+    const resDelete = await request(app).delete('/api/meetings/legacy-null-1')
+      .set('X-User-Email', 'user3@t2.com')
+      .set('X-Blok-Tenant', 't2').set('X-Blok-Internal', 'test-internal-secret');
+    expect(resDelete.status).toBe(404);
+  });
 });
