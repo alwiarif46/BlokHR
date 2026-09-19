@@ -1,4 +1,5 @@
 import type { Logger } from 'pino';
+import { getTenantId } from '../tenant/context';
 import type { SettingsRepository, MemberRow } from '../repositories/settings-repository';
 import type { LeaveRepository } from '../repositories/leave-repository';
 import type { RegularizationRepository } from '../repositories/regularization-repository';
@@ -126,7 +127,7 @@ export class SettingsService {
     ]);
 
     // Get tracked meetings for the settings bundle
-    const meetings = this.meetingRepo ? await this.meetingRepo.getAll() : [];
+    const meetings = this.meetingRepo ? await this.meetingRepo.getAll(getTenantId()) : [];
 
     return {
       groups: groups.map((g) => ({

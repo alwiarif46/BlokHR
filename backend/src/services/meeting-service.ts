@@ -49,7 +49,7 @@ export class MeetingService {
   // ═══════════════════════════════════════════════════════════════
 
   /** Add a tracked meeting manually. */
-  async addMeeting(data: {
+  async addMeeting(tenantId: string, data: {
     name: string;
     joinUrl: string;
     client: string;
@@ -61,7 +61,7 @@ export class MeetingService {
     }
 
     const platform = this.detectPlatform(data.joinUrl);
-    const meeting = await this.repo.create({
+    const meeting = await this.repo.create(tenantId, {
       name: data.name,
       joinUrl: data.joinUrl,
       platform,
@@ -80,16 +80,17 @@ export class MeetingService {
   }
 
   /** Get all tracked meetings. */
-  async getAll(): Promise<TrackedMeeting[]> {
-    return this.repo.getAll();
+  async getAll(tenantId: string): Promise<TrackedMeeting[]> {
+    return this.repo.getAll(tenantId);
   }
 
   /** Update/enrich a meeting. */
   async update(
+    tenantId: string,
     meetingId: string,
     fields: { client?: string; purpose?: string },
   ): Promise<{ success: boolean; error?: string }> {
-    const meeting = await this.repo.getById(meetingId);
+    const meeting = await this.repo.getById(tenantId, meetingId);
     if (!meeting) return { success: false, error: 'Meeting not found' };
 
     const updates: Record<string, unknown> = {};
@@ -97,14 +98,29 @@ export class MeetingService {
     if (fields.purpose !== undefined) updates.purpose = fields.purpose;
 
     if (Object.keys(updates).length > 0) {
-      await this.repo.update(meetingId, updates as { client?: string; purpose?: string });
+      await this.repo.update(tenantId, meetingId, updates as { client?: string; purpose?: string });
     }
 
     return { success: true };
   }
 
+  /** Delete a tracked meeting. Caller must be the original creator. */
+  async delete(
+    tenantId: string,
+    meetingId: string,
+    callerEmail: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const meeting = await this.repo.getById(tenantId, meetingId);
+    if (!meeting) return { success: false, error: 'Meeting not found' };
+    if (meeting.added_by.toLowerCase().trim() !== callerEmail.toLowerCase().trim()) {
+      return { success: false, error: 'You can only delete meetings you created' };
+    }
+    await this.repo.delete(tenantId, meetingId);
+    return { success: true };
+  }
+
   /** Get all attendance data in the frontend's expected grouped format. */
-  async getAttendance(): Promise<{
+  async getAttendance(tenantId: string): Promise<{
     attendance: Record<
       string,
       {
@@ -120,7 +136,7 @@ export class MeetingService {
       }
     >;
   }> {
-    const attendance = await this.repo.getAllAttendance();
+    const attendance = await this.repo.getAllAttendance(tenantId);
     return { attendance };
   }
 
@@ -133,6 +149,7 @@ export class MeetingService {
    * Returns newly added meetings grouped by platform.
    */
   async discoverAll(
+    tenantId: string,
     teamsUserId: string,
     googleEmail: string,
     zoomUserId: string,
@@ -148,12 +165,12 @@ export class MeetingService {
     bluejeans: TrackedMeeting[];
   }> {
     const [teams, google, zoom, webex, gotomeeting, bluejeans] = await Promise.all([
-      this.discoverTeams(teamsUserId),
-      this.discoverGoogle(googleEmail),
-      this.discoverZoom(zoomUserId),
-      this.discoverWebex(webexEmail),
-      this.discoverGoTo(gotoOrganizerKey),
-      this.discoverBlueJeans(bluejeansUserId),
+      this.discoverTeams(tenantId, teamsUserId),
+      this.discoverGoogle(tenantId, googleEmail),
+      this.discoverZoom(tenantId, zoomUserId),
+      this.discoverWebex(tenantId, webexEmail),
+      this.discoverGoTo(tenantId, gotoOrganizerKey),
+      this.discoverBlueJeans(tenantId, bluejeansUserId),
     ]);
 
     return { teams, google, zoom, webex, gotomeeting, bluejeans };
@@ -164,10 +181,11 @@ export class MeetingService {
    * Returns the number of attendance records ingested.
    */
   async syncAttendance(
+    tenantId: string,
     meetingId: string,
     sessionDate: string,
   ): Promise<{ success: boolean; count: number; error?: string }> {
-    const meeting = await this.repo.getById(meetingId);
+    const meeting = await this.repo.getById(tenantId, meetingId);
     if (!meeting) return { success: false, count: 0, error: 'Meeting not found' };
 
     let participants: AttendanceResult[] = [];
@@ -196,7 +214,7 @@ export class MeetingService {
     }
 
     for (const p of participants) {
-      await this.repo.recordAttendance({
+      await this.repo.recordAttendance(tenantId, {
         meetingId: meeting.id,
         sessionDate: sessionDate || new Date().toISOString().split('T')[0],
         email: p.email,
@@ -221,7 +239,7 @@ export class MeetingService {
   //  MICROSOFT TEAMS — Graph API
   // ═══════════════════════════════════════════════════════════════
 
-  private async discoverTeams(userId: string): Promise<TrackedMeeting[]> {
+  private async discoverTeams(tenantId: string, userId: string): Promise<TrackedMeeting[]> {
     if (!this.config.azureBotAppId || !this.config.azureBotAppPassword || !userId) {
       return [];
     }
@@ -248,7 +266,7 @@ export class MeetingService {
         }>;
       };
 
-      return this.deduplicateAndStore(
+      return this.deduplicateAndStore(tenantId, 
         data.value
           ?.filter((e) => e.onlineMeeting?.joinUrl)
           .map((e) => ({
@@ -348,7 +366,7 @@ export class MeetingService {
   //  GOOGLE MEET — Calendar API + Workspace Reports
   // ═══════════════════════════════════════════════════════════════
 
-  private async discoverGoogle(googleEmail: string): Promise<TrackedMeeting[]> {
+  private async discoverGoogle(tenantId: string, googleEmail: string): Promise<TrackedMeeting[]> {
     if (!this.config.googleChatServiceAccountJson || !googleEmail) {
       return [];
     }
@@ -378,7 +396,7 @@ export class MeetingService {
         }>;
       };
 
-      return this.deduplicateAndStore(
+      return this.deduplicateAndStore(tenantId, 
         (data.items ?? [])
           .map((e) => {
             const video = e.conferenceData?.entryPoints?.find(
@@ -437,7 +455,7 @@ export class MeetingService {
   //  ZOOM — Server-to-Server OAuth + REST API
   // ═══════════════════════════════════════════════════════════════
 
-  private async discoverZoom(zoomUserId: string): Promise<TrackedMeeting[]> {
+  private async discoverZoom(tenantId: string, zoomUserId: string): Promise<TrackedMeeting[]> {
     if (
       !this.config.zoomAccountId ||
       !this.config.zoomClientId ||
@@ -472,7 +490,7 @@ export class MeetingService {
         }>;
       };
 
-      return this.deduplicateAndStore(
+      return this.deduplicateAndStore(tenantId, 
         (data.meetings ?? []).map((m) => ({
           name: m.topic ?? 'Zoom Meeting',
           joinUrl: m.join_url ?? '',
@@ -568,7 +586,7 @@ export class MeetingService {
   //  WEBEX — Bot Token + REST API
   // ═══════════════════════════════════════════════════════════════
 
-  private async discoverWebex(webexEmail: string): Promise<TrackedMeeting[]> {
+  private async discoverWebex(tenantId: string, webexEmail: string): Promise<TrackedMeeting[]> {
     if (!this.config.webexBotToken || !webexEmail) {
       return [];
     }
@@ -597,7 +615,7 @@ export class MeetingService {
         }>;
       };
 
-      return this.deduplicateAndStore(
+      return this.deduplicateAndStore(tenantId, 
         (data.items ?? []).map((m) => ({
           name: m.title ?? 'Webex Meeting',
           joinUrl: m.webLink ?? '',
@@ -659,7 +677,7 @@ export class MeetingService {
   //  GOTOMEETING — OAuth2 Client Credentials + REST API
   // ═══════════════════════════════════════════════════════════════
 
-  private async discoverGoTo(organizerKey: string): Promise<TrackedMeeting[]> {
+  private async discoverGoTo(tenantId: string, organizerKey: string): Promise<TrackedMeeting[]> {
     if (!this.config.gotoClientId || !this.config.gotoClientSecret || !organizerKey) {
       return [];
     }
@@ -686,7 +704,7 @@ export class MeetingService {
         meetingType: string;
       }>;
 
-      return this.deduplicateAndStore(
+      return this.deduplicateAndStore(tenantId, 
         (data ?? []).map((m) => ({
           name: m.subject ?? 'GoToMeeting',
           joinUrl: m.joinURL ?? '',
@@ -775,7 +793,7 @@ export class MeetingService {
   //  BLUEJEANS — API Key + REST API
   // ═══════════════════════════════════════════════════════════════
 
-  private async discoverBlueJeans(bluejeansUserId: string): Promise<TrackedMeeting[]> {
+  private async discoverBlueJeans(tenantId: string, bluejeansUserId: string): Promise<TrackedMeeting[]> {
     if (!this.config.bluejeansApiKey || !bluejeansUserId) {
       return [];
     }
@@ -808,7 +826,7 @@ export class MeetingService {
         meetingUri: string;
       }>;
 
-      return this.deduplicateAndStore(
+      return this.deduplicateAndStore(tenantId, 
         (data ?? []).map((m) => ({
           name: m.title ?? 'BlueJeans Meeting',
           joinUrl: m.meetingUri ? `https://bluejeans.com/${m.numericMeetingId}` : '',
@@ -894,14 +912,15 @@ export class MeetingService {
    * Returns only the newly added meetings.
    */
   private async deduplicateAndStore(
+    tenantId: string,
     candidates: Array<{ name: string; joinUrl: string; platform: string; externalId: string }>,
   ): Promise<TrackedMeeting[]> {
     const added: TrackedMeeting[] = [];
     for (const candidate of candidates) {
-      const existing = await this.repo.getByExternalId(candidate.externalId);
+      const existing = await this.repo.getByExternalId(tenantId, candidate.externalId);
       if (existing) continue;
 
-      const meeting = await this.repo.create({
+      const meeting = await this.repo.create(tenantId, {
         name: candidate.name,
         joinUrl: candidate.joinUrl,
         platform: candidate.platform,

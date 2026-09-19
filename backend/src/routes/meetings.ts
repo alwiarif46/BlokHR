@@ -19,6 +19,7 @@ import {
  *   GET  /api/meetings                        — list all tracked meetings
  *   POST /api/meetings                        — add a meeting manually
  *   PUT  /api/meetings/:id                    — enrich/update a meeting
+ *   DELETE /api/meetings/:id                  — delete a tracked meeting (owner only)
  *   GET  /api/meetings/attendance              — get all attendance data (grouped)
  *   GET  /api/meetings/discover-all            — discover from all configured platforms
  *   POST /api/meetings/:id/sync-attendance     — pull attendance from meeting's platform API
@@ -52,7 +53,7 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
   router.get(
     '/meetings',
     asyncHandler(async (_req: Request, res: Response) => {
-      const meetings = await service.getAll();
+      const meetings = await service.getAll(getTenantId());
       res.json({ meetings });
     }),
   );
@@ -61,28 +62,42 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
   router.post(
     '/meetings',
     asyncHandler(async (req: Request, res: Response) => {
-      const { name, joinUrl, client, purpose, addedBy } = req.body as {
+      const email = await requireAuth(req);
+      const { name, joinUrl, client, purpose } = req.body as {
         name?: string;
         joinUrl?: string;
         client?: string;
         purpose?: string;
-        addedBy?: string;
       };
 
       if (!name) throw new AppError('Meeting name is required', 400);
 
-      const result = await service.addMeeting({
+      const result = await service.addMeeting(getTenantId(), {
         name: name.trim(),
         joinUrl: (joinUrl ?? '').trim(),
         client: (client ?? '').trim(),
         purpose: (purpose ?? '').trim(),
-        addedBy: addedBy ?? req.identity?.email ?? '',
+        addedBy: email,
       });
 
       if (!result.success) {
         throw new AppError(result.error ?? 'Failed to add meeting', 400);
       }
 
+      res.json(result);
+    }),
+  );
+
+  /** DELETE /api/meetings/:id — delete a tracked meeting (owner only). */
+  router.delete(
+    '/meetings/:id',
+    asyncHandler(async (req: Request, res: Response) => {
+      const email = await requireAuth(req);
+      const { id } = req.params;
+      const result = await service.delete(getTenantId(), id, email);
+      if (!result.success) {
+        throw new AppError(result.error ?? 'Failed to delete meeting', result.error?.includes('only delete') ? 403 : 404);
+      }
       res.json(result);
     }),
   );
@@ -217,7 +232,7 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
         purpose?: string;
       };
 
-      const result = await service.update(id, {
+      const result = await service.update(getTenantId(), id, {
         client: client?.trim(),
         purpose: purpose?.trim(),
       });
@@ -234,7 +249,7 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
   router.get(
     '/meetings/attendance',
     asyncHandler(async (_req: Request, res: Response) => {
-      const data = await service.getAttendance();
+      const data = await service.getAttendance(getTenantId());
       res.json(data);
     }),
   );
@@ -253,6 +268,7 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
       const bluejeansUserId = (req.query.bluejeansUserId as string) ?? '';
 
       const result = await service.discoverAll(
+        getTenantId(),
         userId,
         googleEmail,
         zoomUserId,
@@ -275,6 +291,7 @@ export function createMeetingRouter(db: DatabaseEngine, logger: Logger, config: 
       const { sessionDate } = req.body as { sessionDate?: string };
 
       const result = await service.syncAttendance(
+        getTenantId(),
         id,
         sessionDate ?? new Date().toISOString().split('T')[0],
       );
