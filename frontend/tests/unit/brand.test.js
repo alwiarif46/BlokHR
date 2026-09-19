@@ -6,31 +6,27 @@ import {
   isLightBrandSurface,
   syncBrandLogos,
   setTenantLogoOverride,
-  MONO_LOGO_DARK,
-  MONO_LOGO_LIGHT,
+  PLATFORM_WORDMARK,
 } from '../../shared/brand.js';
 
 describe('getBrand', () => {
   it('returns BlokHR brand for hr vertical', () => {
     const b = getBrand('hr');
     expect(b.name).toBe('BlokHR');
+    expect(b.wordmark).toBe(PLATFORM_WORDMARK);
     expect(b.colourPresetKey).toBe('blokhr');
     expect(b.wordmarkPath).toContain('blokhr-wordmark.svg');
-    expect(b.headerLogoDarkPath).toContain('blok-mono-white.png');
-    expect(b.headerLogoLightPath).toContain('blok-mono-ink.png');
-    expect(b.headerLogoPath).toContain('blok-mono-white.png');
     expect(b.faviconPath).toContain('favicon-13.svg');
     expect(b.tagline).toBeTruthy();
     expect(b.loginHeading).toBeTruthy();
   });
 
-  it('returns BlokSchool brand for school vertical', () => {
+  it('returns BlokSchool brand for school session', () => {
     const b = getBrand('school');
     expect(b.name).toBe('BlokSchool');
+    expect(b.wordmark).toBe('13lok');
     expect(b.colourPresetKey).toBe('blokschool');
     expect(b.wordmarkPath).toContain('blokschool-wordmark.svg');
-    expect(b.headerLogoPath).toContain('blok-mono-white.png');
-    expect(b.loginLogoPath).toContain('blok-mono-white.png');
     expect(b.loginLogoIncludesName).toBe(true);
     expect(b.faviconPath).toContain('favicon-13.svg');
   });
@@ -42,21 +38,17 @@ describe('getBrand', () => {
 });
 
 describe('resolveBrandLogoPath', () => {
-  it('uses ink mark for light login/header surfaces', () => {
+  it('keeps light-surface detection for theme chrome', () => {
     expect(isLightBrandSurface('neural')).toBe(true);
     expect(isLightBrandSurface('holodeck')).toBe(true);
     expect(isLightBrandSurface('light')).toBe(true);
-    expect(resolveBrandLogoPath('neural')).toBe(MONO_LOGO_LIGHT);
-    expect(resolveBrandLogoPath('holodeck')).toBe(MONO_LOGO_LIGHT);
-    expect(resolveBrandLogoPath('light')).toBe(MONO_LOGO_LIGHT);
-  });
-
-  it('uses white mark for dark themes', () => {
     expect(isLightBrandSurface('chromium')).toBe(false);
     expect(isLightBrandSurface('clean')).toBe(false);
-    expect(resolveBrandLogoPath('chromium')).toBe(MONO_LOGO_DARK);
-    expect(resolveBrandLogoPath('clean')).toBe(MONO_LOGO_DARK);
-    expect(resolveBrandLogoPath('dark')).toBe(MONO_LOGO_DARK);
+  });
+
+  it('returns empty path — chrome uses text wordmark', () => {
+    expect(resolveBrandLogoPath('neural')).toBe('');
+    expect(resolveBrandLogoPath('dark')).toBe('');
   });
 });
 
@@ -66,12 +58,16 @@ describe('applyBrand', () => {
     document.head.innerHTML = '';
     document.body.className = 'theme-dark';
     document.body.innerHTML = `
-      <div id="hdrLogoLetter">B</div>
-      <img id="hdrLogoImg" style="display:none" />
+      <div id="hdrLogo" class="hdr-logo">
+        <div id="hdrLogoLetter">B</div>
+        <img id="hdrLogoImg" style="display:none" />
+        <span id="hdrBrandWordmark" class="brand-wordmark"></span>
+      </div>
       <div id="hdrTitle"></div>
       <div class="login-logo" id="loginLogo">
         <span id="loginLogoLetter">B</span>
         <img id="loginLogoImg" style="display:none" />
+        <span id="loginBrandWordmark" class="brand-wordmark"></span>
       </div>
       <div id="loginTitle"></div>
       <div id="loginTagline"></div>
@@ -88,39 +84,29 @@ describe('applyBrand', () => {
     document.body.className = '';
   });
 
-  it('swaps title, favicon, and mono wordmark for a school session', () => {
+  it('swaps title, favicon, and text wordmark for a school session', () => {
     applyBrand('school');
     expect(document.title).toBe('BlokSchool');
     const icon = document.querySelector("link[rel='icon']");
     expect(icon).toBeTruthy();
     expect(icon.getAttribute('href')).toContain('favicon-13.svg');
-    const img = document.getElementById('hdrLogoImg');
-    expect(img.getAttribute('src')).toContain('blok-mono-white.png');
-    expect(img.style.display).toBe('block');
+    expect(document.getElementById('hdrBrandWordmark').textContent).toBe('13lok');
+    expect(document.getElementById('hdrLogoImg').style.display).toBe('none');
     expect(document.getElementById('hdrTitle').textContent).toBe('BlokSchool');
-    expect(document.getElementById('loginLogoImg').getAttribute('src')).toContain(
-      'blok-mono-white.png',
-    );
+    expect(document.getElementById('loginBrandWordmark').textContent).toBe('13lok');
     expect(document.getElementById('loginTitle').hidden).toBe(true);
+    expect(document.getElementById('loginFooter').textContent).toBe('Powered by 13lok');
   });
 
-  it('applies ink mono when theme is light', () => {
+  it('applies text wordmark on light and dark themes', () => {
     document.body.className = 'theme-light';
     applyBrand('hr', 'light');
-    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
-      'blok-mono-ink.png',
-    );
-    expect(document.getElementById('loginLogoImg').getAttribute('src')).toContain(
-      'blok-mono-ink.png',
-    );
-  });
+    expect(document.getElementById('hdrBrandWordmark').textContent).toBe('13lok');
+    expect(document.getElementById('loginBrandWordmark').textContent).toBe('13lok');
 
-  it('applies white mono when theme is dark', () => {
     document.body.className = 'theme-dark';
     applyBrand('hr', 'dark');
-    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
-      'blok-mono-white.png',
-    );
+    expect(document.getElementById('hdrBrandWordmark').textContent).toBe('13lok');
   });
 
   it('applies hr brand chrome', () => {
@@ -131,10 +117,12 @@ describe('applyBrand', () => {
     );
   });
 
-  it('skips mono sync when tenant logo override is active', () => {
+  it('skips wordmark sync when tenant logo override is active', () => {
     setTenantLogoOverride(true);
     document.getElementById('hdrLogoImg').setAttribute('src', 'tenant://logo');
+    document.getElementById('hdrBrandWordmark').textContent = 'stale';
     syncBrandLogos('dark');
     expect(document.getElementById('hdrLogoImg').getAttribute('src')).toBe('tenant://logo');
+    expect(document.getElementById('hdrBrandWordmark').textContent).toBe('stale');
   });
 });

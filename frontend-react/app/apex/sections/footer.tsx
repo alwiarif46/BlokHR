@@ -1,6 +1,7 @@
 'use client'
 
 import { NavLink } from 'react-router-dom'
+import { BrandMark } from '@/app/apex/brand-mark'
 import { BRAND } from '@/app/apex/marketing-copy'
 import { COMPANY, LEGAL_NAV } from '@/app/apex/legal-copy'
 
@@ -21,7 +22,7 @@ export function Footer() {
           className="inline-flex min-h-11 items-center text-[22px] font-extrabold tracking-[-0.8px] text-foreground"
           aria-label={BRAND}
         >
-          {BRAND}
+          <BrandMark decorative />
         </NavLink>
         <nav aria-label="Footer" className="flex flex-wrap gap-x-5 gap-y-1">
           {PRODUCT_LINKS.map((link) => (

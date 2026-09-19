@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { Icon } from '@iconify/react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { BrandMark } from '@/app/apex/brand-mark'
 import { BRAND, NAV } from '@/app/apex/marketing-copy'
 import { SignupPanel } from '@/app/apex/signup-panel'
 import { useTheme } from '@/app/apex/theme-provider'
@@ -60,7 +61,7 @@ export function ApexShell({ status, api, navigate, children }: ApexShellProps) {
             className="text-[28px] font-extrabold tracking-[-1.2px] leading-none md:text-[40px] md:tracking-[-1.4px]"
             aria-label={BRAND}
           >
-            {BRAND}
+            <BrandMark decorative />
           </NavLink>
 
           <nav className="apex-nav-desktop font-mono text-[12px] font-bold tracking-[1px]" aria-label="Primary">

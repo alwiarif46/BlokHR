@@ -1,6 +1,6 @@
-/** Shared 13blok Apex marketing copy — single source of truth for desktop/mobile. */
+/** Shared 13lok Apex marketing copy — single source of truth for desktop/mobile. */
 
-export const BRAND = '13blok'
+export const BRAND = '13lok'
 export const MODULE_COUNT = 50
 
 export const NAV = [
@@ -16,7 +16,7 @@ export const HERO = {
   eyebrow: 'Modular HRMS & campus ops',
   headline: 'Switch on what you actually run.',
   lede:
-    'Motorola sketched a phone you built from blocks. Google called it Project Ara and shelved it. 13blok is that idea, shipped as software: 50 modules on one spine, each with its own switch. Attendance today, payroll next quarter, biometrics when you are ready.',
+    'Motorola imagined a phone you could build from blocks, Google named it Project Ara, then quietly shelved it. 13lok is that idea, shipped: fifty modules on one spine, each with its own switch. Start with attendance, add payroll next quarter, turn on biometrics the week you are ready rather than the week a salesperson says you are. One workspace for your school or your company, holding only the tools you actually picked. And off means gone, not greyed out and nagging you to upgrade: the module leaves your sidebar and your API until the day you switch it back on. The phone never shipped. The software does.',
   primaryCta: 'Create your workspace',
   secondaryCta: 'I already have one',
   meta: 'No card to start · setup takes 4 steps',

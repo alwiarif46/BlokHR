@@ -12,7 +12,16 @@ describe('themes catalog and setTheme', () => {
   beforeEach(() => {
     setTenantLogoOverride(false);
     document.body.className = 'guardian-body on-login-screen';
-    document.body.innerHTML = '<img id="hdrLogoImg" /><img id="loginLogoImg" />';
+    document.body.innerHTML = `
+      <div id="hdrLogo">
+        <img id="hdrLogoImg" />
+        <span id="hdrBrandWordmark" class="brand-wordmark"></span>
+      </div>
+      <div id="loginLogo">
+        <img id="loginLogoImg" />
+        <span id="loginBrandWordmark" class="brand-wordmark"></span>
+      </div>
+    `;
   });
 
   afterEach(() => {
@@ -70,17 +79,13 @@ describe('themes catalog and setTheme', () => {
     expect(getTheme()).toBe('dark');
   });
 
-  it('swaps mono logos when theme changes between dark and light surfaces', () => {
+  it('keeps text wordmark when theme changes between dark and light surfaces', () => {
     setTheme('dark');
-    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
-      'blok-mono-white.png',
-    );
+    expect(document.getElementById('hdrBrandWordmark').textContent).toBe('13lok');
+    expect(document.getElementById('hdrLogoImg').style.display).toBe('none');
     setTheme('light');
-    expect(document.getElementById('hdrLogoImg').getAttribute('src')).toContain(
-      'blok-mono-ink.png',
-    );
-    expect(document.getElementById('loginLogoImg').getAttribute('src')).toContain(
-      'blok-mono-ink.png',
-    );
+    expect(document.getElementById('hdrBrandWordmark').textContent).toBe('13lok');
+    expect(document.getElementById('loginBrandWordmark').textContent).toBe('13lok');
+    expect(document.getElementById('loginLogoImg').style.display).toBe('none');
   });
 });

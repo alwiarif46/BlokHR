@@ -462,6 +462,53 @@ body.theme-light:has(#screenChangePassword.active) .login-card {
   border-radius: 0;
   color: inherit;
 }
+/* Extrabold text wordmark — matches Apex shell brand lockup */
+.brand-wordmark {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+  line-height: 1;
+  color: var(--tx);
+  white-space: nowrap;
+  user-select: none;
+  padding-right: 0.18em;
+}
+.brand-wordmark::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0.22em;
+  height: 0.22em;
+  border-radius: 1.5px;
+  background: #5d87ed;
+  transform: translate(18%, -8%);
+  pointer-events: none;
+}
+.login-logo.login-logo--wordmark .brand-wordmark {
+  font-size: 32px;
+  letter-spacing: -1.4px;
+}
+.hdr-logo.hdr-logo--wordmark {
+  width: auto;
+  min-width: 0;
+  max-width: min(220px, 46vw);
+  height: 44px;
+  justify-content: flex-start;
+  overflow: visible;
+}
+.hdr-logo.hdr-logo--wordmark .brand-wordmark {
+  font-size: 26px;
+  letter-spacing: -1.2px;
+}
+.hdr-logo.hdr-logo--wordmark img[hidden],
+.login-logo.login-logo--wordmark img[hidden] {
+  display: none !important;
+}
 .login-title {
   font-size: 22px;
   font-weight: 800;

@@ -2,7 +2,7 @@
 
 export const COMPANY = {
   legalName: '13 Blok Private Limited',
-  brand: '13blok',
+  brand: '13lok',
   addressLines: ['Netaji Subhash Marg', 'Delhi', 'India'] as const,
   /** Primary contact for privacy / legal notices */
   emailLegal: 'legal@13blok.in',

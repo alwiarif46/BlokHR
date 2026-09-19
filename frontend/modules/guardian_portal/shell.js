@@ -52,7 +52,8 @@ export function shellHtml(brand) {
 
   return `
 <header class="gp-header" id="gpHeader" hidden>
-  <img id="hdrWordmark" class="gp-wordmark" src="${escapeHtml(brand.headerLogoPath || brand.wordmarkPath)}" alt="${escapeHtml(brand.name)}" />
+  <span id="gpBrandWordmark" class="brand-wordmark gp-wordmark gp-wordmark--text">${escapeHtml(brand.wordmark || '13lok')}</span>
+  <img id="hdrWordmark" class="gp-wordmark" alt="" hidden />
   <div class="gp-header-actions">
     <div class="gp-themes hdr-themes" id="gpHdrThemes" role="group" aria-label="Theme">
       ${themePickerHtml()}

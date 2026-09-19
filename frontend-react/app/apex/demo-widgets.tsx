@@ -1,7 +1,7 @@
 'use client'
 
 import { Icon } from '@iconify/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ACCESS, FEATURES_BLURB, MODULE_COUNT, SETUP_STEPS } from '@/app/apex/marketing-copy'
 import {
   DARK_FACE,
@@ -9,6 +9,14 @@ import {
   mosaicShellForId,
   type MosaicShell,
 } from '@/app/apex/mosaic-theme'
+import boardAdminFeatures from '@/app/apex/assets/board/admin-features.jpg'
+import boardKeepFamiliesClose from '@/app/apex/assets/board/keep-families-close.jpg'
+import boardLeaves from '@/app/apex/assets/board/leaves.jpg'
+import boardMakeItYours from '@/app/apex/assets/board/make-it-yours.jpg'
+import boardNeedItLater from '@/app/apex/assets/board/need-it-later.jpg'
+import boardPlanEveryPeriod from '@/app/apex/assets/board/plan-every-period.jpg'
+import boardSeeWhosIn from '@/app/apex/assets/board/see-whos-in.jpg'
+import boardTrackEveryHour from '@/app/apex/assets/board/track-every-hour.jpg'
 import DraggableWidgetGrid, {
   type WidgetItem,
   type WidgetSize,
@@ -35,6 +43,10 @@ export interface Widget extends WidgetItem {
   stepN?: string
   /** Force a mosaic shell instead of hashed cycle. */
   shell?: MosaicShell
+  /** Optional product photo that fills the tile. */
+  coverImage?: string
+  /** Alternate cover when the module switch is off. */
+  coverImageOff?: string
 }
 
 function switchWidget(
@@ -57,6 +69,8 @@ const ATTENDANCE = switchWidget(
   'mdi:clock-check-outline',
   'Clock-in and regularizations.',
 )
+ATTENDANCE.coverImage = boardSeeWhosIn
+
 const LEAVES = switchWidget(
   'leaves',
   'Leaves',
@@ -65,6 +79,8 @@ const LEAVES = switchWidget(
   'mdi:calendar-remove-outline',
   'Policies and balances.',
 )
+LEAVES.coverImage = boardLeaves
+
 const ROLLCALL = switchWidget(
   'rollcall',
   'Roll call',
@@ -73,6 +89,8 @@ const ROLLCALL = switchWidget(
   'mdi:account-check-outline',
   'Section presence, live.',
 )
+ROLLCALL.coverImage = boardKeepFamiliesClose
+
 const TIMETABLE = switchWidget(
   'timetable',
   'Timetable',
@@ -81,6 +99,8 @@ const TIMETABLE = switchWidget(
   'mdi:calendar-clock',
   'Slots, cover, instances.',
 )
+TIMETABLE.coverImage = boardPlanEveryPeriod
+
 const OVERTIME = switchWidget(
   'overtime',
   'Overtime',
@@ -89,6 +109,8 @@ const OVERTIME = switchWidget(
   'mdi:timer-plus-outline',
   'Bolt on when needed.',
 )
+OVERTIME.coverImage = boardTrackEveryHour
+
 const FACE = switchWidget(
   'face',
   'Face capture',
@@ -97,6 +119,9 @@ const FACE = switchWidget(
   'mdi:face-recognition',
   'Biometrics when ready.',
 )
+FACE.coverImage = boardMakeItYours
+FACE.coverImageOff = boardMakeItYours
+
 const LIBRARY = switchWidget(
   'library',
   'Library',
@@ -161,6 +186,7 @@ const FEATURES_HEADER: Widget = {
   size: 'wide',
   label: 'Admin Features',
   shell: DARK_FACE,
+  coverImage: boardAdminFeatures,
 }
 
 /** Closing CTA — spans two sm cells. Neutral face; green reserved for on-state. */
@@ -172,6 +198,7 @@ const MARKETING_CTA: Widget = {
   detail: 'Just turn it on.',
   icon: 'mdi:toggle-switch',
   shell: DARK_FACE,
+  coverImage: boardNeedItLater,
 }
 
 const OFF_SHELL: MosaicShell = { bg: '#D8D8DC', tone: 'light' }
@@ -191,19 +218,19 @@ function rackCategoryShell(rack: Rack): MosaicShell {
   }
 }
 
-/** Slim home overview: 3 on + 2 off + header + CTA = 9 cells. */
+/** Slim home overview: 3 on + 1 add-on on + 1 off + header + CTA. */
 export const HOME_WIDGETS: Widget[] = [
   FEATURES_HEADER,
-  { ...ATTENDANCE, shell: rackCategoryShell('core') },
   { ...ROLLCALL, shell: rackCategoryShell('campus') },
-  { ...LEAVES, shell: rackCategoryShell('core') },
-  { ...OVERTIME, shell: OFF_SHELL },
-  { ...FACE, shell: OFF_SHELL },
+  { ...OVERTIME, enabled: true, shell: rackCategoryShell('add-on') },
   MARKETING_CTA,
+  { ...ATTENDANCE, shell: rackCategoryShell('core') },
+  { ...TIMETABLE, shell: rackCategoryShell('campus') },
+  { ...FACE, shell: OFF_SHELL },
 ]
 
 /** Starting "modules on" for the live chip (product story of 50). */
-export const BOARD_BASE_ON = 13
+export const BOARD_BASE_ON = 14
 
 /** Full Admin › Features switch rack: 12 cells (4×3). */
 export const MODULES_WIDGETS: Widget[] = [
@@ -463,17 +490,71 @@ function Toggle({ on }: { on: boolean }) {
   )
 }
 
+function BoardCover({
+  src,
+  alt,
+  dimmed = false,
+  children,
+}: {
+  src: string
+  alt: string
+  dimmed?: boolean
+  children?: ReactNode
+}) {
+  return (
+    <section className="relative h-full w-full overflow-hidden bg-[#1a1a1c]">
+      <img
+        src={src}
+        alt={alt}
+        className={`absolute inset-0 size-full object-cover transition-[filter] ${
+          dimmed ? 'grayscale-[0.45] brightness-95' : ''
+        }`}
+        style={{ objectPosition: '50% 36%' }}
+        draggable={false}
+      />
+      {children}
+    </section>
+  )
+}
+
 function FeaturesHeader({
   title,
   detail,
   shell,
   onCount,
+  coverImage,
 }: {
   title: string
   detail?: string
   shell: MosaicShell
   onCount?: number
+  coverImage?: string
 }) {
+  if (coverImage) {
+    return (
+      <BoardCover src={coverImage} alt={title}>
+        {typeof onCount === 'number' ? (
+          <span
+            className="absolute right-3 bottom-3 z-10 flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-bold tabular-nums text-white"
+            style={{ background: 'rgba(18,19,20,0.72)' }}
+          >
+            <span className="relative inline-flex size-2">
+              <span
+                className="absolute inset-0 animate-ping rounded-full motion-reduce:hidden"
+                style={{ background: `${MOSAIC.mint}80` }}
+              />
+              <span className="relative size-2 rounded-full" style={{ background: MOSAIC.mint }} />
+            </span>
+            <span style={{ color: MOSAIC.mint }}>{onCount} on</span>
+          </span>
+        ) : null}
+        <span className="sr-only">
+          {detail ?? FEATURES_BLURB}. {MODULE_COUNT} modules in the rack.
+        </span>
+      </BoardCover>
+    )
+  }
+
   const t = toneClasses(shell.tone)
   return (
     <section
@@ -519,6 +600,7 @@ function ModuleSwitch({
   enabled,
   shell,
   onToggle,
+  coverImage,
 }: {
   rack: Rack
   label: string
@@ -527,7 +609,45 @@ function ModuleSwitch({
   enabled: boolean
   shell: MosaicShell
   onToggle?: () => void
+  coverImage?: string
 }) {
+  if (coverImage) {
+    return (
+      <BoardCover src={coverImage} alt={`${rack} ${label}`} dimmed={!enabled}>
+        {onToggle ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggle()
+            }}
+            className="absolute top-2 right-2 z-10 inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl bg-white/85 shadow-sm backdrop-blur-sm dark:bg-black/70"
+            aria-pressed={enabled}
+            aria-label={`${label} ${enabled ? 'on' : 'off'}`}
+          >
+            <Toggle on={enabled} />
+          </button>
+        ) : null}
+        {!enabled && onToggle ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggle()
+            }}
+            className="absolute bottom-3 left-3 z-10 inline-flex min-h-11 items-center rounded-lg bg-white/90 px-3 text-[12px] font-bold shadow-sm"
+            style={{ color: '#0A7A3E' }}
+          >
+            Turn on
+          </button>
+        ) : null}
+        <span className="sr-only">
+          {enabled ? detail : `${label} is off`}
+        </span>
+      </BoardCover>
+    )
+  }
+
   const t = toneClasses(shell.tone)
   return (
     <section
@@ -645,12 +765,18 @@ function MarketingCta({
   detail,
   icon,
   shell,
+  coverImage,
 }: {
   title: string
   detail?: string
   icon?: string
   shell: MosaicShell
+  coverImage?: string
 }) {
+  if (coverImage) {
+    return <BoardCover src={coverImage} alt={`${title} ${detail ?? ''}`.trim()} />
+  }
+
   const t = toneClasses(shell.tone)
   return (
     <section
@@ -699,6 +825,7 @@ function renderWidgetContent(
           detail={widget.detail}
           shell={shell}
           onCount={widget.id === 'features-header' ? onCount : undefined}
+          coverImage={widget.coverImage}
         />
       )
     case 'module-switch':
@@ -711,6 +838,9 @@ function renderWidgetContent(
           enabled={enabled}
           shell={shell}
           onToggle={() => onToggle(widget.id)}
+          coverImage={
+            !enabled && widget.coverImageOff ? widget.coverImageOff : widget.coverImage
+          }
         />
       )
     case 'setup-step':
@@ -763,12 +893,13 @@ function renderWidgetContent(
         />
       )
     case 'marketing-cta':
-  return (
+      return (
         <MarketingCta
           title={widget.label ?? ''}
           detail={widget.detail}
           icon={widget.icon}
           shell={shell}
+          coverImage={widget.coverImage}
         />
       )
     default: {
@@ -812,7 +943,7 @@ export function DemoBoard({
   gap = 12,
   radius = MOSAIC.radiusPx,
   className = '',
-  title = '13blok module board',
+  title = '13lok module board',
   stripLabel = 'Adding a feature takes one click, not a project',
 }: DemoBoardProps) {
   const [live, setLive] = useState(true)

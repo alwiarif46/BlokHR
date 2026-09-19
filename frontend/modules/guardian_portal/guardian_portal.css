@@ -78,6 +78,34 @@
   display: block;
 }
 
+.gp-wordmark--text {
+  height: auto;
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -1.2px;
+  line-height: 1;
+  color: var(--tx, inherit);
+  position: relative;
+  padding-right: 0.18em;
+}
+
+.gp-wordmark--text::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0.22em;
+  height: 0.22em;
+  border-radius: 1.5px;
+  background: #5d87ed;
+  transform: translate(18%, -8%);
+  pointer-events: none;
+}
+
+.gp-wordmark[hidden] {
+  display: none !important;
+}
+
 .gp-app {
   display: flex;
   flex-direction: column;

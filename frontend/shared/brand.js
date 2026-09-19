@@ -1,18 +1,21 @@
 /**
  * shared/brand.js — Vertical brand identity (W-03)
  *
- * Pure brand table + DOM apply for title / favicon / header wordmark.
+ * Pure brand table + DOM apply for title / favicon / chrome wordmark.
  * Login and other surfaces read getBrand() when they need copy.
  *
- * Product chrome uses theme-aware [blok] mono marks:
- *  - light surfaces (neural / holodeck login+header, wizard light) → ink
- *  - dark surfaces (chromium / clean, wizard dark) → white
+ * Product chrome uses the same extrabold text wordmark as Apex (`13lok`).
+ * Favicon stays the 13 mark. Tenant logo_data_url still overrides chrome.
  */
 
 const ASSET_BASE = 'assets/brand/';
 
-/** Shared mono wordmarks for product chrome (both verticals). */
+/** Platform lockup shown in header / login / wizard / guardian (matches Apex BRAND). */
+export const PLATFORM_WORDMARK = '13lok';
+
+/** @deprecated Mono PNGs retired; kept for any leftover path checks. */
 export const MONO_LOGO_DARK = ASSET_BASE + 'blok-mono-white.png';
+/** @deprecated Mono PNGs retired; kept for any leftover path checks. */
 export const MONO_LOGO_LIGHT = ASSET_BASE + 'blok-mono-ink.png';
 
 /** @typedef {'hr'|'school'} BrandVertical */
@@ -20,6 +23,7 @@ export const MONO_LOGO_LIGHT = ASSET_BASE + 'blok-mono-ink.png';
 /**
  * @typedef {{
  *   name: string,
+ *   wordmark: string,
  *   wordmarkPath: string,
  *   headerLogoPath: string,
  *   loginLogoPath: string,
@@ -37,11 +41,12 @@ export const MONO_LOGO_LIGHT = ASSET_BASE + 'blok-mono-ink.png';
 const BRANDS = {
   hr: {
     name: 'BlokHR',
+    wordmark: PLATFORM_WORDMARK,
     wordmarkPath: ASSET_BASE + 'blokhr-wordmark.svg',
-    headerLogoPath: MONO_LOGO_DARK,
-    loginLogoPath: MONO_LOGO_DARK,
-    headerLogoDarkPath: MONO_LOGO_DARK,
-    headerLogoLightPath: MONO_LOGO_LIGHT,
+    headerLogoPath: '',
+    loginLogoPath: '',
+    headerLogoDarkPath: '',
+    headerLogoLightPath: '',
     faviconPath: ASSET_BASE + 'favicon-13.svg',
     tagline: 'Your Modular HRMS',
     loginHeading: 'Sign in to continue',
@@ -50,11 +55,12 @@ const BRANDS = {
   },
   school: {
     name: 'BlokSchool',
+    wordmark: PLATFORM_WORDMARK,
     wordmarkPath: ASSET_BASE + 'blokschool-wordmark.svg',
-    headerLogoPath: MONO_LOGO_DARK,
-    loginLogoPath: MONO_LOGO_DARK,
-    headerLogoDarkPath: MONO_LOGO_DARK,
-    headerLogoLightPath: MONO_LOGO_LIGHT,
+    headerLogoPath: '',
+    loginLogoPath: '',
+    headerLogoDarkPath: '',
+    headerLogoLightPath: '',
     faviconPath: ASSET_BASE + 'favicon-13.svg',
     tagline: 'Attendance, timetable & learning ops',
     loginHeading: 'Sign in to continue',
@@ -63,10 +69,42 @@ const BRANDS = {
   },
 };
 
+/** Chrome slots: hide img/letter, show text wordmark (unless tenant override). */
+const WORDMARK_SLOTS = [
+  {
+    img: 'hdrLogoImg',
+    letter: 'hdrLogoLetter',
+    text: 'hdrBrandWordmark',
+    wrap: 'hdrLogo',
+    wrapClass: 'hdr-logo--wordmark',
+  },
+  {
+    img: 'loginLogoImg',
+    letter: 'loginLogoLetter',
+    text: 'loginBrandWordmark',
+    wrap: 'loginLogo',
+    wrapClass: 'login-logo--mark login-logo--wordmark',
+  },
+  {
+    img: 'wzLogoImg',
+    letter: 'wzLogoLetter',
+    text: 'wzBrandWordmark',
+    wrap: 'wzLogo',
+    wrapClass: 'wz-logo--mark wz-logo--wordmark',
+  },
+  {
+    img: 'hdrWordmark',
+    letter: null,
+    text: 'gpBrandWordmark',
+    wrap: null,
+    wrapClass: null,
+  },
+];
+
 /** @type {BrandVertical} */
 let _currentVertical = 'hr';
 
-/** When true, tenant logo_data_url owns header/login imgs — skip mono sync. */
+/** When true, tenant logo_data_url owns header/login imgs — skip wordmark sync. */
 let _tenantLogoOverride = false;
 
 /**
@@ -90,16 +128,13 @@ export function isLightBrandSurface(themeOrWz) {
 }
 
 /**
- * Resolve mono logo path for the current surface.
- * @param {string|null|undefined} themeOrWz
- * @param {string|null|undefined} [vertical]
+ * @deprecated Mono paths retired; returns empty string. Prefer PLATFORM_WORDMARK.
+ * @param {string|null|undefined} _themeOrWz
+ * @param {string|null|undefined} [_vertical]
  * @returns {string}
  */
-export function resolveBrandLogoPath(themeOrWz, vertical) {
-  const brand = getBrand(vertical != null ? vertical : _currentVertical);
-  return isLightBrandSurface(themeOrWz)
-    ? brand.headerLogoLightPath
-    : brand.headerLogoDarkPath;
+export function resolveBrandLogoPath(_themeOrWz, _vertical) {
+  return '';
 }
 
 /**
@@ -115,34 +150,49 @@ export function hasTenantLogoOverride() {
 }
 
 /**
- * Swap header / login / wizard / guardian wordmark imgs to the mono mark for theme.
+ * Show platform text wordmark; hide mono imgs / lettermarks.
  * No-ops when a tenant logo override is active.
  *
- * @param {string|null|undefined} themeOrWz
+ * @param {string|null|undefined} [_themeOrWz]
  * @param {string|null|undefined} [vertical]
  */
-export function syncBrandLogos(themeOrWz, vertical) {
+export function syncBrandLogos(_themeOrWz, vertical) {
   if (_tenantLogoOverride) return;
   const brand = getBrand(vertical != null ? vertical : _currentVertical);
-  const path = resolveBrandLogoPath(themeOrWz, vertical != null ? vertical : _currentVertical);
-  const ids = ['hdrLogoImg', 'loginLogoImg', 'hdrWordmark', 'wzLogoImg'];
-  for (let i = 0; i < ids.length; i++) {
-    const el = document.getElementById(ids[i]);
-    if (!el) continue;
-    el.setAttribute('src', path);
-    el.setAttribute('alt', brand.name);
-    el.style.display = 'block';
+  const mark = brand.wordmark || PLATFORM_WORDMARK;
+
+  for (let i = 0; i < WORDMARK_SLOTS.length; i++) {
+    const slot = WORDMARK_SLOTS[i];
+    const img = document.getElementById(slot.img);
+    if (img) {
+      img.removeAttribute('src');
+      img.style.display = 'none';
+      img.setAttribute('alt', '');
+      img.setAttribute('hidden', '');
+    }
+    if (slot.letter) {
+      const letter = document.getElementById(slot.letter);
+      if (letter) {
+        letter.style.display = 'none';
+        letter.setAttribute('hidden', '');
+      }
+    }
+    const textEl = document.getElementById(slot.text);
+    if (textEl) {
+      textEl.textContent = mark;
+      textEl.removeAttribute('hidden');
+      textEl.style.display = '';
+      textEl.setAttribute('aria-label', mark);
+    }
+    if (slot.wrap && slot.wrapClass) {
+      const wrap = document.getElementById(slot.wrap);
+      if (wrap) {
+        slot.wrapClass.split(/\s+/).forEach((c) => {
+          if (c) wrap.classList.add(c);
+        });
+      }
+    }
   }
-  const hdrLetter = document.getElementById('hdrLogoLetter');
-  if (hdrLetter) hdrLetter.style.display = 'none';
-  const loginLetter = document.getElementById('loginLogoLetter');
-  if (loginLetter) loginLetter.style.display = 'none';
-  const wzLetter = document.getElementById('wzLogoLetter');
-  if (wzLetter) wzLetter.style.display = 'none';
-  const wzLogo = document.getElementById('wzLogo');
-  if (wzLogo) wzLogo.classList.add('wz-logo--mark');
-  const loginLogo = document.getElementById('loginLogo');
-  if (loginLogo) loginLogo.classList.add('login-logo--mark');
 }
 
 /**
@@ -186,7 +236,7 @@ export function applyBrand(vertical, themeOrWz) {
   const hdrTitle = document.getElementById('hdrTitle');
 
   if (loginTagline) loginTagline.textContent = brand.tagline;
-  if (loginFooter) loginFooter.textContent = 'Powered by ' + brand.name;
+  if (loginFooter) loginFooter.textContent = 'Powered by ' + brand.wordmark;
   if (loginSub) loginSub.textContent = brand.loginHeading;
   if (hdrTitle) hdrTitle.textContent = brand.name;
   if (loginTitle) {
@@ -194,7 +244,10 @@ export function applyBrand(vertical, themeOrWz) {
     if (brand.loginLogoIncludesName) {
       loginTitle.hidden = true;
       loginTitle.classList.add('visually-hidden');
-      if (loginLogo) loginLogo.classList.add('login-logo--mark');
+      if (loginLogo) {
+        loginLogo.classList.add('login-logo--mark');
+        loginLogo.classList.add('login-logo--wordmark');
+      }
     } else {
       loginTitle.hidden = false;
       loginTitle.classList.remove('visually-hidden');

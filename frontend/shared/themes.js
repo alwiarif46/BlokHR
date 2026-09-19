@@ -176,23 +176,38 @@ export function applyBranding(branding) {
 
   if (branding.logo_data_url) {
     setTenantLogoOverride(true);
-    const img = document.getElementById('loginLogoImg');
-    if (img) {
-      img.src = branding.logo_data_url;
-      img.style.display = 'block';
-      if (img.previousElementSibling) {
-        img.previousElementSibling.style.display = 'none';
+    const hideText = (id) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.style.display = 'none';
+        el.setAttribute('hidden', '');
       }
-    }
-    const hdrImg = document.getElementById('hdrLogoImg');
-    if (hdrImg) {
-      hdrImg.src = branding.logo_data_url;
-      hdrImg.style.display = 'block';
-    }
+    };
+    hideText('loginBrandWordmark');
+    hideText('hdrBrandWordmark');
+    hideText('wzBrandWordmark');
+    hideText('gpBrandWordmark');
+    hideText('loginLogoLetter');
+    hideText('hdrLogoLetter');
+    hideText('wzLogoLetter');
+
+    const showTenantImg = (id) => {
+      const img = document.getElementById(id);
+      if (!img) return;
+      img.src = branding.logo_data_url;
+      img.removeAttribute('hidden');
+      img.style.display = 'block';
+      img.setAttribute('alt', name);
+    };
+    showTenantImg('loginLogoImg');
+    showTenantImg('hdrLogoImg');
+    showTenantImg('wzLogoImg');
     const hdrWordmark = document.getElementById('hdrWordmark');
-    if (hdrWordmark) {
+    if (hdrWordmark && hdrWordmark.tagName === 'IMG') {
       hdrWordmark.src = branding.logo_data_url;
+      hdrWordmark.removeAttribute('hidden');
       hdrWordmark.style.display = 'block';
+      hdrWordmark.setAttribute('alt', name);
     }
   } else {
     setTenantLogoOverride(false);

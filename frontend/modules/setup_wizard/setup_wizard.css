@@ -128,6 +128,39 @@
   object-fit: contain;
   display: block;
 }
+.wz-logo.wz-logo--wordmark {
+  width: auto;
+  height: auto;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  color: var(--wz-tx);
+}
+.wz-logo.wz-logo--wordmark .brand-wordmark {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -1.4px;
+  line-height: 1;
+  color: var(--wz-tx);
+  position: relative;
+  padding-right: 0.18em;
+}
+.wz-logo.wz-logo--wordmark .brand-wordmark::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 0.22em;
+  height: 0.22em;
+  border-radius: 1.5px;
+  background: #5d87ed;
+  transform: translate(18%, -8%);
+  pointer-events: none;
+}
+.wz-logo.wz-logo--wordmark img[hidden] {
+  display: none !important;
+}
 .wz-title { font-family: 'Plus Jakarta Sans', sans-serif; font-size: 22px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 6px; background: linear-gradient(135deg, var(--wz-tx) 40%, var(--wz-accent)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
 .wz-subtitle { font-size: 13px; color: var(--wz-tx3); font-weight: 400; font-family: 'Plus Jakarta Sans', sans-serif; }
 .wz-steps { display: flex; align-items: center; justify-content: center; padding: 28px 40px 8px; }

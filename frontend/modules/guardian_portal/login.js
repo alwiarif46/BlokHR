@@ -42,13 +42,10 @@ export function renderLogin(onSuccess) {
   main.innerHTML = `
     <div class="login-wrap">
       <div class="login-card" data-view="login">
-        <div class="login-logo login-logo--mark df" id="loginLogo">
+        <div class="login-logo login-logo--mark login-logo--wordmark df" id="loginLogo">
           <span id="loginLogoLetter" hidden>${escapeHtml(brand.name[0] || 'B')}</span>
-          <img
-            id="loginLogoImg"
-            alt="${escapeHtml(brand.name)}"
-            src="${escapeHtml(brand.loginLogoPath || brand.headerLogoPath)}"
-          />
+          <img id="loginLogoImg" alt="" hidden />
+          <span id="loginBrandWordmark" class="brand-wordmark">${escapeHtml(brand.wordmark || '13lok')}</span>
         </div>
         <div class="login-title df visually-hidden" id="loginTitle" hidden>${escapeHtml(brand.name)}</div>
         <div class="login-tagline" id="loginTagline">${escapeHtml(brand.tagline)}</div>
