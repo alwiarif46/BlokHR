@@ -75,14 +75,15 @@ export function createBdMeetingRouter(
   router.post(
     '/bd-meetings/qualify',
     asyncHandler(async (req: Request, res: Response) => {
-      const { meetingId, approverEmail } = req.body as {
+      const { meetingId } = req.body as {
         meetingId?: string;
-        approverEmail?: string;
       };
 
       if (!meetingId) throw new AppError('meetingId is required', 400);
 
-      const qualifier = approverEmail ?? req.identity?.email ?? '';
+      const qualifier = req.identity?.email ?? '';
+      if (!qualifier) throw new AppError('Unauthorized', 401);
+
       const result = await service.qualify(meetingId, qualifier);
 
       if (!result.success) {
@@ -96,14 +97,15 @@ export function createBdMeetingRouter(
   router.post(
     '/bd-meetings/approve',
     asyncHandler(async (req: Request, res: Response) => {
-      const { meetingId, approverEmail } = req.body as {
+      const { meetingId } = req.body as {
         meetingId?: string;
-        approverEmail?: string;
       };
 
       if (!meetingId) throw new AppError('meetingId is required', 400);
 
-      const approver = approverEmail ?? req.identity?.email ?? '';
+      const approver = req.identity?.email ?? '';
+      if (!approver) throw new AppError('Unauthorized', 401);
+
       const result = await service.approve(meetingId, approver);
 
       if (!result.success) {
@@ -117,15 +119,16 @@ export function createBdMeetingRouter(
   router.post(
     '/bd-meetings/reject',
     asyncHandler(async (req: Request, res: Response) => {
-      const { meetingId, approverEmail, reason } = req.body as {
+      const { meetingId, reason } = req.body as {
         meetingId?: string;
-        approverEmail?: string;
         reason?: string;
       };
 
       if (!meetingId) throw new AppError('meetingId is required', 400);
 
-      const rejector = approverEmail ?? req.identity?.email ?? '';
+      const rejector = req.identity?.email ?? '';
+      if (!rejector) throw new AppError('Unauthorized', 401);
+
       const result = await service.reject(meetingId, rejector, reason ?? '');
 
       if (!result.success) {

@@ -21,6 +21,11 @@ describe('BD Meeting Module', () => {
       groupShiftStart: '09:00',
       groupShiftEnd: '18:00',
     });
+    // Set mgr as manager of bob
+    await db.run('UPDATE members SET reports_to = ? WHERE email = ?', ['mgr@shaavir.com', 'bob@shaavir.com']);
+    await db.run('INSERT INTO admins (tenant_id, email) VALUES (?, ?)', ['default', 'admin@shaavir.com']);
+    await db.run('INSERT INTO role_assignments (tenant_id, id, assignee_email, role_type, scope_type, scope_value) VALUES (?, ?, ?, ?, ?, ?)', ['default', 1, 'admin2@shaavir.com', 'hr', 'global', '']);
+    
     // Seed a non-BD member for rejection tests
     await seedMember(db, {
       email: 'alice@shaavir.com',
@@ -53,6 +58,7 @@ describe('BD Meeting Module', () => {
         })
         .set('X-User-Email', 'bob@shaavir.com');
       expect(res.status).toBe(200);
+      if (!res.body.success) console.log(res.body);
       expect(res.body.success).toBe(true);
       expect(res.body.meeting.status).toBe('pending');
       expect(res.body.meeting.client).toBe('Acme Corp');
@@ -173,8 +179,9 @@ describe('BD Meeting Module', () => {
     it('qualifies a pending meeting: pending → qualified', async () => {
       const res = await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ meetingId, approverEmail: 'mgr@shaavir.com' })
+        .send({ meetingId })
         .set('X-User-Email', 'mgr@shaavir.com');
+      if (!res.body.success) console.log(res.body);
       expect(res.body.success).toBe(true);
 
       const list = await request(app)
@@ -187,13 +194,14 @@ describe('BD Meeting Module', () => {
     it('approves after qualification: qualified → approved', async () => {
       await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ meetingId, approverEmail: 'mgr@shaavir.com' })
+        .send({ meetingId })
         .set('X-User-Email', 'mgr@shaavir.com');
 
       const res = await request(app)
         .post('/api/bd-meetings/approve')
-        .send({ meetingId, approverEmail: 'admin@shaavir.com' })
+        .send({ meetingId })
         .set('X-User-Email', 'admin@shaavir.com');
+      if (!res.body.success) console.log(res.body);
       expect(res.body.success).toBe(true);
 
       const list = await request(app)
@@ -206,7 +214,7 @@ describe('BD Meeting Module', () => {
     it('rejects approve before qualify', async () => {
       const res = await request(app)
         .post('/api/bd-meetings/approve')
-        .send({ meetingId, approverEmail: 'admin@shaavir.com' })
+        .send({ meetingId })
         .set('X-User-Email', 'admin@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/Cannot approve/);
@@ -215,13 +223,13 @@ describe('BD Meeting Module', () => {
     it('rejects double qualification', async () => {
       await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ meetingId, approverEmail: 'mgr@shaavir.com' })
+        .send({ meetingId })
         .set('X-User-Email', 'mgr@shaavir.com');
 
       const res = await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ meetingId, approverEmail: 'mgr2@shaavir.com' })
-        .set('X-User-Email', 'mgr2@shaavir.com');
+        .send({ meetingId })
+        .set('X-User-Email', 'mgr@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/Cannot qualify/);
     });
@@ -229,16 +237,16 @@ describe('BD Meeting Module', () => {
     it('rejects double approval', async () => {
       await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ meetingId, approverEmail: 'mgr@shaavir.com' })
+        .send({ meetingId })
         .set('X-User-Email', 'mgr@shaavir.com');
       await request(app)
         .post('/api/bd-meetings/approve')
-        .send({ meetingId, approverEmail: 'admin@shaavir.com' })
+        .send({ meetingId })
         .set('X-User-Email', 'admin@shaavir.com');
 
       const res = await request(app)
         .post('/api/bd-meetings/approve')
-        .send({ meetingId, approverEmail: 'admin2@shaavir.com' })
+        .send({ meetingId })
         .set('X-User-Email', 'admin2@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/Cannot approve/);
@@ -247,7 +255,7 @@ describe('BD Meeting Module', () => {
     it('rejects qualify with missing meetingId', async () => {
       const res = await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ approverEmail: 'mgr@shaavir.com' })
+        .send({})
         .set('X-User-Email', 'mgr@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/meetingId/);
@@ -256,7 +264,7 @@ describe('BD Meeting Module', () => {
     it('rejects approve with missing meetingId', async () => {
       const res = await request(app)
         .post('/api/bd-meetings/approve')
-        .send({ approverEmail: 'admin@shaavir.com' })
+        .send({})
         .set('X-User-Email', 'admin@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/meetingId/);
@@ -265,7 +273,7 @@ describe('BD Meeting Module', () => {
     it('returns not found for nonexistent meeting qualify', async () => {
       const res = await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ meetingId: 'nonexistent-id', approverEmail: 'mgr@shaavir.com' })
+        .send({ meetingId: 'nonexistent-id' })
         .set('X-User-Email', 'mgr@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/not found/);
@@ -274,7 +282,7 @@ describe('BD Meeting Module', () => {
     it('returns not found for nonexistent meeting approve', async () => {
       const res = await request(app)
         .post('/api/bd-meetings/approve')
-        .send({ meetingId: 'nonexistent-id', approverEmail: 'admin@shaavir.com' })
+        .send({ meetingId: 'nonexistent-id' })
         .set('X-User-Email', 'admin@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/not found/);
@@ -299,10 +307,11 @@ describe('BD Meeting Module', () => {
         .post('/api/bd-meetings/reject')
         .send({
           meetingId: sub.body.meeting.id,
-          approverEmail: 'mgr@shaavir.com',
+
           reason: 'Client not qualified',
         })
         .set('X-User-Email', 'mgr@shaavir.com');
+      if (!res.body.success) console.log(res.body);
       expect(res.body.success).toBe(true);
 
       const list = await request(app)
@@ -325,17 +334,18 @@ describe('BD Meeting Module', () => {
 
       await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ meetingId: sub.body.meeting.id, approverEmail: 'mgr@shaavir.com' })
+        .send({ meetingId: sub.body.meeting.id })
         .set('X-User-Email', 'mgr@shaavir.com');
 
       const res = await request(app)
         .post('/api/bd-meetings/reject')
         .send({
           meetingId: sub.body.meeting.id,
-          approverEmail: 'admin@shaavir.com',
+
           reason: 'Budget constraints',
         })
         .set('X-User-Email', 'admin@shaavir.com');
+      if (!res.body.success) console.log(res.body);
       expect(res.body.success).toBe(true);
 
       const list = await request(app)
@@ -357,18 +367,18 @@ describe('BD Meeting Module', () => {
 
       await request(app)
         .post('/api/bd-meetings/qualify')
-        .send({ meetingId: sub.body.meeting.id, approverEmail: 'mgr@shaavir.com' })
+        .send({ meetingId: sub.body.meeting.id })
         .set('X-User-Email', 'mgr@shaavir.com');
       await request(app)
         .post('/api/bd-meetings/approve')
-        .send({ meetingId: sub.body.meeting.id, approverEmail: 'admin@shaavir.com' })
+        .send({ meetingId: sub.body.meeting.id })
         .set('X-User-Email', 'admin@shaavir.com');
 
       const res = await request(app)
         .post('/api/bd-meetings/reject')
         .send({
           meetingId: sub.body.meeting.id,
-          approverEmail: 'mgr@shaavir.com',
+
           reason: 'Changed mind',
         })
         .set('X-User-Email', 'mgr@shaavir.com');
@@ -391,7 +401,7 @@ describe('BD Meeting Module', () => {
         .post('/api/bd-meetings/reject')
         .send({
           meetingId: sub.body.meeting.id,
-          approverEmail: 'mgr@shaavir.com',
+
           reason: 'Nope',
         })
         .set('X-User-Email', 'mgr@shaavir.com');
@@ -400,7 +410,7 @@ describe('BD Meeting Module', () => {
         .post('/api/bd-meetings/reject')
         .send({
           meetingId: sub.body.meeting.id,
-          approverEmail: 'mgr@shaavir.com',
+
           reason: 'Double nope',
         })
         .set('X-User-Email', 'mgr@shaavir.com');
@@ -411,7 +421,7 @@ describe('BD Meeting Module', () => {
     it('rejects with missing meetingId', async () => {
       const res = await request(app)
         .post('/api/bd-meetings/reject')
-        .send({ approverEmail: 'mgr@shaavir.com', reason: 'test' })
+        .send({ reason: 'test' })
         .set('X-User-Email', 'mgr@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/meetingId/);
@@ -420,7 +430,7 @@ describe('BD Meeting Module', () => {
     it('returns not found for nonexistent meeting reject', async () => {
       const res = await request(app)
         .post('/api/bd-meetings/reject')
-        .send({ meetingId: 'nonexistent-id', approverEmail: 'mgr@shaavir.com', reason: 'test' })
+        .send({ meetingId: 'nonexistent-id', reason: 'test' })
         .set('X-User-Email', 'mgr@shaavir.com');
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/not found/);
@@ -489,6 +499,7 @@ describe('BD Meeting Module', () => {
         .post('/api/bd-meetings/qualify')
         .send({ meetingId: sub.body.meeting.id })
         .set('X-User-Email', 'mgr@shaavir.com');
+      if (!res.body.success) console.log(res.body);
       expect(res.body.success).toBe(true);
 
       const list = await request(app)

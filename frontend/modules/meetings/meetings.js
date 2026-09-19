@@ -1,4 +1,4 @@
-﻿/**
+/**
  * modules/meetings/meetings.js
  *
  * Personal calendar (Microsoft / Google) + BD + tracked meetings.
@@ -180,20 +180,20 @@ async function mtgCreateBD() {
 }
 async function mtgQualify(meetingId) {
   if (!(await confirmDialog({ message: 'Qualify this BD meeting?', confirmLabel: 'Qualify' }))) return;
-  const res = await api.post('/api/bd-meetings/' + encodeURIComponent(meetingId) + '/qualify', {});
+  const res = await api.post('/api/bd-meetings/qualify', { meetingId });
   if (res && !res._error && res.success !== false) { toast('Meeting qualified', 'success'); mtgLoadData(); }
   else { toast((res && (res.error || res.message)) || 'Failed to qualify', 'error'); }
 }
 async function mtgReject(meetingId) {
   const reason = await promptDialog({ title: 'Reject BD meeting', label: 'Reason (optional)', confirmLabel: 'Reject' });
   if (reason === null) return;
-  const res = await api.post('/api/bd-meetings/' + encodeURIComponent(meetingId) + '/reject', { reason: (reason || '').trim() });
+  const res = await api.post('/api/bd-meetings/reject', { meetingId, reason: (reason || '').trim() });
   if (res && !res._error && res.success !== false) { toast('Meeting rejected', 'success'); mtgLoadData(); }
   else { toast((res && (res.error || res.message)) || 'Failed to reject', 'error'); }
 }
 async function mtgApprove(meetingId) {
   if (!(await confirmDialog({ message: 'Approve this BD meeting?', confirmLabel: 'Approve' }))) return;
-  const res = await api.post('/api/bd-meetings/' + encodeURIComponent(meetingId) + '/approve', {});
+  const res = await api.post('/api/bd-meetings/approve', { meetingId });
   if (res && !res._error && res.success !== false) { toast('Meeting approved', 'success'); mtgLoadData(); }
   else { toast((res && (res.error || res.message)) || 'Failed to approve', 'error'); }
 }

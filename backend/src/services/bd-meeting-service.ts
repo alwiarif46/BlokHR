@@ -138,7 +138,7 @@ export class BdMeetingService {
     const meeting = await this.repo.getById(meetingId);
     if (!meeting) return { success: false, error: 'BD meeting not found' };
 
-    const authorized = await this.isAdminOrHr(approverEmail);
+    const authorized = await this.isAdminOrHr(approverEmail, meeting.email);
     if (!authorized) {
       return { success: false, error: 'Only Admin/HR can final-approve BD meetings' };
     }
@@ -217,28 +217,37 @@ export class BdMeetingService {
   // ── Authorization & BD department check ──
 
   public async canManage(callerEmail: string, targetEmail: string): Promise<boolean> {
+
     if (callerEmail.toLowerCase().trim() === targetEmail.toLowerCase().trim()) return true;
-    if (await this.isAdminOrHr(callerEmail)) return true;
-    const targetMember = await this.db.get<{ reports_to: string }>(
-      'SELECT reports_to FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
-      [getTenantId(), targetEmail.toLowerCase().trim()],
+    if (await this.isAdminOrHr(callerEmail, targetEmail)) return true;
+    const targetMember = await this.db.get<{ reports_to: string, group_id: string }>(
+      'SELECT reports_to, group_id FROM members WHERE tenant_id = ? AND email = ? AND active = 1',
+      [getTenantId(), targetEmail.toLowerCase().trim()]
     );
-    return targetMember?.reports_to === callerEmail;
+    if (!targetMember) return false;
+    if (targetMember.reports_to === callerEmail) return true;
+    const mgrRow = await this.db.get(
+      'SELECT 1 FROM role_assignments WHERE tenant_id = ? AND assignee_email = ? AND role_type = \'manager\' AND ( scope_type = \'global\' OR (scope_type = \'group\' AND scope_value = ?) OR (scope_type = \'member\' AND scope_value = ?) )',
+      [getTenantId(), callerEmail.toLowerCase().trim(), targetMember.group_id ?? '', 'member:' + targetEmail.toLowerCase().trim()]
+    );
+    return !!mgrRow;
   }
 
-  public async isAdminOrHr(email: string): Promise<boolean> {
-    if (await isTenantAdmin(this.db, email)) return true;
+  public async isAdminOrHr(callerEmail: string, targetEmail: string): Promise<boolean> {
+
+    if (await isTenantAdmin(this.db, callerEmail)) return true;
+    const targetMember = await this.db.get<{ group_id: string }>(
+      'SELECT group_id FROM members WHERE tenant_id = ? AND email = ?',
+      [getTenantId(), targetEmail.toLowerCase().trim()]
+    );
+    if (!targetMember) return false;
     const hrRow = await this.db.get(
-      "SELECT 1 FROM role_assignments WHERE tenant_id = ? AND assignee_email = ? AND role_type = 'hr'",
-      [getTenantId(), email.toLowerCase().trim()]
+      'SELECT 1 FROM role_assignments WHERE tenant_id = ? AND assignee_email = ? AND role_type = \'hr\' AND ( scope_type = \'global\' OR (scope_type = \'group\' AND scope_value = ?) OR (scope_type = \'member\' AND scope_value = ?) )',
+      [getTenantId(), callerEmail.toLowerCase().trim(), targetMember.group_id ?? '', 'member:' + targetEmail.toLowerCase().trim()]
     );
     return !!hrRow;
   }
 
-  /**
-   * Determines if a member belongs to the Business Development department.
-   * Matches group name containing "business development" (case-insensitive).
-   */
   private async isBdMember(email: string): Promise<boolean> {
     const tenantId = getTenantId();
     const member = await this.db.get<MemberRow>(

@@ -43,7 +43,7 @@ export class MeetingRepository {
   // ── Meeting CRUD ──
 
   /** Create a tracked meeting. */
-  async create(data: {
+  async create(tenantId: string, data: {
     name: string;
     joinUrl: string;
     platform: string;
@@ -54,10 +54,11 @@ export class MeetingRepository {
   }): Promise<TrackedMeeting> {
     const id = uuidv4();
     await this.db.run(
-      `INSERT INTO tracked_meetings (id, name, join_url, platform, client, purpose, added_by, external_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tracked_meetings (id, tenant_id, name, join_url, platform, client, purpose, added_by, external_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
+        tenantId,
         data.name,
         data.joinUrl,
         data.platform,
@@ -76,25 +77,24 @@ export class MeetingRepository {
   }
 
   /** Get all tracked meetings. */
-  async getAll(): Promise<TrackedMeeting[]> {
-    return this.db.all<TrackedMeeting>('SELECT * FROM tracked_meetings ORDER BY created_at DESC');
+  async getAll(tenantId: string): Promise<TrackedMeeting[]> {
+    return this.db.all<TrackedMeeting>('SELECT * FROM tracked_meetings WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY created_at DESC', [tenantId]);
   }
 
   /** Get a tracked meeting by ID. */
-  async getById(id: string): Promise<TrackedMeeting | null> {
-    return this.db.get<TrackedMeeting>('SELECT * FROM tracked_meetings WHERE id = ?', [id]);
+  async getById(tenantId: string, id: string): Promise<TrackedMeeting | null> {
+    return this.db.get<TrackedMeeting>('SELECT * FROM tracked_meetings WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)', [id, tenantId]);
   }
 
   /** Find by external ID (for dedup during calendar sync). */
-  async getByExternalId(externalId: string): Promise<TrackedMeeting | null> {
+  async getByExternalId(tenantId: string, externalId: string): Promise<TrackedMeeting | null> {
     if (!externalId) return null;
-    return this.db.get<TrackedMeeting>('SELECT * FROM tracked_meetings WHERE external_id = ?', [
-      externalId,
-    ]);
+    return this.db.get<TrackedMeeting>('SELECT * FROM tracked_meetings WHERE external_id = ? AND (tenant_id = ? OR tenant_id IS NULL)', [externalId, tenantId]);
   }
 
   /** Update tracked meeting fields (enrich, toggle, etc). */
   async update(
+    tenantId: string,
     id: string,
     fields: Partial<
       Pick<
@@ -112,7 +112,8 @@ export class MeetingRepository {
     if (sets.length === 0) return;
     sets.push("updated_at = datetime('now')");
     vals.push(id);
-    await this.db.run(`UPDATE tracked_meetings SET ${sets.join(', ')} WHERE id = ?`, vals);
+    vals.push(tenantId);
+    await this.db.run(`UPDATE tracked_meetings SET ${sets.join(', ')} WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)`, vals);
   }
 
   // ── Attendance ──
@@ -121,7 +122,7 @@ export class MeetingRepository {
    * Record attendance for a person in a meeting session.
    * Upserts by unique constraint (meeting_id + session_date + email).
    */
-  async recordAttendance(data: {
+  async recordAttendance(tenantId: string, data: {
     meetingId: string;
     sessionDate: string;
     email: string;
@@ -134,8 +135,8 @@ export class MeetingRepository {
   }): Promise<MeetingAttendanceRecord> {
     const id = uuidv4();
     await this.db.run(
-      `INSERT INTO meeting_attendance (id, meeting_id, session_date, email, display_name, join_time, leave_time, total_seconds, late_minutes, credit)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO meeting_attendance (id, tenant_id, meeting_id, session_date, email, display_name, join_time, leave_time, total_seconds, late_minutes, credit)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(meeting_id, session_date, email) DO UPDATE SET
          display_name = excluded.display_name,
          join_time = excluded.join_time,
@@ -145,6 +146,7 @@ export class MeetingRepository {
          credit = excluded.credit`,
       [
         id,
+        tenantId,
         data.meetingId,
         data.sessionDate,
         data.email,
@@ -169,7 +171,7 @@ export class MeetingRepository {
    * Returns the structure the frontend expects:
    *   { "{meetingId}_{date}": { date, records: [{ email, displayName, totalSeconds, lateMinutes, credit }] } }
    */
-  async getAllAttendance(): Promise<
+  async getAllAttendance(tenantId: string): Promise<
     Record<
       string,
       {
@@ -186,7 +188,7 @@ export class MeetingRepository {
     >
   > {
     const rows = await this.db.all<MeetingAttendanceRecord>(
-      'SELECT * FROM meeting_attendance ORDER BY session_date DESC, join_time ASC',
+      'SELECT * FROM meeting_attendance WHERE tenant_id = ? OR tenant_id IS NULL ORDER BY session_date DESC, join_time ASC', [tenantId],
     );
 
     const grouped: Record<
@@ -223,16 +225,16 @@ export class MeetingRepository {
   }
 
   /** Get attendance records for a specific meeting. */
-  async getAttendanceByMeeting(meetingId: string): Promise<MeetingAttendanceRecord[]> {
+  async getAttendanceByMeeting(tenantId: string, meetingId: string): Promise<MeetingAttendanceRecord[]> {
     return this.db.all<MeetingAttendanceRecord>(
-      'SELECT * FROM meeting_attendance WHERE meeting_id = ? ORDER BY session_date DESC',
-      [meetingId],
+      'SELECT * FROM meeting_attendance WHERE meeting_id = ? AND (tenant_id = ? OR tenant_id IS NULL) ORDER BY session_date DESC',
+      [meetingId, tenantId],
     );
   }
 
   /** Delete a tracked meeting and its attendance records by ID. */
-  async delete(id: string): Promise<void> {
-    await this.db.run('DELETE FROM tracked_meetings WHERE id = ?', [id]);
-    await this.db.run('DELETE FROM meeting_attendance WHERE meeting_id = ?', [id]);
+  async delete(tenantId: string, id: string): Promise<void> {
+    await this.db.run('DELETE FROM tracked_meetings WHERE id = ? AND (tenant_id = ? OR tenant_id IS NULL)', [id, tenantId]);
+    await this.db.run('DELETE FROM meeting_attendance WHERE meeting_id = ? AND (tenant_id = ? OR tenant_id IS NULL)', [id, tenantId]);
   }
 }
